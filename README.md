@@ -2,7 +2,7 @@
 
 Full-stack recruitment website for Job Point Consultancy, based in Durgapur, West Bengal. The public interface follows the Talentraa recruitment-template flow, adapted to Job Point's logo colors and selected typefaces.
 
-Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; body typeface `Geist`, display typeface `Plus Jakarta Sans`.
+Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Google typeface `Plus Jakarta Sans` throughout (body 400–500; headings 700–800), with Google Material Symbols Rounded icons.
 
 ## Product features
 
@@ -52,4 +52,4 @@ The immutable migrations are `drizzle/0000_job_point_recruitment.sql` and `drizz
 
 Use the Sites-managed starter workflow. The package lock is unchanged. After installing dependencies, generate or verify migration metadata with `npm run db:generate`, then run the Sites build command. Local D1 preview and hosted D1 are separate databases. Do not expose the admin routes or resume objects publicly.
 
-The operating recommendation and decisions are in [docs/DIGITAL_RECRUITMENT_BLUEPRINT.md](docs/DIGITAL_RECRUITMENT_BLUEPRINT.md). Before public intake, Job Point Consultancy must confirm its legal identity and privacy contact, processor and storage arrangements, retention and deletion policy, backup restore process, CV malware-scanning approach, breach response, and any domestic/overseas recruiting obligations. The public privacy notice names these release dependencies. The current code has not passed a full dependency build or browser/security test in this sandbox; do not accept live PII until these gates are verified.
+The operating recommendation and decisions are in [docs/DIGITAL_RECRUITMENT_BLUEPRINT.md](docs/DIGITAL_RECRUITMENT_BLUEPRINT.md). Before public intake, Job Point Consultancy must confirm its legal identity and privacy contact, processor and storage arrangements, retention and deletion policy, backup restore process, CV malware-scanning approach, breach response, and any domestic/overseas recruiting obligations. The public privacy notice names these release dependencies. Sites completed the remote build and private deployment on 13 October 2026. Browser/API/security verification remains incomplete; do not accept live PII until these gates are verified.
