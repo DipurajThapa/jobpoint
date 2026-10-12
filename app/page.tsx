@@ -1,0 +1,7 @@
+import HomeClient from "./home-client";
+
+export default function Home() {
+  const company = { "@context": "https://schema.org", "@type": "EmploymentAgency", name: "Job Point Consultancy", description: "Recruitment consultancy based at Webel IT Park in Durgapur, West Bengal, connecting job seekers and employers across India.", areaServed: { "@type": "Country", name: "India" }, address: { "@type": "PostalAddress", addressLocality: "Durgapur", addressRegion: "West Bengal", addressCountry: "IN" }, knowsAbout: ["Recruitment", "Candidate screening", "Hiring support", "Job search support"] };
+  const faq = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: [{ q: "What does Job Point Consultancy do?", a: "We support employers with recruitment and help candidates explore suitable opportunities through role briefing, candidate review and interview coordination." }, { q: "How do I apply for a job?", a: "Browse current openings, review the role details, and submit your application. You can also register your interest if no role fits." }, { q: "Can employers request help with a vacancy?", a: "Employers can share the position, location, skills and expected start date using the employer enquiry form." }].map(x => ({ "@type": "Question", name: x.q, acceptedAnswer: { "@type": "Answer", text: x.a } })) };
+  return <><HomeClient /><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(company) }} /><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faq) }} /></>;
+}
