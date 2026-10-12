@@ -7,7 +7,8 @@ function escapeXml(value: string) { return value.replace(/&/g, "&amp;").replace(
 
 export async function GET(request: Request) {
   const origin = new URL(request.url).origin;
-  const urls = ["/", "/privacy"].map(path => `<url><loc>${escapeXml(origin + path)}</loc></url>`);
+  // Policy drafts stay out of the sitemap until the company finalises them.
+  const urls = ["/"].map(path => `<url><loc>${escapeXml(origin + path)}</loc></url>`);
   try {
     const result = await env.DB!.prepare("SELECT id, updated_at FROM jobs WHERE status = 'published' ORDER BY updated_at DESC LIMIT 500").all<{id: string; updated_at: string}>();
     for (const job of result.results) urls.push(`<url><loc>${escapeXml(origin + "/jobs/" + encodeURIComponent(job.id))}</loc><lastmod>${escapeXml(new Date(job.updated_at.replace(" ", "T") + (job.updated_at.includes("Z") ? "" : "Z")).toISOString())}</lastmod></url>`);

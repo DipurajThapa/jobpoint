@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().replace("T", " ").slice(0, 19);
     const db = getDb();
     const [recent] = await db.select({ id: applications.id }).from(applications).where(and(eq(applications.email, email), jobId ? eq(applications.jobId, jobId) : isNull(applications.jobId), gt(applications.createdAt, cutoff))).limit(1);
-    if (recent) return json({ message: "Thank you. Your details have been received." }, 201);
+    if (recent) return errorJson("We received a recent submission using this email for this role. Your earlier CV has not been replaced. To request a correction or CV replacement, use the privacy request form; a recruiter will verify your identity.", 409);
     const file = form.get("resume");
     let resumeKey: string | null = null, resumeName: string | null = null, resumeType: string | null = null, resumeSize: number | null = null;
     if (file instanceof File && file.size) {
@@ -46,6 +46,7 @@ export async function POST(request: Request) {
     const id = crypto.randomUUID();
     try { await db.insert(applications).values({ id, jobId, fullName, email, phone, location, experience, desiredRole, skills, education, availability, message, resumeKey, resumeName, resumeType, resumeSize, consent: true, shareConsent, futureConsent, privacyVersion: "2026-10-13", consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); }
     catch (e) { if (resumeKey && env.BUCKET) await env.BUCKET.delete(resumeKey); throw e; }
-    return json({ message: "Thank you. Your application details have been received. We’ll contact you if a relevant opportunity is available." }, 201);
+    const reference = `JP-${id.slice(0, 13).replaceAll("-", "").toUpperCase()}`;
+    return json({ reference, message: `Your details have been saved. Reference: ${reference}. A recruiter will review them and contact you if there is a relevant next step. Keep this reference for follow-up.` }, 201);
   } catch { return errorJson("We couldn't submit your details. Please try again in a moment.", 503); }
 }

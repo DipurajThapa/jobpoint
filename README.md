@@ -15,6 +15,8 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 - Privacy request queue for access/correction/deletion/withdrawal/grievance, identity verification step, consent/version records, retention review indicators and audit events for sensitive admin actions.
 - Job detail pages with `JobPosting` structured data, plus company and FAQ schema on the homepage.
 - Original generated recruitment imagery in `public/images`; not third-party stock photos.
+- Shared public navigation follows About → Services → Jobs → Candidates → Employers → FAQs. White and neutral surfaces balance blue action accents.
+- Privacy, terms and safeguards pages describe actual behavior and unresolved legal facts; policy drafts are excluded from indexing and the sitemap.
 
 ## Runtime architecture
 
@@ -43,6 +45,12 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 | `PATCH /api/admin/privacy-requests/{id}` | Site owner | Record a verified request outcome |
 
 Candidate multipart fields: `fullName`, `email`, `phone`, `location`, `experience`, `consent=yes`, `adult=yes`; optional `jobId`, `message`, `resume`, `desiredRole`, `skills`, `education`, `availability`, `shareConsent=yes` and `futureConsent=yes`. General registration requires `futureConsent=yes`. Employer JSON fields: `contactName`, `company`, `email`, `phone`, `roleTitle`, `location`, `headcount`, `details`, `consent:"yes"`. Both forms include an anti-spam `website` honeypot.
+
+## Submission and access behavior
+
+A successful candidate submission creates an application record; its optional CV is private in R2. A successful employer submission creates an employer enquiry. Both confirmations show a reference derived from the saved record ID, also shown in the admin console. Recent duplicate candidate submissions return an explicit 409 response and do not overwrite an existing CV. Verified profile correction/withdrawal/deletion is handled through the existing privacy request and admin workflow; candidate self-service CV replacement is not implemented. No acknowledgement email, recruiter email notification or messaging integration is configured.
+
+The owner signs in at `/admin` using the owning ChatGPT account. Candidate records are under **Candidate pipeline**; employer forms are under **Employer enquiries**; privacy requests are under **Privacy requests**. CV downloads are owner-authorised and audited. The owner account is currently `dipuraj.thapa@gmail.com`. A confirmed Job Point recruiter account and access policy must be configured before the company handover. The current site is owner-private, so outside candidates and employers cannot use it until public release is authorised and ready.
 
 ## Data model
 

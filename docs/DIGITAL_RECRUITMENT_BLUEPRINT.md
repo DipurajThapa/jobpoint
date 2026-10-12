@@ -37,7 +37,7 @@ The recruiter owns the decision at screening, shortlist, employer submission and
 
 ## Application quality
 
-Required contact and experience fields, adulthood confirmation, form honeypots, same-origin checks, file validation, size limits and hourly request limits reduce poor submissions. An identical email-to-role application within 24 hours receives a neutral receipt rather than another record. Repeated emails across records are flagged for a recruiter; no profile is merged or rejected solely by email, since email ownership is not verified. The recruiter checks eligibility and fit in context and records notes. Do not infer protected characteristics from a CV.
+Required contact and experience fields, adulthood confirmation, form honeypots, same-origin checks, file validation, size limits and hourly request limits reduce poor submissions. An identical email-to-role application within 24 hours receives an explicit duplicate response rather than silently replacing a CV or adding another record. Repeated emails across records are flagged for a recruiter; no profile is merged or rejected solely by email, since email ownership is not verified. The recruiter checks eligibility and fit in context and records notes. Do not infer protected characteristics from a CV.
 
 ## Architecture
 
@@ -76,3 +76,19 @@ India's DPDP Act and 2025 Rules have phased commencement: the November 2025 Gaze
 - [West Bengal Labour Commissionerate services](https://labour.wb.gov.in/lc/e-services)
 - [Ministry of External Affairs: recruiting agents](https://www.mea.gov.in/ras.htm)
 - [Zoho Recruit staffing plans](https://help.zoho.com/portal/en/kb/recruit/zoho-recruit-fundamentals/zoho-recruit-editions/articles/staffing-edition-plans), [Manatal agency features](https://www.manatal.com/recruitment-agencies), [Recruit CRM features](https://recruitcrm.io/features/)
+
+## Legal and operating review: 13 October 2026
+
+The following is a readiness assessment for the India recruitment scope currently described, not legal certification. Actual entity structure, activities, jurisdiction and provider agreements must be assessed by the company and a qualified adviser.
+
+| Area | Website action | Remaining company or hosting decision |
+| --- | --- | --- |
+| IT Act/SPDI rules, where applicable | Itemised data/purpose, intended recipients, correction/withdrawal channel and sensible sensitive-data exclusions | Confirm registered collecting/retaining entity, full address, named grievance officer and contact; implement applicable grievance deadline (the 2011 rules specify one month) and documented security programme |
+| DPDP phased commencement | Separate consent choices, purpose notice, rights queue, human review, audit events | Check launch-date applicability, lawful purpose, rights response deadline, retention duties and processor safeguards. The November 2025 notifications phase key duties/rules in after 18 months; do not describe all of them as already effective |
+| Security incidents and logs | Restricted access, private files, audit records | Assess CERT-In directions for the actual entity: report specified incidents within six hours, designate a contact and retain required ICT logs for 180 days in India. Current Sites log location/retention has not been verified; a brief IP rate-limit table is not an ICT security log or a substitute for this duty |
+| Transfers and processors | Policy identifies Sites/Cloudflare hosting and Google font requests | Confirm processor contracts, region/subprocessor information and transfer safeguards. The 2011 rules address equivalent protection for transfers; do not claim India-only storage without evidence |
+| Recruitment services | Genuine-role review, no guarantee of placement, no public database access, separate employer agreement | Confirm agency registration and services offered. Overseas recruitment needs a review of MEA/eMigrate recruiting-agent requirements; no licence is claimed |
+| Retention/deletion | Twelve-month manual review indicator and selected live record/CV deletion | Approve purpose-based schedule, exceptions, recipient deletion and backup handling. Review is not an automatic purge and twelve months is not asserted to be a statutory period |
+| Access and communications | One existing console, submission references and manual follow-up | Provide an approved Job Point recruiter email for access. No automatic email or WhatsApp notification is configured; keep one recruitment workflow when adding a provider |
+
+Additional primary sources: [2011 SPDI Rules (official Gazette text reproduced by WIPO)](https://www.wipo.int/wipolex/en/legislation/details/15063), [MeitY/PIB clarification](https://www.meity.gov.in/writereaddata/files/PressNote_25811.pdf), [CERT-In directions of 28 April 2022](https://www.cert-in.org.in/PDF/CERT-In_Directions_70B_28.04.2022.pdf).
