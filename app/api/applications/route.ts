@@ -1,3 +1,4 @@
+import { DEMO_MODE, demoSubmissionResponse } from "@/lib/demo";
 import { env } from "cloudflare:workers";
 import { getDb } from "@/db";
 import { applications } from "@/db/schema";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 const maxResumeBytes = 5 * 1024 * 1024;
 
 export async function POST(request: Request) {
+  if (DEMO_MODE) return demoSubmissionResponse();
   try {
     if (!sameOrigin(request)) return errorJson("Cross-site submissions are not accepted.", 403);
     const length = Number(request.headers.get("content-length") ?? 0);

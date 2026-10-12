@@ -1,3 +1,4 @@
+import { DEMO_MODE, demoSubmissionResponse } from "@/lib/demo";
 import { getDb } from "@/db";
 import { employerEnquiries } from "@/db/schema";
 import { clean, errorJson, json, limitSubmission, sameOrigin, validEmail } from "@/lib/http";
@@ -5,6 +6,7 @@ import { clean, errorJson, json, limitSubmission, sameOrigin, validEmail } from 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  if (DEMO_MODE) return demoSubmissionResponse();
   try {
     if (!sameOrigin(request)) return errorJson("Cross-site submissions are not accepted.", 403);
     if (Number(request.headers.get("content-length") ?? 0) > 24_000) return errorJson("The request is too large.", 413);
