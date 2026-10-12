@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const phone = clean(body.phone, 30), roleTitle = clean(body.roleTitle, 160), location = clean(body.location, 120);
     const details = clean(body.details, 1800), headcount = Math.max(1, Math.min(500, Number(body.headcount) || 1));
     if (!contactName || !company || !validEmail(email) || !phone || !roleTitle || !location || !details || body.consent !== "yes") return errorJson("Please complete the required fields and consent checkbox.");
-    await getDb().insert(employerEnquiries).values({ id: crypto.randomUUID(), contactName, company, email, phone, roleTitle, location, headcount, details, consent: true });
+    await getDb().insert(employerEnquiries).values({ id: crypto.randomUUID(), contactName, company, email, phone, roleTitle, location, headcount, details, consent: true, privacyVersion: "2026-10-13", consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     return json({ message: "Thank you. Your hiring enquiry has been received. Our team will follow up." }, 201);
   } catch { return errorJson("We couldn't submit your enquiry. Please try again in a moment.", 503); }
 }

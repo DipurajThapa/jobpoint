@@ -8,6 +8,13 @@
       "when": 1791834800172,
       "tag": "0000_job_point_recruitment",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791840000000,
+      "tag": "0001_recruitment_operations",
+      "breakpoints": true
     }
   ]
 }
