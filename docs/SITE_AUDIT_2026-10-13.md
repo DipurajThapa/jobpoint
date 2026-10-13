@@ -13,7 +13,7 @@ The comparison uses [Indeed's employer candidate-management guide](https://www.i
 | Journey or capability | Job Point source | Finding |
 | --- | --- | --- |
 | Service, sector and process explanation | Homepage sections, FAQ and legal pages | Present; service copy could be expanded with real proof and specific, approved service boundaries. |
-| Published job search and detail | Filterable D1 endpoint, server-rendered first listings, job detail and published-only filter | Present in code; no fabricated jobs. A recruiter must provide genuine vacancies. |
+| Published job search and detail | Filterable D1 endpoint, server-rendered first listings, job detail and published-only filter | Present in code. The live D1 `jobs` table contains **zero rows** at review time; a recruiter must provide genuine vacancies. |
 | Candidate registration and role application | Distinct consent choices, structured fields, optional private CV, duplicate guidance | Built but disabled in the public demo. No candidate account, status tracking or self-service CV replacement. |
 | Employer hiring request | Role/headcount/detail form and restricted review queue | Built but disabled in the public demo. No self-service employer workspace or booking. |
 | Recruiter operations | Role publishing, stages, notes, search, privacy queue and audited CV access | Present for the Site owner; no confirmed company recruiter account or team collaboration. |
@@ -26,7 +26,7 @@ The comparison uses [Indeed's employer candidate-management guide](https://www.i
 - Shared components: header, footer, legal-page layout, icons, demo notice, candidate field set and enquiry dialog. Home sections, job details and privacy request remain page-specific. One public-job query supplies both the first HTML response and search API. FAQ copy and structured data share a single source.
 - Six user-facing routes: `/`, `/jobs/[id]`, `/privacy`, `/terms`, `/compliance`, `/admin`; an application route exists for each published job. Invalid or closed job IDs correctly produce a 404. Unknown paths use a branded 404 with links to home and current jobs. A 404 for an invalid URL cannot be eliminated, but no literal internal route or anchor is missing in the source checker.
 - The public demo has no submit button on disabled forms. Other calls to action open a preview dialog, navigate to a section or job, retry search, or use the owner sign-in flow. Admin and authentication redirects are expected controls, not broken navigation.
-- The source check verifies **literal** internal links and anchors. Dynamic job URLs, actual browser click flows, host redirects and live HTTP response codes need deployed testing.
+- The source check verifies **literal** internal links and anchors. Dynamic job URLs, actual browser click flows, host redirects and live HTTP response codes need deployed testing. The live Worker log recorded a `/favicon.ico` 404; the branch adds a logo-derived ICO asset and removes the unused starter SVG. Verify the favicon response after deployment.
 
 ## SEO, GEO and performance
 

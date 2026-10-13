@@ -15,8 +15,9 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: "Job Point Consultancy", description: "Find your next opportunity or hire with confidence." },
   robots: { index: !DEMO_MODE, follow: !DEMO_MODE, googleBot: { index: !DEMO_MODE, follow: !DEMO_MODE, "max-image-preview": "large" } },
   icons: {
-    icon: "/images/job-point-light.png",
-    shortcut: "/images/job-point-light.png",
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/images/job-point-light.png",
   },
 };
 
