@@ -60,8 +60,12 @@ The immutable migrations are `drizzle/0000_job_point_recruitment.sql` and `drizz
 
 Use the Sites-managed starter workflow. The package lock is unchanged. After installing dependencies, generate or verify migration metadata with `npm run db:generate`, then run the Sites build command. Local D1 preview and hosted D1 are separate databases. Do not expose the admin routes or resume objects publicly.
 
-The operating recommendation and decisions are in [docs/DIGITAL_RECRUITMENT_BLUEPRINT.md](docs/DIGITAL_RECRUITMENT_BLUEPRINT.md). Before public intake, Job Point Consultancy must confirm its legal identity and privacy contact, processor and storage arrangements, retention and deletion policy, backup restore process, CV malware-scanning approach, breach response, and any domestic/overseas recruiting obligations. The public privacy notice names these release dependencies. Sites completed the remote build and private deployment on 13 October 2026. Browser/API/security verification remains incomplete; do not accept live PII until these gates are verified.
+The operating recommendation and decisions are in [docs/DIGITAL_RECRUITMENT_BLUEPRINT.md](docs/DIGITAL_RECRUITMENT_BLUEPRINT.md). Before public intake, Job Point Consultancy must confirm its legal identity and privacy contact, processor and storage arrangements, retention and deletion policy, backup restore process, CV malware-scanning approach, breach response, and any domestic/overseas recruiting obligations. The public privacy notice names these release dependencies. Sites published version 5 as a public read-only demo on 13 October 2026. Browser/API/security verification remains incomplete; do not accept live PII until these gates are verified.
 
 ## Demo verification
 
 Run `node --experimental-vm-modules scripts/check-demo.mjs` for the read-only intake and anonymous admin boundary checks. Native Sites remote build validates the complete TSX bundle. Public URL access must be confirmed using Sites access settings; local tests do not prove the platform authentication boundary.
+
+## Website audit
+
+The [13 October source and portal comparison](docs/SITE_AUDIT_2026-10-13.md) records what exists, what the public demo cannot do, SEO readiness and the remaining verification/launch gates. Shared candidate fields and the enquiry dialog sit under `components/`; the public job query and FAQ data sit under `lib/`. Run `node scripts/check-navigation.mjs` to verify literal route and anchor targets.

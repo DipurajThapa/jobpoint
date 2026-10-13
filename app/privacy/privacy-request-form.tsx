@@ -24,7 +24,7 @@ export default function PrivacyRequestForm() {
     <label>Your name<input name="requesterName" required maxLength={120} autoComplete="name" /></label>
     <label>Email used with Job Point<input name="email" type="email" required maxLength={254} autoComplete="email" /></label>
     <label>Details (optional)<textarea name="details" rows={3} maxLength={1200} placeholder="Tell us what you would like corrected or reviewed." /></label>
-    <button className="button" disabled={busy || DEMO_MODE}>{DEMO_MODE ? "Requests disabled for demo" : busy ? "Submitting…" : "Send privacy request"}</button></fieldset>
+    {!DEMO_MODE && <button className="button" disabled={busy}>{busy ? "Submitting…" : "Send privacy request"}</button>}</fieldset>
     {message && <p role="status" className="form-message">{message}</p>}
   </form>;
 }
