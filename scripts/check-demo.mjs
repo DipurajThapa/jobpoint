@@ -85,7 +85,10 @@ for (const path of await routes('app/api/admin')) {
   }
 }
 const robots = await actual('app/robots.txt/route.ts');
-assert.match(await (await robots.namespace.GET(request('GET'))).text(), /Disallow: \/\n/); checks++;
+const robotsText = await (await robots.namespace.GET(request('GET'))).text();
+assert.match(robotsText, /Disallow: \/admin/);
+assert.match(robotsText, /Disallow: \/api\//);
+assert.doesNotMatch(robotsText, /Disallow: \/\n/); checks++;
 const sitemap = await actual('app/sitemap.xml/route.ts');
 assert.doesNotMatch(await (await sitemap.namespace.GET(request('GET'))).text(), /<url>/); checks++;
 assert.equal(forbiddenCalls, 0);

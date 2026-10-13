@@ -1,6 +1,6 @@
 import LegalPage from "@/components/legal-page";
 
-export const metadata = { title: "Terms of use", description: "Use of the Job Point Consultancy recruitment website.", robots: { index: false, follow: true } };
+export const metadata = { title: "Terms of use", description: "Use of the Job Point Consultancy recruitment website.", alternates: { canonical: "/terms" }, robots: { index: false, follow: true } };
 
 export default function TermsPage() {
   return <LegalPage title="Terms of use" intro="These terms cover use of this recruitment website. Updated 13 October 2026. They require company review before public launch and do not replace a signed recruitment agreement.">
@@ -10,6 +10,6 @@ export default function TermsPage() {
     <h2>Fees and payments</h2><p>The website does not collect payments or publish an approved fee schedule. Any agreed service charges, refund terms or placement commitments must be supplied clearly in the relevant written agreement before a payment is requested. No promise about the company’s fee model is made here until it is confirmed.</p>
     <h2>Information use and privacy</h2><p>Data handling and your choices are explained in the <a href="/privacy">privacy notice</a>. Employer-sharing consent and future-opportunity consent are distinct from applying for a role. Employers receive only information appropriate to the agreed recruitment purpose; they do not receive access to the full candidate database.</p>
     <h2>Acceptable use and availability</h2><p>Do not attempt unauthorised access, scrape or disclose candidate data, send spam, impersonate others or interfere with the service. We may restrict misuse and close vacancies that are filled or withdrawn. Site information should be checked with the recruiter before acting on it. Nothing in these terms removes mandatory consumer, employment or data-protection rights.</p>
-    <h2>Questions and complaints</h2><p>Use the <a href="/#contact">contact section</a> for recruitment enquiries and the <a href="/privacy#privacy-request">privacy request form</a> for information concerns. Registered company identity, full address, responsible contact and any business-specific terms must be finalised before public use.</p>
+    <h2>Questions and complaints</h2><p>The <a href="/#contact">contact section</a> previews the intended recruitment enquiry process. The <a href="/privacy#privacy-request">privacy request form</a> is also a preview; submissions are disabled during the public demo. Registered company identity, full address, responsible contact and any business-specific terms must be finalised before live use.</p>
   </LegalPage>;
 }
