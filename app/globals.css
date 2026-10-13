@@ -34,3 +34,4 @@
 @media (max-width: 600px) { .demo-banner .container { flex-direction: column; gap: 2px; } }
 
 .candidate-job-fields{display:grid;gap:10px}.apply-form .candidate-job-fields>label{display:grid;gap:4px;font-weight:700;font-size:14px}
+.sample-disclaimer{display:block;margin-top:10px;font-size:15px;line-height:1.5;color:#6f5318;font-weight:600}.sample-badge{display:inline-block;margin-bottom:4px;padding:2px 7px;border-radius:6px;background:#fff3d6;color:#755318;font-size:12px;font-weight:800;letter-spacing:.02em}
