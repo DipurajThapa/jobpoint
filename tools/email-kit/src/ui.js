@@ -4,7 +4,7 @@
    ========================================================================== */
 (function () {
   const $ = id => document.getElementById(id);
-  const TEXT_FIELDS = ['waEvidence','waNumber','senderName', 'senderRole', 'senderPhone', 'senderEmail', 'recipientTitle', 'recipientName', 'recipientContact', 'company', 'designation', 'industry', 'location', 'responsibility', 'desired', 'roles', 'hiringLocations', 'hiringType', 'priorChannel', 'priorType', 'priorDate', 'priorSubject', 'priorText', 'priorTopic', 'responseText', 'responseCategory', 'referredName', 'referredRole', 'referralPermission', 'agreedStep', 'agreedDate', 'reason', 'observation', 'sourceUrl', 'dateChecked', 'verification', 'postAuthor', 'referrer', 'conversationWhen', 'sourceQuote', 'optOutScope', 'meetingAction', 'meetingDate', 'meetingTime', 'meetingZone', 'meetingMode', 'movedTo'];
+  const TEXT_FIELDS = ['contextAnswer','waEvidence','waNumber','senderName', 'senderRole', 'senderPhone', 'senderEmail', 'recipientTitle', 'recipientName', 'recipientContact', 'company', 'designation', 'industry', 'location', 'responsibility', 'desired', 'roles', 'hiringLocations', 'hiringType', 'priorChannel', 'priorType', 'priorDate', 'priorSubject', 'priorText', 'priorTopic', 'responseText', 'responseCategory', 'referredName', 'referredRole', 'referralPermission', 'agreedStep', 'agreedDate', 'reason', 'observation', 'sourceUrl', 'dateChecked', 'verification', 'postAuthor', 'referrer', 'conversationWhen', 'sourceQuote', 'optOutScope', 'meetingAction', 'meetingDate', 'meetingTime', 'meetingZone', 'meetingMode', 'movedTo'];
   const CHECK_FIELDS = ['scopeConfirmed', 'includeTerms', 'referrerConsent', 'accepted', 'noReplyRequested', 'whatsappConsent', 'dncDifferent', 'includeSource'];
   const SENDER_FIELDS = ['senderName', 'senderRole', 'senderPhone', 'senderEmail'];
   const STORE_SENDER = 'email-kit-sender';
@@ -35,6 +35,7 @@
   let rev = 0;                // the database revision this tab has read
   let legacyProblem = '';     // earlier records that could not be moved
   let pendingToast = null;
+  let importReviewed = false;
   const touched = new Set();  // fields the user has set, which auto-fill must not overwrite
 
   /* ---------- Reading and writing the form ---------- */
@@ -45,6 +46,7 @@
     const ch = document.querySelector('input[name=channel]:checked');
     s.channel = ch ? ch.value : 'email';
     const mode = document.querySelector('input[name=mode]:checked').value;
+    s.scenario = $('scenario').value;
     s.stage = mode === 'followup' ? 'followup' : (s.accepted ? 'accepted' : 'first');
     /* The first LinkedIn message after an accepted request is not a reminder. */
     if (mode === 'followup' && s.accepted && s.priorChannel === 'invite' && s.channel === 'message' && s.responseCategory === 'noResponse') s.stage = 'accepted';
@@ -68,6 +70,8 @@
     const set = (name, value) => { const r = document.querySelector('input[name=' + name + '][value="' + value + '"]'); if (r) r.checked = true; };
     set('channel', s.channel);
     set('mode', s.stage === 'followup' ? 'followup' : 'first');
+    $('scenario').value = s.scenario || (s.stage === 'followup' ? (s.responseText ? 'reply' : 'no-response') : 'new');
+    syncScenario();
     TEXT_FIELDS.forEach(f => { if (s[f] !== undefined) $(f).value = s[f]; });
     CHECK_FIELDS.forEach(f => { $(f).checked = !!s[f]; });
     CONFIG.askTopics.forEach(t => { $('ask-' + t.id).checked = (s.askTopics || []).includes(t.id); });
@@ -145,6 +149,58 @@
   }
 
   /* ---------- Conditional fields ---------- */
+  function syncScenario() {
+    const scenario = $('scenario').value;
+    $('mode-' + (scenario === 'new' ? 'first' : 'followup')).checked = true;
+    $('importBox').hidden = !['import','reconnect'].includes(scenario) || !!activeEntry;
+    $('contextAnswerBox').hidden = !(scenario === 'reply' && activeEntry && db.convs[activeEntry]?.importedContext?.lastSpeaker === 'client');
+    $('scenarioHint').textContent = ({
+      new:'Introduce yourself and the reason for writing.',
+      reply:'Respond to the client’s latest message. Paste it below if it is not on record.',
+      'no-response':'Check whether your earlier message was received after the follow-up interval.',
+      'after-reply':'Continue the existing exchange after your latest answer; allow time for review.',
+      import:'Bring in an external exchange and verify its current state before drafting.',
+      reconnect:'Confirm why the discussion is ready to resume and respect any earlier pause.'
+    })[scenario];
+    if (scenario === 'reply' && !activeEntry && $('responseCategory').value === 'noResponse') $('responseCategory').value = 'unclear';
+    if (['no-response','after-reply'].includes(scenario) && !activeEntry) $('responseCategory').value = 'noResponse';
+    if (scenario === 'after-reply' && !activeEntry) $('priorType').value = 'reply';
+  }
+  function intake() {
+    return { history:$('importHistory').value.trim(), objective:$('importObjective').value.trim(), subject:$('importSubject').value.trim(),
+      lastSpeaker:$('importLastSpeaker').value, lastDate:$('importLastDate').value, lastText:$('importLastText').value.trim(),
+      summary:$('importSummary').value.trim(), outstanding:$('importOutstanding').value.trim(), next:$('importNext').value.trim() };
+  }
+  function reviewIntake() {
+    const read = Conversation.review($('importHistory').value, Rules.localToday());
+    if (!$('importSubject').value) $('importSubject').value = read.subject;
+    if (!$('importLastDate').value) $('importLastDate').value = read.lastDate;
+    if (!$('importSummary').value) $('importSummary').value = read.summary;
+    const data = intake();
+    const advice = Conversation.advise(Object.assign({ scenario:$('scenario').value, optedOut:read.optedOut }, data), Rules.localToday());
+    $('importAssessment').textContent = 'Suggested action: ' + advice.action + '. ' + advice.reason + ' ' + read.caveat;
+    importReviewed = true;
+    $('confirmImport').disabled = !data.objective || !data.summary || !data.lastSpeaker || !data.lastDate ||
+      (data.lastSpeaker === 'client' && !data.lastText) || advice.action === 'clarify' || advice.action === 'pause';
+    return advice;
+  }
+  async function confirmIntake() {
+    const advice = reviewIntake();
+    if ($('confirmImport').disabled) return showToast(advice.reason || 'Complete the required context first.');
+    const data = intake();
+    const result = await attempt('importConversation', { s:readForm(), intake:data });
+    if (!result) return;
+    const conv = db.convs[result.result.convId];
+    continueEntry({ id:conv.id });
+    $('scenario').value = data.lastSpeaker === 'client' ? 'reply' : 'after-reply';
+    syncScenario();
+    if (data.lastSpeaker === 'client') $('responseText').value = data.lastText;
+    $('priorSubject').value = data.subject;
+    $('priorTopic').value = data.objective;
+    $('priorDate').value = data.lastDate;
+    renderAll();
+    showToast('Verified context saved. Review the next action before generating a draft.');
+  }
   /* The tracker's record of what was sent cannot be changed by hand. */
   function trackedEntry(s) {
     /* A loaded conversation holds until the consultant says who this is. */
@@ -587,7 +643,7 @@
     validateNow(now).blockers.forEach(b => out.push(b.msg));
     /* Text written for one person must not go to another. */
     const then = JSON.parse(draft.snapshot);
-    if (['stage','channel','responseCategory','responseText','recipientContact','waNumber','waEvidence','agencyVersion','priorType','optOutScope','noReplyRequested'].some(f => now[f] !== then[f]))
+    if (['stage','channel','responseCategory','responseText','contextAnswer','recipientContact','waNumber','waEvidence','agencyVersion','priorType','optOutScope','noReplyRequested'].some(f => now[f] !== then[f]))
       out.push('The recipient, reply, agency or channel details changed. Generate a fresh draft.');
     if (['recipientName', 'company'].some(f => norm(now[f]) !== norm(then[f]))) out.push('The recipient has changed since this draft was made. Choose Generate message.');
     /* Dates and agreed steps are promises, so a draft cannot carry old ones. */
@@ -963,6 +1019,18 @@
   }
   async function generateNow() {
     attempted = true;
+    if (['import','reconnect'].includes($('scenario').value) && !activeEntry) {
+      reviewIntake(); showToast('Save and verify the conversation context before drafting.'); return;
+    }
+    if (activeEntry && ['after-reply','no-response'].includes($('scenario').value)) {
+      const conv = db.convs[activeEntry];
+      const lastDate = conv && (conv.importedContext?.lastDate || conv.lastSentAt);
+      const advice = Conversation.advise({lastSpeaker:'consultant',lastDate,outstanding:conv?.importedContext?.outstanding || '',scenario:$('scenario').value}, Rules.localToday());
+      if (advice.action === 'pause' || advice.action === 'clarify') { showToast(advice.reason); return; }
+    }
+    if (activeEntry && $('scenario').value === 'reply' && db.convs[activeEntry]?.importedContext?.lastSpeaker === 'client' && !$('contextAnswer').value.trim()) {
+      showToast('Add a verified answer or next step before drafting a reply to this imported message.'); $('contextAnswer').focus(); return;
+    }
     resetUndo = null; $('toast').hidden = true;
     let s = readForm();
     pendingToast = null;
@@ -970,7 +1038,6 @@
     s = readForm();
     const v = renderGaps(s);
     if (v.blockers.length) {
-      if (v.blockers.some(b => b.field.startsWith('agency'))) $('agencyBox').open = true;
       if (v.blockers.some(b => b.field.startsWith('sender'))) $('senderBox').open = true;
       renderAll();
       if (pendingToast) showToast(pendingToast[0], pendingToast[1]);
@@ -987,6 +1054,11 @@
     }
     $('senderBox').open = false;
     const result = Rules.compose(s, limits);
+    const imported = activeEntry && db.convs[activeEntry]?.importedContext;
+    if (imported && ['reply','after-reply','no-response'].includes(s.scenario) && !result.noMessage) {
+      const message = Conversation.draft(imported, s);
+      if (message) result.candidates = [Object.assign({id:'verified-context',label:'Based on verified context',difference:'Uses the recorded objective and latest state.',why:'Review and edit before using it.',fits:true,droppedEvidence:[]},message)];
+    }
     if (result.noMessage) showNoMessage(result);
     else {
       showCandidate(result, result.candidates[0]);
@@ -1086,9 +1158,13 @@
     $('rememberSender').checked = remember;
     $('ch-' + (keepChannel ? channel : 'email')).checked = true;
     $('mode-first').checked = true;
+    $('scenario').value = 'new';
+    ['importHistory','importObjective','importSubject','importLastSpeaker','importLastDate','importLastText','importSummary','importOutstanding','importNext'].forEach(id => { $(id).value = ''; });
+    $('confirmImport').disabled = true; $('importAssessment').textContent = ''; importReviewed = false;
     touched.clear();
     attempted = false;
     clearDraft();
+    syncScenario();
     syncOptions();
     lastReason = $('reason').value;
   }
@@ -1157,10 +1233,18 @@
     /* A saved draft reopens as the message it was written for. */
     const open = stored || Engine.rows(db, 'msgs').find(m => m.convId === conv.id && m.direction === 'out' && ['draft', 'ready'].includes(m.status));
     const s = Object.assign(readForm(), Engine.formFor(db, conv, sender), open && open.context ? open.context : {});
+    s.scenario = s.stage === 'followup' ? (s.responseText ? 'reply' : 'no-response') : 'new';
     activeEntry = s.stage === 'first' ? '' : conv.id;
     carry = { followTask: s.followTask || '', promise: s.promise || '', owedAnswer: !!s.owedAnswer, resend: s.resend || '' };
     touched.add('desired');
     writeForm(Object.assign({},s,{whatsappConsent:false,waNumber:'',waEvidence:''}));
+    if (conv.importedContext) {
+      $('scenario').value = conv.importedContext.lastSpeaker === 'client' ? 'reply' : 'after-reply';
+      if (conv.importedContext.lastSpeaker === 'client') $('responseText').value = conv.importedContext.lastText;
+      $('priorDate').value = conv.importedContext.lastDate;
+      $('priorTopic').value = conv.importedContext.objective;
+      syncScenario();
+    }
     renderAll();
     $('trackerBox').open = false;
     $('toast').hidden = true;
@@ -1335,17 +1419,12 @@
   let busy = 0;
   const channelOut = typeof BroadcastChannel === 'function' ? new BroadcastChannel('email-kit-records') : null;
 
-  const agencyFields = {name:'agencyName',services:'agencyServices',sectors:'agencySectors',references:'agencyReferences',terms:'agencyTerms',reviewBy:'agencyReview'};
   let agencyLoaded;
   function refreshViews() {
     const profile = db.meta.agency && db.meta.agency.value;
     const serialized = JSON.stringify(profile || null);
     if (serialized !== agencyLoaded) {
       agencyLoaded = serialized; applyAgency(profile);
-      for (const [field, id] of Object.entries(agencyFields)) $(id).value = profile && profile[field] || '';
-      $('agencyApproved').checked = false;
-      $('agencyStatus').textContent = profile ? 'Approved for ' + profile.name + ' until ' + profile.reviewBy + '.' : 'Save your agency profile before composing a message.';
-      $('agencyBox').open = !profile || profile.reviewBy < Rules.localToday();
     }
     tracker = Engine.trackerView(db);
     doNotContact = Engine.suppressionView(db);
@@ -1627,13 +1706,6 @@
   async function restoreData(data) {
     if (!data || data.app !== 'usha') { backupNote('That file is not an Email Kit backup, so nothing was restored.'); return; }
     if (Number(data.schema) > SCHEMA) { backupNote('That backup came from a newer version. Please update Email Kit first.'); return; }
-    const backupProfile = Array.isArray(data.meta) && data.meta.find(r => r && r.id === 'agency');
-    if (backupProfile && (!db.meta.agency || db.meta.agency.value.name.toLowerCase() !== String(backupProfile.value && backupProfile.value.name).toLowerCase())) {
-      backupNote('Set up the same agency in this browser profile before restoring. No records were imported.'); return;
-    }
-    if (!backupProfile && db.meta.agency && (Object.keys(db.contacts).length || Object.keys(db.suppressions).length)) {
-      backupNote('Restore this older, unidentified backup in a fresh browser profile, then verify the agency.'); return;
-    }
     if (Number(data.schema) < 3) {
       const out = await attempt('migrateLegacy', { tracker: Array.isArray(data.tracker) ? data.tracker : [], doNotContact: Array.isArray(data.doNotContact) ? data.doNotContact : [] }, 'backup');
       if (out) backupNote('The backup is restored from the earlier version.');
@@ -1740,16 +1812,18 @@
 
   /* ---------- Events ---------- */
   function wire() {
-    $('saveAgency').addEventListener('click', async () => {
-      const profile = Object.fromEntries(Object.entries(agencyFields).map(([key,id]) => [key,$(id).value.trim()]));
-      profile.approved = $('agencyApproved').checked;
-      const result = await attempt('saveAgency',{profile});
-      if (result) { clearDraft(); renderAll(); showToast('Agency profile saved.'); }
-    });
+    $('reviewImport').addEventListener('click', reviewIntake);
+    $('confirmImport').addEventListener('click', confirmIntake);
     const form = $('form');
     const OBS_GROUP = { vacancy: 'finding', expansion: 'finding', post: 'post', referral: 'referral', previous: 'previous', role: 'none' };
     const onChange = e => {
       const t = e && e.target;
+      if (t && t.name === 'mode') $('scenario').value = t.value === 'first' ? 'new' : 'no-response';
+      if (t && t.id && t.id.startsWith('import') && importReviewed) {
+        importReviewed = false; $('confirmImport').disabled = true;
+        $('importAssessment').textContent = 'Context changed. Review it again before saving.';
+      }
+      syncScenario();
       /* An Undo offer must not reach back over newly typed work. */
       if (t && ['recipientName','recipientContact','company','waNumber','waEvidence'].includes(t.id)) {
         $('whatsappConsent').checked = false;
