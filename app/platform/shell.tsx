@@ -1,13 +1,14 @@
 import Image from "next/image";
 import Icon from "@/components/icon";
-import type { PlatformUser } from "@/lib/platform/auth";
+import { toolEnabled, type PlatformUser } from "@/lib/platform/auth";
 import { TOOLS } from "@/lib/platform/tools";
 
 type Props = { user: PlatformUser; current: string; children: React.ReactNode };
 
 // Shared signed-in frame. It only renders after the page's server-side check.
-export default function Shell({ user, current, children }: Props) {
-  const tools = TOOLS.filter(t => user.access[t.key]);
+export default async function Shell({ user, current, children }: Props) {
+  const enabled = await Promise.all(TOOLS.map(t => toolEnabled(t.key)));
+  const tools = TOOLS.filter((t,i) => user.access[t.key] && enabled[i]);
   const link = (href: string, icon: string, label: string) =>
     <a href={href} aria-current={current === href ? "page" : undefined}><Icon name={icon} />{label}</a>;
   return <div className="wp-shell">
@@ -19,6 +20,7 @@ export default function Shell({ user, current, children }: Props) {
         {tools.map(t => <a key={t.key} href={t.href}><Icon name={t.icon} />{t.name}</a>)}
         <span className="wp-nav-label">ACCOUNT</span>
         {user.role === "admin" && link("/platform/admin", "manage_accounts", "Team access")}
+        {user.role === "admin" && link("/platform/admin/operations", "settings", "Operations")}
         {link("/platform/account", "person", "My account")}
       </nav>
       <div className="wp-me">
