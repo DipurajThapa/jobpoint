@@ -42,21 +42,6 @@
     <button type="button" class="btn text" id="reset" data-needs="edit">Reset form</button>
   </header>
 
-  <details class="sender" id="agencyBox" open>
-    <summary>Agency setup</summary>
-    <p class="hint">Use one agency per browser profile. This edition covers permanent, non-IT white-collar recruitment across India. Enter only claims approved for outreach.</p>
-    <div class="grid">
-      <div class="field"><label for="agencyName">Agency name</label><input id="agencyName" maxlength="100"></div>
-      <div class="field"><label for="agencyReview">Review approval by</label><input type="date" id="agencyReview"></div>
-      <div class="field span2"><label for="agencyServices">Approved screening process or service description</label><textarea id="agencyServices" maxlength="1200"></textarea></div>
-      <div class="field"><label for="agencySectors">Sector statement (optional)</label><textarea id="agencySectors" maxlength="400"></textarea></div>
-      <div class="field"><label for="agencyReferences">Client names approved for public reference (optional)</label><textarea id="agencyReferences" maxlength="800"></textarea></div>
-      <div class="field span2"><label for="agencyTerms">Approved commercial terms, one per line (optional)</label><textarea id="agencyTerms" maxlength="1600"></textarea></div>
-    </div>
-    <label class="check"><input type="checkbox" id="agencyApproved"><span>I approve this agency identity, the India recruitment scope and the statements above.</span></label>
-    <button class="btn" id="saveAgency" data-needs="manage" type="button">Save agency profile</button>
-    <p class="hint" id="agencyStatus" role="status"></p>
-  </details>
   <form id="form" novalidate autocomplete="off">
 
     <details class="sender" id="senderBox" open>
@@ -95,7 +80,37 @@
       </div>
     </details>
 
-    <fieldset class="segment" id="modeGroup">
+    <section class="block" aria-labelledby="scenarioTitle">
+      <h2 id="scenarioTitle">What would you like to do?</h2>
+      <div class="field"><label for="scenario">Choose the next step</label><select id="scenario">
+        <option value="new">Start a new conversation</option>
+        <option value="reply">Reply to a client's message</option>
+        <option value="no-response">Follow up after no client response</option>
+        <option value="after-reply">Follow up after my latest reply</option>
+        <option value="import">Continue a conversation from elsewhere</option>
+        <option value="reconnect">Reconnect after a pause or closure</option>
+      </select></div>
+      <p class="hint" id="scenarioHint">Introduce yourself and the reason for writing.</p>
+      <div class="field" id="contextAnswerBox" hidden><label for="contextAnswer">Verified answer or next step for the client</label><textarea id="contextAnswer" rows="3" maxlength="1200" placeholder="Add the answer you can verify before drafting a reply."></textarea></div>
+    </section>
+    <section class="block" id="importBox" aria-labelledby="importTitle" hidden>
+      <h2 id="importTitle">Bring in an existing conversation</h2>
+      <p class="hint">Paste the messages you have. Email Kit identifies what it can, then asks you to verify the summary. Nothing is treated as sent automatically.</p>
+      <div class="field"><label for="importHistory">Email history or message notes</label><textarea id="importHistory" rows="7" maxlength="30000" placeholder="From: client@example.com&#10;Date: 2026-10-29&#10;Subject: Hiring discussion&#10;&#10;... "></textarea></div>
+      <div class="grid">
+        <div class="field"><label for="importObjective">Conversation objective</label><input id="importObjective" maxlength="300"></div>
+        <div class="field"><label for="importSubject">Existing email subject <span class="opt">optional</span></label><input id="importSubject" maxlength="300"></div>
+        <div class="field"><label for="importLastSpeaker">Who sent the latest message?</label><select id="importLastSpeaker"><option value="">Please confirm</option><option value="client">Client</option><option value="consultant">I did</option></select></div>
+        <div class="field"><label for="importLastDate">When was it sent?</label><input id="importLastDate" type="date"></div>
+        <div class="field span2"><label for="importLastText">Latest message text <span class="opt">required if the client replied</span></label><textarea id="importLastText" rows="3" maxlength="10000"></textarea></div>
+        <div class="field span2"><label for="importSummary">Important discussions and decisions (review and edit)</label><textarea id="importSummary" rows="3" maxlength="2000"></textarea></div>
+        <div class="field span2"><label for="importOutstanding">Unanswered question, decision or commitment <span class="opt">if known</span></label><textarea id="importOutstanding" rows="2" maxlength="800"></textarea></div>
+        <div class="field span2"><label for="importNext">Expected next step <span class="opt">if known</span></label><input id="importNext" maxlength="300"></div>
+      </div>
+      <p class="hint" id="importAssessment" role="status"></p>
+      <div class="track-actions"><button class="btn quiet" id="reviewImport" type="button" data-needs="edit">Review context</button><button class="btn" id="confirmImport" type="button" data-needs="edit" disabled>Save verified conversation</button></div>
+    </section>
+    <fieldset class="segment" id="modeGroup" hidden>
       <legend>Conversation stage</legend>
       <div class="segment-row two">
         <input type="radio" name="mode" id="mode-first" value="first" checked><label for="mode-first">First contact</label>
@@ -498,6 +513,7 @@
 <script id="message-library">/*__LIBRARY__*/</script>
 <script id="selection-rules">/*__RULES__*/</script>
 <script id="client-engine">/*__ENGINE__*/</script>
+<script id="client-conversation">/*__CONVERSATION__*/</script>
 <script id="local-store">/*__STORE__*/</script>
 <script id="record-views">/*__RECORDS__*/</script>
 <script id="backup">/*__BACKUP__*/</script>
