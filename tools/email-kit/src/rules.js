@@ -853,6 +853,15 @@ const Rules = (function () {
     if ((ctx.category === 'optOut' && (state.noReplyRequested || state.optOutScope === 'review')) || ctx.category === 'deliveryFailure') {
       return { ctx, candidates: [], noMessage: true, summary, targetActive: false, overflow: '' };
     }
+    if (ctx.category === 'commercial' && !CONFIG.commercial.lines.length) {
+      const first = norm(state.recipientName).split(/\s+/)[0];
+      const subject = norm(state.priorSubject);
+      const body = [(first ? 'Dear ' + first + ',' : 'Hello,'), '',
+        'Thank you for asking about our commercial terms. I will confirm the current fee, payment and replacement details before sharing them with you.',
+        '', 'Regards,', norm(state.senderName), norm(state.senderRole), CONFIG.firm.name].filter((line,i,all) => line || (i > 0 && all[i-1])).join('\n');
+      return { ctx, summary, targetActive:false, overflow:'', candidates:[{ id:'terms-unconfirmed', label:'Confirm the terms', difference:'No fee or contract terms are quoted.', why:'The current terms are not verified.', body,
+        subject:subject ? (/^re:/i.test(subject) ? subject : 'Re: ' + subject) : 'Commercial terms', fits:true, droppedEvidence:[] }] };
+    }
     const angles = rank(structuresFor(ctx).filter(a => isAvailable(a, ctx)), ctx);
     const seen = new Set();
     const list = angles.map(a => renderAngle(a, ctx, limits)).filter(c => {
