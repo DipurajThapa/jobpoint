@@ -1,0 +1,32 @@
+import Image from "next/image";
+import Icon from "@/components/icon";
+import type { PlatformUser } from "@/lib/platform/auth";
+import { TOOLS } from "@/lib/platform/tools";
+
+type Props = { user: PlatformUser; current: string; children: React.ReactNode };
+
+// Shared signed-in frame. It only renders after the page's server-side check.
+export default function Shell({ user, current, children }: Props) {
+  const tools = TOOLS.filter(t => user.access[t.key]);
+  const link = (href: string, icon: string, label: string) =>
+    <a href={href} aria-current={current === href ? "page" : undefined}><Icon name={icon} />{label}</a>;
+  return <div className="wp-shell">
+    <aside className="wp-side">
+      <a className="wp-brand" href="/platform"><Image src="/images/job-point-dark.png" width={46} height={46} alt="" /><span><b>Working Platform</b><span>JOB POINT</span></span></a>
+      <nav className="wp-nav" aria-label="Working Platform">
+        {link("/platform", "dashboard", "Dashboard")}
+        {tools.length > 0 && <span className="wp-nav-label">TOOLS</span>}
+        {tools.map(t => <a key={t.key} href={t.href}><Icon name={t.icon} />{t.name}</a>)}
+        <span className="wp-nav-label">ACCOUNT</span>
+        {user.role === "admin" && link("/platform/admin", "manage_accounts", "Team access")}
+        {link("/platform/account", "person", "My account")}
+      </nav>
+      <div className="wp-me">
+        <b>{user.name || user.email}</b>
+        <span>{user.role === "admin" ? "Administrator" : "Team member"}</span>
+        <form method="post" action="/api/platform/auth/sign-out"><button type="submit">Sign out</button></form>
+      </div>
+    </aside>
+    <main className="wp-main" id="main">{children}</main>
+  </div>;
+}

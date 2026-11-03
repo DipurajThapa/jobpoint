@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text, index } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text, index, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
 
 export const jobs = sqliteTable("jobs", {
   id: text("id").primaryKey(),
@@ -82,6 +82,7 @@ export const auditEvents = sqliteTable("audit_events", {
   action: text("action").notNull(),
   targetType: text("target_type").notNull(),
   targetId: text("target_id").notNull(),
+  detail: text("detail").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("audit_events_created_idx").on(table.createdAt)]);
 
@@ -89,4 +90,83 @@ export const rateLimits = sqliteTable("rate_limits", {
   key: text("key").primaryKey(),
   windowStart: integer("window_start").notNull(),
   hits: integer("hits").notNull().default(0),
+});
+
+// Working Platform: internal team accounts, per-tool permissions and sessions.
+// Tokens and passwords are stored only as hashes.
+export const platformUsers = sqliteTable("platform_users", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull(),
+  name: text("name").notNull().default(""),
+  role: text("role", { enum: ["admin", "member"] }).notNull().default("member"),
+  status: text("status", { enum: ["invited", "active", "disabled"] }).notNull().default("invited"),
+  passwordHash: text("password_hash"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  lastSignInAt: text("last_sign_in_at"),
+  createdBy: text("created_by"),
+}, (table) => [uniqueIndex("platform_users_email_unique").on(table.email)]);
+
+export const platformToolAccess = sqliteTable("platform_tool_access", {
+  userId: text("user_id").notNull().references(() => platformUsers.id, { onDelete: "cascade" }),
+  toolKey: text("tool_key").notNull(),
+  level: text("level", { enum: ["view", "edit", "manage"] }).notNull(),
+  grantedBy: text("granted_by").notNull(),
+  grantedAt: text("granted_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [primaryKey({ columns: [table.userId, table.toolKey] })]);
+
+export const platformSessions = sqliteTable("platform_sessions", {
+  tokenHash: text("token_hash").primaryKey(),
+  userId: text("user_id").notNull().references(() => platformUsers.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull(),
+  lastSeenAt: text("last_seen_at").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  userAgent: text("user_agent").notNull().default(""),
+}, (table) => [index("platform_sessions_user_idx").on(table.userId)]);
+
+export const platformTokens = sqliteTable("platform_tokens", {
+  tokenHash: text("token_hash").primaryKey(),
+  userId: text("user_id").notNull().references(() => platformUsers.id, { onDelete: "cascade" }),
+  purpose: text("purpose", { enum: ["invite", "reset"] }).notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  usedAt: text("used_at"),
+}, (table) => [index("platform_tokens_user_idx").on(table.userId, table.purpose)]);
+
+// Email Kit: one shared workspace. Each engine record is stored as JSON by
+// (table, id); attachment bytes and daily recovery snapshots live in private R2.
+export const emailKitRecords = sqliteTable("email_kit_records", {
+  tbl: text("tbl").notNull(),
+  id: text("id").notNull(),
+  data: text("data").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  updatedRev: integer("updated_rev").notNull().default(0),
+}, (table) => [primaryKey({ columns: [table.tbl, table.id] })]);
+
+export const emailKitState = sqliteTable("email_kit_state", {
+  id: integer("id").primaryKey(),
+  rev: integer("rev").notNull().default(0),
+  lastTx: text("last_tx").notNull().default(""),
+  updatedAt: text("updated_at"),
+  updatedBy: text("updated_by"),
+});
+
+export const emailKitFiles = sqliteTable("email_kit_files", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull().default(""),
+  size: integer("size").notNull(),
+  r2Key: text("r2_key").notNull(),
+  createdAt: text("created_at").notNull(),
+  createdBy: text("created_by").notNull(),
+});
+
+export const emailKitSnapshots = sqliteTable("email_kit_snapshots", {
+  id: text("id").primaryKey(),
+  r2Key: text("r2_key").notNull(),
+  bytes: integer("bytes").notNull(),
+  createdAt: text("created_at").notNull(),
+  createdBy: text("created_by").notNull(),
 });
