@@ -340,11 +340,10 @@ const Rules = (function () {
 
     /* With no reply to write, an opt-out needs only enough to identify them. */
     const noReply = followup && ((cat === 'optOut' && (s.noReplyRequested || s.optOutScope === 'review')) || cat === 'deliveryFailure');
-    if (!noReply && (!CONFIG.firm.name || (CONFIG.reviewBy && CONFIG.reviewBy < today))) need('agencyName', 'Save a current, approved agency profile before drafting.');
     if (!noReply && cat === 'optOut' && s.channel !== s.priorChannel) need('channel','Keep an acknowledgement on the original channel or record no reply.');
     if (!noReply && followup && cat === 'meeting' && interpret(s.responseText,today).category === 'unclear' && !['cancel','change'].includes(s.meetingAction)) need('meetingAction','They declined the proposed time. Clarify, cancel or record a new time they agreed.');
     if (!noReply && followup && !s.stopReviewed && interpret(s.responseText,today).optOut && cat !== 'optOut') need('responseCategory','This reply contains a stop request. Review its scope before any further message.');
-    if (!noReply && (cat === 'commercial' || s.includeTerms) && !CONFIG.commercial.lines.length) need('agencyTerms', 'Enter your approved terms in Agency setup before quoting them.');
+    if (!noReply && s.includeTerms && !CONFIG.commercial.lines.length) need('includeTerms', 'Approved terms are not available. Leave the terms out and confirm them separately.');
     if (!noReply) {
       if (!norm(s.senderName)) need('senderName', 'Add your name so the message can introduce you.');
       if (!norm(s.senderRole)) need('senderRole', 'Add your designation so the message can introduce you.');
