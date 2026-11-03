@@ -355,9 +355,9 @@ const FOLLOW_UPS = {
       paras: [['thanksInterest'], ['answers'], ['notedBlock'], ['terms'], ['nextRequirement']], tiers: [{}] }
   ],
   moreInfo: [
-    { id: 'holding', label: 'Holding reply', difference: 'This version thanks them and says you will answer separately, because Usha has no verified answer.', needs: 'firstHolding',
+    { id: 'holding', label: 'Holding reply', difference: 'This version thanks them and says you will answer separately, because Email Kit has no verified answer.', needs: 'firstHolding',
       paras: [['thanksReply', 'holdingLine'], ['terms'], ['agreedLine']], tiers: [{}] },
-    { id: 'owedManual', label: 'Send the answer you promised', difference: 'This version keeps your promise. Add the answer, because Usha has no verified one.', needs: 'owedOpen',
+    { id: 'owedManual', label: 'Send the answer you promised', difference: 'This version keeps your promise. Add the answer, because Email Kit has no verified one.', needs: 'owedOpen',
       paras: [['owedLine'], ['owedBlank'], ['terms'], ['furtherDetail']], tiers: [{}] },
     { id: 'answerAgreed', label: 'Answer and confirm what you agreed', difference: 'This version answers the question and confirms the next step you recorded.', needs: 'answersAgreed',
       paras: [['openAnswer'], ['answers'], ['terms'], ['agreedLine']], tiers: [{}] },
@@ -382,7 +382,7 @@ const FOLLOW_UPS = {
   meeting: [
     { id: 'meetingReply', label: 'Meeting reply', difference: 'This version confirms, changes or cancels the meeting you recorded.', needs: 'meetingClear',
       paras: [['thanksMeeting'], ['meetingLine'], ['answers'], ['terms'], ['meetingTopicLine']], tiers: [{}] },
-    { id: 'meetingClarify', label: 'Ask for the missing details', difference: 'This version asks for the details that are not clear, so Usha does not guess them.', needs: 'meetingUnclear',
+    { id: 'meetingClarify', label: 'Ask for the missing details', difference: 'This version asks for the details that are not clear, so Email Kit does not guess them.', needs: 'meetingUnclear',
       paras: [['thanksMeeting'], ['answers'], ['terms'], ['meetingAsk']], tiers: [{}] }
   ],
   meetingHeld: [

@@ -6,7 +6,7 @@
   const VERSION = '__VERSION__';
   const NOTES = __NOTES__;
   const $ = id => document.getElementById(id);
-  const STORE_VERSION = 'usha-version';
+  const STORE_VERSION = 'email-kit-version';
   const HOUR = 3600000;
   const isPage = __STANDALONE__;
   const isFile = isPage || location.protocol === 'file:';
@@ -24,7 +24,7 @@
     if (isFile) return;
     try {
       const previous = localStorage.getItem(STORE_VERSION);
-      if (previous && previous !== VERSION) window.UshaApp.showToast('Usha is updated to version ' + VERSION + '. ' + NOTES);
+      if (previous && previous !== VERSION) window.EmailKitApp.showToast('Email Kit is updated to version ' + VERSION + '. ' + NOTES);
       localStorage.setItem(STORE_VERSION, VERSION);
     } catch (e) { /* storage may be unavailable */ }
   }
@@ -39,8 +39,8 @@
       return;
     }
     if (isFile) text.textContent = 'This copy runs from a file, so it cannot install or update. Open it from your app link instead.';
-    else if (standalone()) text.textContent = 'Usha is installed. Updates arrive inside this app, so you never need to install it again.';
-    else if (installEvent) text.textContent = 'Install Usha on this device.' + once;
+    else if (standalone()) text.textContent = 'Email Kit is installed. Updates arrive inside this app, so you never need to install it again.';
+    else if (installEvent) text.textContent = 'Install Email Kit on this device.' + once;
     else if (isIos) text.textContent = 'In Safari, tap Share and then Add to Home Screen.' + once;
     else text.textContent = 'Open your browser menu and choose the install option. If the app is already installed, open it from your home screen instead.' + once;
   }
@@ -61,15 +61,15 @@
 
   async function offerUpdate(worker) {
     /* With nothing on screen to lose, the update applies without a question. */
-    if (!window.UshaApp.hasWork()) { apply(worker); return; }
+    if (!window.EmailKitApp.hasWork()) { apply(worker); return; }
     const details = await info(worker);
     if (dismissed === details.version) return;
-    $('updateText').textContent = 'Version ' + details.version + ' is ready. ' + details.notes + ' Updating restarts Usha and clears the form, so please copy your draft first.';
+    $('updateText').textContent = 'Version ' + details.version + ' is ready. ' + details.notes + ' Updating restarts Email Kit and clears the form, so please copy your draft first.';
     $('updateNow').onclick = () => { $('updateBar').hidden = true; apply(worker); };
     $('updateLater').onclick = () => {
       dismissed = details.version;
       $('updateBar').hidden = true;
-      status('The update will apply the next time you open Usha.');
+      status('The update will apply the next time you open Email Kit.');
     };
     $('updateBar').hidden = false;
     status('Version ' + details.version + ' is ready to install.');
@@ -83,7 +83,7 @@
 
   async function checkForUpdate(manual) {
     if (!navigator.onLine) {
-      if (manual) status('You are offline, so Usha cannot check for updates.');
+      if (manual) status('You are offline, so Email Kit cannot check for updates.');
       return;
     }
     if (!registration) return;
@@ -95,7 +95,7 @@
       else if (registration.waiting) offerUpdate(registration.waiting);
       else status('You have the latest version.');
     } catch (e) {
-      if (manual) status('Usha could not reach the update server. Please try again later.');
+      if (manual) status('Email Kit could not reach the update server. Please try again later.');
     }
   }
 
@@ -128,7 +128,7 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(false); });
     setInterval(() => checkForUpdate(false), HOUR);
     if (navigator.serviceWorker.controller) checkForUpdate(false);
-    else status('Usha is ready to work offline.');
+    else status('Email Kit is ready to work offline.');
   }
 
   window.addEventListener('beforeinstallprompt', e => {
@@ -139,7 +139,7 @@
   window.addEventListener('appinstalled', () => {
     installEvent = null;
     showInstallHelp();
-    window.UshaApp.showToast('Usha is installed. Please use the app icon from now on.');
+    window.EmailKitApp.showToast('Email Kit is installed. Please use the app icon from now on.');
   });
   $('installApp').addEventListener('click', async () => {
     if (!installEvent) return;

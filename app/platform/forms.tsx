@@ -3,15 +3,17 @@ import { useEffect, useState, type FormEvent } from "react";
 
 async function post(url: string, body: unknown) {
   const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" });
-  const data = await response.json().catch(() => ({}));
+  const data = await response.json().catch(() => ({})) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   if (!response.ok) throw new Error(data.error || "Something went wrong. Try again.");
   return data;
 }
 
 const safeNext = (value: string | null) => value && value.startsWith("/platform") && !value.startsWith("//") && !value.includes("\\") ? value : "/platform";
 
-export function SignInForm({ next, signedOut }: { next: string | null; signedOut: boolean }) {
-  const [error, setError] = useState("");
+const SIGN_IN_ERRORS: Record<string, string> = { INVALID: "Email or password is incorrect.", MISSING: "Enter your email and password.", RATE_LIMIT: "Too many sign-in attempts. Wait 15 minutes, then try again.", UNAVAILABLE: "Sign-in is temporarily unavailable." };
+
+export function SignInForm({ next, signedOut, errorCode }: { next: string | null; signedOut: boolean; errorCode?: string }) {
+  const [error, setError] = useState(errorCode ? SIGN_IN_ERRORS[errorCode] ?? "Sign-in failed." : "");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     // Remove anything Email Kit kept in this browser for the previous person.
@@ -26,7 +28,8 @@ export function SignInForm({ next, signedOut }: { next: string | null; signedOut
       window.location.assign(safeNext(next));
     } catch (e) { setError(e instanceof Error ? e.message : "Sign-in failed."); setBusy(false); }
   }
-  return <form onSubmit={submit} noValidate>
+  return <form onSubmit={submit} method="post" action="/api/platform/auth/sign-in" noValidate>
+    <input type="hidden" name="next" value={safeNext(next)} />
     {signedOut && <p className="wp-notice good" role="status">You are signed out.</p>}
     {error && <p className="wp-notice bad" role="alert">{error}</p>}
     <label>Work email<input name="email" type="email" autoComplete="username" required maxLength={254} autoFocus /></label>
@@ -35,8 +38,8 @@ export function SignInForm({ next, signedOut }: { next: string | null; signedOut
   </form>;
 }
 
-export function SetPasswordForm({ token, invite, email }: { token: string; invite: boolean; email: string }) {
-  const [error, setError] = useState("");
+export function SetPasswordForm({ token, invite, email, initialError }: { token: string; invite: boolean; email: string; initialError?: string }) {
+  const [error, setError] = useState(initialError ?? "");
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -48,7 +51,9 @@ export function SetPasswordForm({ token, invite, email }: { token: string; invit
       window.location.assign("/platform");
     } catch (e) { setError(e instanceof Error ? e.message : "The password was not saved."); setBusy(false); }
   }
-  return <form onSubmit={submit} noValidate>
+  return <form onSubmit={submit} method="post" action="/api/platform/auth/accept" noValidate>
+    <input type="hidden" name="token" value={token} />
+    <input type="hidden" name="purpose" value={invite ? "accept" : "reset"} />
     {error && <p className="wp-notice bad" role="alert">{error}</p>}
     <label>Email<input value={email} readOnly autoComplete="username" /></label>
     {invite && <label>Your name<input name="name" required maxLength={120} autoComplete="name" /></label>}
@@ -59,8 +64,8 @@ export function SetPasswordForm({ token, invite, email }: { token: string; invit
   </form>;
 }
 
-export function ChangePasswordForm() {
-  const [notice, setNotice] = useState<{ text: string; good: boolean } | null>(null);
+export function ChangePasswordForm({ initial }: { initial?: { text: string; good: boolean } }) {
+  const [notice, setNotice] = useState<{ text: string; good: boolean } | null>(initial ?? null);
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,7 +80,7 @@ export function ChangePasswordForm() {
     } catch (e) { setNotice({ text: e instanceof Error ? e.message : "Not changed.", good: false }); }
     setBusy(false);
   }
-  return <form onSubmit={submit} className="wp-form-grid" style={{ gridTemplateColumns: "1fr" }}>
+  return <form onSubmit={submit} method="post" action="/api/platform/auth/password" className="wp-form-grid" style={{ gridTemplateColumns: "1fr" }}>
     {notice && <p className={`wp-notice ${notice.good ? "good" : "bad"}`} role="status">{notice.text}</p>}
     <label>Current password<input name="current" type="password" required autoComplete="current-password" maxLength={200} /></label>
     <label>New password<input name="next" type="password" required minLength={12} maxLength={200} autoComplete="new-password" /></label>
@@ -105,14 +110,16 @@ export function OwnerForms({ hasAdmin }: { hasAdmin: boolean }) {
   }
   return <div style={{ display: "grid", gap: 18 }}>
     {notice && <p className={`wp-notice ${notice.good ? "good" : "bad"}`} role="status">{notice.text}</p>}
-    {!hasAdmin && <form onSubmit={create} style={{ display: "grid", gap: 12 }}>
+    {!hasAdmin && <form onSubmit={create} method="post" action="/api/platform/owner" style={{ display: "grid", gap: 12 }}>
+      <input type="hidden" name="action" value="create-admin" />
       <h2>Create the first administrator</h2>
       <label>Name<input name="name" required maxLength={120} /></label>
       <label>Email<input name="email" type="email" required maxLength={254} /></label>
       <label>Password<input name="password" type="password" required minLength={12} maxLength={200} autoComplete="new-password" /></label>
       <button className="wp-btn">Create administrator</button>
     </form>}
-    <form onSubmit={reset} style={{ display: "grid", gap: 12 }}>
+    <form onSubmit={reset} method="post" action="/api/platform/owner" style={{ display: "grid", gap: 12 }}>
+      <input type="hidden" name="action" value="reset-admin" />
       <h2>Recover an administrator</h2>
       <p className="hint">Creates a one-time link (valid 24 hours) for an administrator who cannot sign in. Give it to them directly.</p>
       <label>Administrator email<input name="email" type="email" required maxLength={254} /></label>

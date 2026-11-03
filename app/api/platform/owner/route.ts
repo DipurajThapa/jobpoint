@@ -1,6 +1,6 @@
 import { isOwnerRequest } from "@/lib/admin";
 import { hashPassword, passwordProblem } from "@/lib/platform/crypto";
-import { apiError, apiJson, auditStatement, clientKey, db, issueToken, linkUrl, newId, nowIso, sameOriginRequest, audit, withinLimit } from "@/lib/platform/auth";
+import { apiError, apiJson, auditStatement, clientKey, db, issueToken, linkUrl, newId, nowIso, readInput, sameOriginRequest, seeOther, audit, withinLimit } from "@/lib/platform/auth";
 import { cleanEmail, cleanName, validEmail } from "@/lib/platform/users";
 
 export const dynamic = "force-dynamic";
@@ -12,8 +12,11 @@ export async function POST(request: Request) {
   if (!sameOriginRequest(request)) return apiError("This request must come from the Working Platform.", 403);
   const ownerEmail = request.headers.get("oai-authenticated-user-email")?.toLowerCase() ?? "owner";
   if (!await withinLimit(`wp-owner:${await clientKey(request)}`, 900, 10)) return apiError("Too many attempts. Wait 15 minutes, then try again.", 429);
-  let body: Record<string, unknown>;
-  try { body = await request.json(); } catch { return apiError("The request was not readable."); }
+  const input = await readInput(request);
+  if (!input) return apiError("The request was not readable.");
+  // Without scripts the page cannot show a one-time link, so form posts only create the first administrator.
+  if (input.form && input.data.action !== "create-admin") return seeOther("/platform/owner");
+  const body = input.data;
   const admins = await db().prepare("SELECT COUNT(*) AS n FROM platform_users WHERE role = 'admin' AND status = 'active'").first<{ n: number }>();
 
   if (body.action === "create-admin") {
@@ -34,7 +37,7 @@ export async function POST(request: Request) {
           .bind(id, email, name, await hashPassword(password), now, now, `owner:${ownerEmail}`),
       auditStatement(`owner:${ownerEmail}`, "platform.first_admin_created", "platform_user", id),
     ]);
-    return apiJson({ ok: true });
+    return input.form ? seeOther("/platform/sign-in") : apiJson({ ok: true });
   }
 
   if (body.action === "reset-admin") {

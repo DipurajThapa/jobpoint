@@ -73,6 +73,9 @@ const Engine = (function () {
     for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
     return (h >>> 0).toString(36) + '-' + t.length.toString(36);
   }
+  /* 'Usha' is the stored name of the system actor (kept so records from the
+     earlier app stay valid). People see it as Email Kit. */
+  const who = v => (v === 'Usha' ? 'Email Kit' : v);
   const newId = prefix => prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
   function todayIn(zone, date) {
@@ -329,7 +332,7 @@ const Engine = (function () {
     return open.find(c => !ENDED.includes(c.status)) || open.find(c => c.lastType) || newConversation(tx, org, contact, s);
   }
 
-  /* A follow-up typed by hand may refer to a message Usha never recorded. */
+  /* A follow-up typed by hand may refer to a message Email Kit never recorded. */
   function ensurePrior(tx, conv, s) {
     if (tx.all('msgs').some(m => m.convId === conv.id && m.direction === 'out' && ['sent', 'failed'].includes(m.status))) return;
     if (s.stage !== 'followup' || s.activeRecordId) return;
@@ -371,7 +374,7 @@ const Engine = (function () {
     meeting: ['Attend the meeting', 'The meeting is confirmed.'],
     meetingOutcome: ['Record the meeting outcome', 'The meeting date has passed.'],
     meetingClarify: ['Agree the meeting details', 'The date, time or time zone is not settled.'],
-    review: ['Review this', 'Usha could not decide this safely.']
+    review: ['Review this', 'Email Kit could not decide this safely.']
   };
 
   function addTask(tx, conv, kind, due, extra) {
@@ -612,7 +615,7 @@ const Engine = (function () {
         break;
       }
       case 'unclear':
-        move(tx, conv, 'clarification', 'Usha could not read the reply safely.');
+        move(tx, conv, 'clarification', 'Email Kit could not read the reply safely.');
         addTask(tx, conv, 'reply', tx.today, { title: 'Decide what this reply means', reason: 'The reply is saved, but it could not be read safely.' });
         break;
       default:
@@ -787,7 +790,7 @@ const Engine = (function () {
     }
     if (conv && followup && cat === 'noResponse') {
       const check = recheck(state, conv, today, { followUp: true, channel: s.channel, followTask: s.followTask });
-      if (!check.ok && !['restricted', 'moved', 'ended'].includes(check.code)) blockers.push({ field: 'responseCategory', msg: check.reason + ' Usha will not draft a reminder.' });
+      if (!check.ok && !['restricted', 'moved', 'ended'].includes(check.code)) blockers.push({ field: 'responseCategory', msg: check.reason + ' Email Kit will not draft a reminder.' });
       const owed = rows(state, 'tasks').find(t => t.convId === conv.id && t.status === 'open' && ['reply', 'answerOwed'].includes(t.kind));
       if (owed) blockers.push({ field: 'responseCategory', msg: 'You still owe them a reply, so a reminder would be wrong. Choose the response category.' });
       const planned = rows(state, 'tasks').find(t => t.convId === conv.id && t.status === 'open' && FOLLOW_KINDS.includes(t.kind));
@@ -956,11 +959,11 @@ const Engine = (function () {
     /* The only way a message becomes sent. The user must ask for it. */
     markSent(tx, { s, convId, msgId, channel, subject, body }) {
       const conv = tx.get('convs', convId);
-      if (!conv) refuse('Usha could not find this conversation.');
+      if (!conv) refuse('Email Kit could not find this conversation.');
       const msg = tx.get('msgs', msgId);
       if (msg && msg.status === 'sent') return { duplicate: true, convId, next: conv.next };
       /* Only the draft on screen can become a sent message. */
-      if (msg && !['draft', 'ready'].includes(msg.status)) refuse('This draft is no longer current, so Usha did not record it as sent. Generate it again.');
+      if (msg && !['draft', 'ready'].includes(msg.status)) refuse('This draft is no longer current, so Email Kit did not record it as sent. Generate it again.');
       const profile = tx.get('meta','agency');
       if (!profile || !msg || msg.convId !== convId || msg.agencyVersion !== profile.value.revision || !s.agencyVersion || s.agencyVersion !== CONFIG.profileVersion || profile.value.reviewBy < tx.today)
         refuse('Generate a new draft with the current approved agency profile.');
@@ -974,7 +977,7 @@ const Engine = (function () {
       if (courtesy && s.responseCategory === 'optOut' && (s.priorChannel !== channel || Rules.detectNoReply(s.responseText))) refuse('No acknowledgement on this channel.');
       if (!courtesy) {
         const check = recheckTx(tx, conv, { channel, followUp: s.stage === 'followup' && s.responseCategory === 'noResponse', msg, reply: s.stage === 'followup' && s.responseCategory !== 'noResponse', followTask: s.followTask });
-        if (!check.ok) refuse(check.reason + ' Usha did not record this as sent.');
+        if (!check.ok) refuse(check.reason + ' Email Kit did not record this as sent.');
       }
       if (channel === 'whatsapp' && !courtesy && Rules.findDoNotContact(suppressionView(transactionView(tx)), s)?.exact)
         refuse('This WhatsApp destination is restricted.');
@@ -1035,7 +1038,7 @@ const Engine = (function () {
       return { convId: conv.id, msgId: msg.id, status: conv.status, next: conv.next };
     },
 
-    /* Runs when Usha opens, comes back online or the day changes. One conversation
+    /* Runs when Email Kit opens, comes back online or the day changes. One conversation
        at a time, so a fault in one can never stop the others. Safe to repeat. */
     reconcileConversation(tx, { convId, sender, composer }) {
       const report = { overdue: 0, drafted: 0, closed: 0 };
@@ -1222,7 +1225,7 @@ const Engine = (function () {
     },
     correctFact(tx, { id, text, status, why }) {
       const old = tx.get('facts', id);
-      if (!old) refuse('Usha could not find this note.');
+      if (!old) refuse('Email Kit could not find this note.');
       const conv = tx.get('convs', old.convId);
       old.status = text && norm(text) !== old.text ? 'corrected' : status;
       if (text && norm(text) !== old.text) {
@@ -1316,7 +1319,7 @@ const Engine = (function () {
     /* Combines two records of one person. Nothing is lost, and every reference moves. */
     mergeContacts(tx, { keepId, dropId }) {
       const keep = tx.get('contacts', keepId), drop = tx.get('contacts', dropId);
-      if (!keep || !drop) refuse('Usha could not find both contacts.');
+      if (!keep || !drop) refuse('Email Kit could not find both contacts.');
       keep.keys = Array.from(new Set(keep.keys.concat(drop.keys)));
       keep.aliases = Array.from(new Set((keep.aliases || []).concat(drop.aliases || [], drop.nameKey && drop.nameKey !== keep.nameKey ? [drop.nameKey] : [])));
       keep.affiliations = keep.affiliations.concat(drop.affiliations.filter(a => !keep.affiliations.some(b => b.orgId === a.orgId)));
@@ -1739,8 +1742,8 @@ const Engine = (function () {
     return /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i.test(name) ? '_' + name : name;
   };
   function folderFiles(state, today) {
-    const root = 'Usha clients ' + today + '/';
-    const files = [{ path: root + 'README.txt', text: 'This folder is a readable copy of your Usha records on ' + today + '.\nThe database inside Usha remains the source of truth, so changes made here do not go back into Usha.\n' }];
+    const root = 'Email Kit clients ' + today + '/';
+    const files = [{ path: root + 'README.txt', text: 'This folder is a readable copy of your Email Kit records on ' + today + '.\nThe database inside Email Kit remains the source of truth, so changes made here do not go back into Email Kit.\n' }];
     folders(state).forEach(({ org, contacts }) => {
       const orgPath = root + safeName(org.name) + '/';
       files.push({ path: orgPath + 'organisation.txt', text: ['Organisation: ' + org.name, 'Legal name: ' + (org.legalName || org.name), 'Industry: ' + (org.industry || 'Not recorded'), 'Location: ' + (org.location || 'Not recorded')].join('\n') + '\n' });
@@ -1751,7 +1754,7 @@ const Engine = (function () {
         files.push({ path: path + 'contact.txt', text: lines.join('\n') + '\n' });
         convs.forEach((conv, i) => {
           const dir = path + String(i + 1).padStart(2, '0') + ' ' + safeName(conv.topic || 'Conversation') + '/';
-          const ctx = ['Status: ' + LABELS.conv[conv.status], 'Outcome: ' + (conv.outcome || 'Open'), 'Subject: ' + (conv.subject || 'None'), 'Next action: ' + (conv.next ? conv.next.action + ', owner ' + conv.next.owner + ', due ' + (conv.next.due || 'not set') + '. ' + conv.next.reason : 'None'), ''];
+          const ctx = ['Status: ' + LABELS.conv[conv.status], 'Outcome: ' + (conv.outcome || 'Open'), 'Subject: ' + (conv.subject || 'None'), 'Next action: ' + (conv.next ? conv.next.action + ', owner ' + who(conv.next.owner) + ', due ' + (conv.next.due || 'not set') + '. ' + conv.next.reason : 'None'), ''];
           const group = (title, list, line) => { if (list.length) ctx.push(title + ':', ...list.map(line), ''); };
           const facts = rows(state, 'facts').filter(f => f.convId === conv.id);
           group('Confirmed', facts.filter(f => f.status === 'confirmed'), f => '- ' + LABELS.fact[f.kind] + ': ' + f.text);
@@ -1762,11 +1765,11 @@ const Engine = (function () {
           group('Tasks', rows(state, 'tasks').filter(t => t.convId === conv.id), t => '- ' + t.title + ' (' + t.status + ', due ' + (t.due || 'not set') + ')');
           group('Sources', rows(state, 'sources').filter(r => r.convId === conv.id), r => '- ' + [r.label, r.url, r.summary, r.quote && '"' + r.quote + '"'].filter(Boolean).join(', '));
           rows(state, 'sources').filter(r => r.convId === conv.id && r.fileId).forEach(r => files.push({ path: dir + 'attachments/' + safeName(r.label), fileId: r.fileId }));
-          group('History', rows(state, 'events').filter(e => e.convId === conv.id).sort((a, b) => a.at.localeCompare(b.at)), e => '- ' + e.at.slice(0, 16).replace('T', ' ') + ', ' + e.actor + ': ' + e.detail + (e.outcome ? ' (' + e.outcome + ')' : ''));
+          group('History', rows(state, 'events').filter(e => e.convId === conv.id).sort((a, b) => a.at.localeCompare(b.at)), e => '- ' + e.at.slice(0, 16).replace('T', ' ') + ', ' + who(e.actor) + ': ' + e.detail + (e.outcome ? ' (' + e.outcome + ')' : ''));
           files.push({ path: dir + 'conversation.txt', text: ctx.join('\n') + '\n' });
           rows(state, 'msgs').filter(m => m.convId === conv.id).sort((a, b) => a.at.localeCompare(b.at)).forEach((m, n) => {
             const name = String(n + 1).padStart(3, '0') + ' ' + m.at.slice(0, 10) + ' ' + (m.direction === 'in' ? 'received' : m.status) + ' ' + m.type + '.txt';
-            files.push({ path: dir + 'messages/' + safeName(name), text: ['Status: ' + LABELS.msg[m.status], 'Channel: ' + m.channel, 'Subject: ' + (m.subject || 'None'), 'Date: ' + m.at, 'Recorded by: ' + m.actor, 'Source: ' + (m.source || 'Usha'), '', m.body || m.summary || ''].join('\n') + '\n' });
+            files.push({ path: dir + 'messages/' + safeName(name), text: ['Status: ' + LABELS.msg[m.status], 'Channel: ' + m.channel, 'Subject: ' + (m.subject || 'None'), 'Date: ' + m.at, 'Recorded by: ' + who(m.actor), 'Source: ' + who(m.source || 'Usha'), '', m.body || m.summary || ''].join('\n') + '\n' });
           });
         });
       });
@@ -1774,5 +1777,5 @@ const Engine = (function () {
     return files;
   }
 
-  return { TABLES, LABELS, ALLOWED, ENDED, EngineError, emptyState, settingsError, validRow, differs, formerLink, addressQuestion, run, applyChanges, invert, applySettings, settingsOf, todayIn, resolve, recheck, guards, history, trackerView, suppressionView, actions, folders, timeline, confirmedFacts, formFor, folderFiles, meetingText, rows, hash };
+  return { who, TABLES, LABELS, ALLOWED, ENDED, EngineError, emptyState, settingsError, validRow, differs, formerLink, addressQuestion, run, applyChanges, invert, applySettings, settingsOf, todayIn, resolve, recheck, guards, history, trackerView, suppressionView, actions, folders, timeline, confirmedFacts, formFor, folderFiles, meetingText, rows, hash };
 })();

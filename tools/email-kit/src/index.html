@@ -3,22 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src 'self' data:; manifest-src 'self'; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#27306f">
-<meta name="application-name" content="Usha">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Usha">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<title>Usha 3.0</title>
-<meta name="description" content="Usha drafts outreach and follow-ups for recruitment agencies. It works offline and does not send messages.">
+<meta name="theme-color" content="#0A1F5C">
+<title>Email Kit | Working Platform</title>
+<meta name="description" content="Email Kit prepares employer outreach and follow-ups for the Job Point team. It does not send messages.">
 <link rel="icon" href="__FAVICON__">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap">
 <style>/*__CSS__*/</style>
 </head>
 <body>
+<!--__PLATFORM_BAR__-->
 <a class="skip" href="#messageHeading">Skip to the message</a>
 <div class="storebar" id="storeBar" role="alert" hidden></div>
 <div class="update" id="updateBar" hidden>
@@ -42,8 +38,8 @@
 <main class="brief">
   <header class="masthead">
     <!--__LOGO__-->
-    <p>Usha 3.0 · Recruitment outreach</p>
-    <button type="button" class="btn text" id="reset">Reset form</button>
+    <p>Employer outreach · Job Point Consultancy</p>
+    <button type="button" class="btn text" id="reset" data-needs="edit">Reset form</button>
   </header>
 
   <details class="sender" id="agencyBox" open>
@@ -58,7 +54,7 @@
       <div class="field span2"><label for="agencyTerms">Approved commercial terms, one per line (optional)</label><textarea id="agencyTerms" maxlength="1600"></textarea></div>
     </div>
     <label class="check"><input type="checkbox" id="agencyApproved"><span>I approve this agency identity, the India recruitment scope and the statements above.</span></label>
-    <button class="btn" id="saveAgency" type="button">Save agency profile</button>
+    <button class="btn" id="saveAgency" data-needs="manage" type="button">Save agency profile</button>
     <p class="hint" id="agencyStatus" role="status"></p>
   </details>
   <form id="form" novalidate autocomplete="off">
@@ -131,25 +127,25 @@
     <div class="suggest" id="trackerMatch" tabindex="-1" hidden>
       <p id="trackerMatchText"></p>
       <div class="track-actions">
-        <button type="button" class="btn quiet small" id="trackerMatchUse">Continue</button>
-        <button type="button" class="btn quiet small" id="trackerMatchRemove">Remove the record</button>
+        <button type="button" class="btn quiet small" id="trackerMatchUse" data-needs="edit">Continue</button>
+        <button type="button" class="btn quiet small" id="trackerMatchRemove" data-needs="edit">Remove the record</button>
       </div>
     </div>
 
     <div class="suggest" id="addressChoice" hidden>
       <p id="addressChoiceText"></p>
       <div class="track-actions">
-        <button type="button" class="btn quiet small" id="addressSame">The same person</button>
-        <button type="button" class="btn quiet small" id="addressOther">A different person</button>
+        <button type="button" class="btn quiet small" id="addressSame" data-needs="edit">The same person</button>
+        <button type="button" class="btn quiet small" id="addressOther" data-needs="edit">A different person</button>
       </div>
     </div>
 
     <div class="suggest" id="nameChoice" hidden>
       <p id="nameChoiceText"></p>
       <div class="track-actions">
-        <button type="button" class="btn quiet small" id="nameCorrect">Correct the record</button>
-        <button type="button" class="btn quiet small" id="nameMoved" hidden>They moved to this company</button>
-        <button type="button" class="btn quiet small" id="nameDifferent">A different person</button>
+        <button type="button" class="btn quiet small" id="nameCorrect" data-needs="edit">Correct the record</button>
+        <button type="button" class="btn quiet small" id="nameMoved" data-needs="edit" hidden>They moved to this company</button>
+        <button type="button" class="btn quiet small" id="nameDifferent" data-needs="edit">A different person</button>
       </div>
     </div>
 
@@ -173,15 +169,15 @@
       <div class="field gap"><label for="responseCategory">Response category</label><select id="responseCategory"></select></div>
       <div class="suggest" id="categorySuggest" hidden>
         <p id="categoryText"></p>
-        <button type="button" class="btn quiet small" id="categoryUse">Use this category</button>
+        <button type="button" class="btn quiet small" id="categoryUse" data-needs="edit">Use this category</button>
       </div>
       <div class="suggest" id="replyMatch" hidden>
         <p id="replyMatchText"></p>
         <button type="button" class="btn quiet small" id="replyMatchUse">Open this conversation</button>
       </div>
       <div class="reading" id="readBox" hidden>
-        <h3>What Usha found</h3>
-        <p class="hint">Usha reads only plain wording, so please check each point.</p>
+        <h3>What Email Kit found</h3>
+        <p class="hint">Email Kit reads only plain wording, so please check each point.</p>
         <ul id="readList"></ul>
       </div>
 
@@ -279,7 +275,7 @@
       <label class="check" id="wrapTerms"><input type="checkbox" id="includeTerms"><span>Include commercial terms in this message.</span></label>
 
       <div class="research" id="wrapResearch">
-        <p class="hint">Search for a hiring signal. Searches open in your browser and send their terms to Google. You check the results yourself, because Usha works offline.</p>
+        <p class="hint">Search for a hiring signal. Searches open in your browser and send their terms to Google. You check the results yourself, because Email Kit works offline.</p>
         <ul id="researchList"></ul>
       </div>
     </section>
@@ -326,7 +322,7 @@
       </div>
     </section>
 
-    <p class="privacy" id="privacyLine">Usha saves your client records in a private database on this device, so they are here when you come back. Usha sends nothing, and nothing leaves this device unless you export it.</p>
+    <p class="privacy" id="privacyLine">Client records are saved in the Job Point Working Platform and shared with team members who have Email Kit access. Email Kit sends nothing: you send from your own mailbox, then record it here.</p>
   </form>
 </main>
 
@@ -340,7 +336,7 @@
     <h3>Do not contact</h3>
     <p id="dncText"></p>
     <div class="dnc-actions" id="dncActions">
-      <button type="button" class="btn quiet small" id="dncClear">Record new permission</button>
+      <button type="button" class="btn quiet small" id="dncClear" data-needs="edit">Record new permission</button>
     </div>
   </div>
 
@@ -349,7 +345,7 @@
     <dt>Recommended next step</dt><dd id="summaryNext"></dd>
   </dl>
 
-  <button type="button" class="btn primary wide" id="generate">Generate message</button>
+  <button type="button" class="btn primary wide" id="generate" data-needs="edit">Generate message</button>
 
   <div id="live" class="sr" role="status" aria-live="polite"></div>
   <div class="toast" id="toast" hidden></div>
@@ -361,7 +357,7 @@
 
   <div class="sheet" id="sheet">
     <p class="empty" id="emptyState">Your draft will appear here.</p>
-    <p class="empty" id="noMessage" hidden>No message is needed. They asked for no reply, and Usha has marked this prospect as Do not contact.</p>
+    <p class="empty" id="noMessage" hidden>No message is needed. They asked for no reply, and Email Kit has marked this prospect as Do not contact.</p>
 
     <div id="draftArea" hidden>
       <div class="sheet-row" id="subjectRow">
@@ -397,9 +393,9 @@
 
   <div class="next-row" id="nextRow" hidden>
     <a class="btn quiet" id="openApp" hidden target="_blank" rel="noopener noreferrer"></a>
-    <button type="button" class="btn quiet" id="markSent" hidden>Mark as sent</button>
+    <button type="button" class="btn quiet" id="markSent" data-needs="edit" hidden>Mark as sent</button>
     <button type="button" class="btn quiet" id="saveEml" hidden>Save email file</button>
-    <button type="button" class="btn quiet" id="queueLater" hidden>Queue for later</button>
+    <button type="button" class="btn quiet" id="queueLater" data-needs="edit" hidden>Queue for later</button>
     <button type="button" class="btn quiet" id="alternative" disabled aria-expanded="false" aria-controls="altPanel">Choose an alternative</button>
   </div>
 
@@ -437,33 +433,34 @@
     <div id="installBlock">
       <h3>Install</h3>
       <p id="installText"></p>
-      <button type="button" class="btn quiet small" id="installApp" hidden>Install Usha</button>
+      <button type="button" class="btn quiet small" id="installApp" hidden>Install Email Kit</button>
     </div>
     <h3>Your records</h3>
     <p id="storageText"></p>
-    <p>Save a backup regularly. A backup holds your full client history and your Do not contact list, so keep it somewhere safe. Usha never sends it anywhere.</p>
+    <p>Save a backup regularly. A backup holds your full client history and your Do not contact list, so keep it somewhere safe. Email Kit never sends it anywhere.</p>
     <div class="dnc-actions">
       <div class="field"><label for="backupPassword">Backup passphrase (at least 12 characters for a new backup)</label><input type="password" id="backupPassword" autocomplete="off"><p class="hint">Keep the passphrase separately. Enter it here to save or restore a protected backup. CSV and folder exports are readable copies.</p></div>
       <button type="button" class="btn quiet small" id="exportBackup">Save a backup</button>
-      <button type="button" class="btn quiet small" id="importBackup">Restore a backup</button>
+      <button type="button" class="btn quiet small" id="importBackup" data-needs="manage">Restore a backup</button>
       <button type="button" class="btn quiet small" id="exportFolder">Save a readable folder</button>
       <button type="button" class="btn quiet small" id="exportCsv">Export contacts as CSV</button>
-      <button type="button" class="btn quiet small" id="importContacts">Import contacts from CSV</button>
-      <button type="button" class="btn quiet small" id="eraseAll">Delete all client records</button>
+      <button type="button" class="btn quiet small" id="importContacts" data-needs="edit">Import contacts from CSV</button>
+      <button type="button" class="btn quiet small" id="eraseAll" data-needs="manage">Delete all client records</button>
     </div>
     <input type="file" id="importFile" accept=".json,application/json" hidden aria-label="Choose a backup file">
     <input type="file" id="contactsFile" accept=".csv,text/csv" hidden aria-label="Choose a contacts file">
     <p id="backupStatus"></p>
-    <div id="recoverySection" hidden>
+    <div id="restoreReport" class="restore-report" role="status" hidden></div>
+    <div id="recoverySection" data-needs="manage" hidden>
       <h3>Recovery points</h3>
-      <p>Usha keeps one a day for a week. Restoring adds back anything missing and never removes a Do not contact mark.</p>
+      <p>Email Kit keeps one a day for a week. Restoring adds back anything missing and never removes a Do not contact mark.</p>
       <ul id="recoveryList"></ul>
     </div>
   </details>
 
   <details class="fold" id="rulesBox">
     <summary>Follow-up rules</summary>
-    <p>Usha counts from the day you mark a message as sent, never from when a draft was made. New rules apply to future messages.</p>
+    <p>Email Kit counts from the day you mark a message as sent, never from when a draft was made. New rules apply to future messages.</p>
     <div class="limit-grid">
       <div class="field"><label for="setFirst">First reminder after, in working days</label><input id="setFirst" type="number" min="1" max="60"></div>
       <div class="field"><label for="setFinal">Next reminder after, in working days</label><input id="setFinal" type="number" min="1" max="60"></div>
@@ -477,7 +474,7 @@
       <legend>Days off</legend>
       <div class="check-grid" id="setDays"></div>
     </fieldset>
-    <button type="button" class="btn quiet small" id="saveRules">Save the rules</button>
+    <button type="button" class="btn quiet small" id="saveRules" data-needs="manage">Save the rules</button>
     <p id="rulesStatus"></p>
   </details>
 
@@ -492,9 +489,8 @@
       <div class="field"><label for="emailMax">Email: target to, in words</label><input id="emailMax" type="number" min="1" step="5"></div>
     </div>
     <p>Character counts use the final text and include spaces, punctuation and line breaks, with each line break counted as one character. Email word counts cover the body, including the greeting and sign-off, and leave out the subject. A list bullet does not count as a word. Minimum targets apply to first messages, because follow-ups should be shorter.</p>
-    <button type="button" class="btn quiet small" id="limitsDefault">Restore default limits</button>
+    <button type="button" class="btn quiet small" id="limitsDefault" data-needs="edit">Restore default limits</button>
   </details>
-<details class="fold font-license"><summary>Font licence</summary><pre>__FONT_LICENSE__</pre></details>
 </aside>
 </div>
 

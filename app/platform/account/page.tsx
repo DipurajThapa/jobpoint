@@ -6,7 +6,9 @@ import { ChangePasswordForm } from "../forms";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My account" };
 
-export default async function AccountPage() {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const params = await searchParams;
+  const initial = params.changed ? { text: "Password changed. Other devices have been signed out.", good: true } : params.error ? { text: params.error.slice(0, 200), good: false } : undefined;
   const user = await requirePlatformPage("/platform/account");
   const tools = TOOLS.filter(t => user.access[t.key]);
   return <Shell user={user} current="/platform/account">
@@ -15,6 +17,6 @@ export default async function AccountPage() {
       <p><b>{user.name || "—"}</b><br />{user.email}<br />{user.role === "admin" ? "Administrator" : "Team member"}</p>
       <p className="hint">Tool access: {tools.length ? tools.map(t => `${t.name} (${LEVEL_LABEL[user.access[t.key]]})`).join(", ") : "none yet"}. Ask an administrator to change your name or access.</p>
     </section>
-    <section className="wp-card"><h2>Change password</h2><ChangePasswordForm /></section>
+    <section className="wp-card"><h2>Change password</h2><ChangePasswordForm initial={initial} /></section>
   </Shell>;
 }

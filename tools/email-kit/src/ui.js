@@ -7,10 +7,10 @@
   const TEXT_FIELDS = ['waEvidence','waNumber','senderName', 'senderRole', 'senderPhone', 'senderEmail', 'recipientTitle', 'recipientName', 'recipientContact', 'company', 'designation', 'industry', 'location', 'responsibility', 'desired', 'roles', 'hiringLocations', 'hiringType', 'priorChannel', 'priorType', 'priorDate', 'priorSubject', 'priorText', 'priorTopic', 'responseText', 'responseCategory', 'referredName', 'referredRole', 'referralPermission', 'agreedStep', 'agreedDate', 'reason', 'observation', 'sourceUrl', 'dateChecked', 'verification', 'postAuthor', 'referrer', 'conversationWhen', 'sourceQuote', 'optOutScope', 'meetingAction', 'meetingDate', 'meetingTime', 'meetingZone', 'meetingMode', 'movedTo'];
   const CHECK_FIELDS = ['scopeConfirmed', 'includeTerms', 'referrerConsent', 'accepted', 'noReplyRequested', 'whatsappConsent', 'dncDifferent', 'includeSource'];
   const SENDER_FIELDS = ['senderName', 'senderRole', 'senderPhone', 'senderEmail'];
-  const STORE_SENDER = 'usha-sender';
-  const STORE_DNC = 'usha-do-not-contact';
-  const STORE_TRACKER = 'usha-tracker';
-  const STORE_SCHEMA = 'usha-schema';
+  const STORE_SENDER = 'email-kit-sender';
+  const STORE_DNC = 'email-kit-do-not-contact';
+  const STORE_TRACKER = 'email-kit-tracker';
+  const STORE_SCHEMA = 'email-kit-schema';
 
   /* Saved data keeps working across updates. Version 2 moved the tracker and
      the Do not contact list from browser storage into the local database.
@@ -506,7 +506,7 @@
       $('dncText').textContent = e.scope === 'review' ? (e.name || 'This contact') + ' may have opted out, and the scope needs your review. Outreach is paused until you decide.'
         : e.scope === 'channel' ? (e.name || 'This contact') + ' asked not to be contacted on this channel.'
           : e.scope === 'organisation' ? e.company + ' asked for no further contact, so this covers everyone there.'
-            : (e.name || 'This company') + ' asked for no further contact. Usha will not draft outreach until they explicitly opt back in.';
+            : (e.name || 'This company') + ' asked for no further contact. Email Kit will not draft outreach until they explicitly opt back in.';
       $('dncClear').onclick = () => clearMark(e);
       banner.hidden = false;
     } else {
@@ -819,9 +819,9 @@
 
   function showNoMessage(result) {
     draft = { noMessage: true, channel: result.ctx.channel, snapshot: snapshot(result.ctx.state), candidates: [], category: result.ctx.category };
-    $('noMessage').textContent = result.ctx.category === 'deliveryFailure' ? 'No message is needed. Usha has recorded that the last message did not reach them. Correct the address in the client record.'
-      : result.ctx.state.optOutScope === 'review' ? 'Send nothing yet. Usha has paused outreach until you review this possible opt-out in Next actions.'
-        : 'No message is needed. They asked for no reply, and Usha has recorded the restriction.';
+    $('noMessage').textContent = result.ctx.category === 'deliveryFailure' ? 'No message is needed. Email Kit has recorded that the last message did not reach them. Correct the address in the client record.'
+      : result.ctx.state.optOutScope === 'review' ? 'Send nothing yet. Email Kit has paused outreach until you review this possible opt-out in Next actions.'
+        : 'No message is needed. They asked for no reply, and Email Kit has recorded the restriction.';
     $('emptyState').hidden = true;
     $('draftArea').hidden = true;
     $('noMessage').hidden = false;
@@ -906,7 +906,7 @@
     const cat = s.responseCategory, pasted = s.responseText.trim();
     if (activeEntry && db.convs[activeEntry] && Engine.differs(db, db.convs[activeEntry], s)) return true;
     /* A pasted reply is always recorded. The suggestion stands in for an unset
-       category, and Unclear stands in when Usha cannot read it. */
+       category, and Unclear stands in when Email Kit cannot read it. */
     if (s.stage === 'followup' && cat === 'optOut' && Rules.detectNoReply(pasted)) { $('noReplyRequested').checked = true; s.noReplyRequested = true; }
     if (s.stage === 'followup' && pasted && !s.stopReviewed && cat !== 'optOut' && s.company.trim() && Rules.interpret(pasted).optOut) {
       $('responseCategory').value = 'optOut'; $('optOutScope').value = 'review';
@@ -943,7 +943,7 @@
       replaced = null;
       $('restoreBox').hidden = true;
       const name = s.recipientName.trim() || Rules.shortCompany(s.company);
-      const text = s.optOutScope === 'review' ? 'Usha has paused outreach to ' + name + ' until you review the restriction.' : 'Usha has marked ' + name + ' as Do not contact.';
+      const text = s.optOutScope === 'review' ? 'Email Kit has paused outreach to ' + name + ' until you review the restriction.' : 'Email Kit has marked ' + name + ' as Do not contact.';
       pendingToast = [text, [{ label: 'Undo', run: async () => {
         /* Only the acknowledgement goes. A draft from before the opt-out comes back. */
         const msgId = draft && draft.category === 'optOut' ? draft.msgId : '';
@@ -975,7 +975,7 @@
       renderAll();
       if (pendingToast) showToast(pendingToast[0], pendingToast[1]);
       $('gaps').focus();
-      say(v.blockers.length + ' item' + (v.blockers.length === 1 ? '' : 's') + ' to resolve before Usha can make a draft.');
+      say(v.blockers.length + ' item' + (v.blockers.length === 1 ? '' : 's') + ' to resolve before Email Kit can make a draft.');
       return;
     }
     /* Text written for a prospect who has now opted out must not come back. */
@@ -1126,8 +1126,8 @@
     else if (s.stage === 'followup' && s.responseCategory === 'referred') actions.push({ label: 'Prepare outreach to ' + s.referredName.trim(), run: () => prepareReferred({ id: conv.id }) });
     else if (next && next.due) actions.push({ label: 'Add to calendar', run: () => addToCalendar({ id: conv.id, nextDate: next.due, recipientName: s.recipientName.trim(), company: Rules.shortCompany(s.company) }) });
     actions.push({ label: 'Undo', run: async () => { if (await undo(changes, 'The message is no longer marked as sent.')) { restoreWork(before); say('The last step is undone.'); $('markSent').focus(); } } });
-    showToast('Usha has recorded your message to ' + who + '.' + when, actions);
-    say('Usha has recorded your message to ' + who + '.' + when);
+    showToast('Email Kit has recorded your message to ' + who + '.' + when, actions);
+    say('Email Kit has recorded your message to ' + who + '.' + when);
     $('messageHeading').focus();
   }
 
@@ -1141,7 +1141,7 @@
     if (!out) return;
     blankForm(true);
     renderAll();
-    showToast(navigator.onLine ? 'The draft is queued. Usha checks it again before you use it.' : 'The draft is queued. Usha will check it again when you are back online.');
+    showToast(navigator.onLine ? 'The draft is queued. Email Kit checks it again before you use it.' : 'The draft is queued. Email Kit will check it again when you are back online.');
     say('The draft is queued.');
   }
 
@@ -1150,7 +1150,7 @@
     const conv = db.convs[entry.id];
     if (!conv) return;
     const before = snapshotWork();
-    const hadWork = window.UshaApp.hasFormWork();
+    const hadWork = window.EmailKitApp.hasFormWork();
     blankForm(false);
     const sender = {};
     SENDER_FIELDS.forEach(f => { sender[f] = $(f).value; });
@@ -1168,8 +1168,8 @@
     /* A saved draft, edited or not, comes back. It is never replaced unseen. */
     if (open && open.agencyVersion === CONFIG.profileVersion && open.channel === s.channel && (!open.context || !open.context.responseCategory || open.context.responseCategory === s.responseCategory)) showStored(open);
     else if (open) showToast('A previous draft is in History. Generate a new one for the current agency and conversation.');
-    if (hadWork) showToast('Usha replaced the form with ' + name + '.', { label: 'Undo', run: () => { restoreWork(before); say('The last step is undone.'); } });
-    say('Usha has loaded ' + name + '.');
+    if (hadWork) showToast('Email Kit replaced the form with ' + name + '.', { label: 'Undo', run: () => { restoreWork(before); say('The last step is undone.'); } });
+    say('Email Kit has loaded ' + name + '.');
     if (!open) {
       $('responseText').scrollIntoView({ block: 'center' });
       $('responseText').focus();
@@ -1211,7 +1211,7 @@
     return true;
   }
 
-  function addToCalendar(entry) { saveFile('usha-follow-up-' + entry.nextDate + '.ics', Rules.calendarFile(entry), 'text/calendar'); }
+  function addToCalendar(entry) { saveFile('email-kit-follow-up-' + entry.nextDate + '.ics', Rules.calendarFile(entry), 'text/calendar'); }
 
   /* Stops a second first message to someone already on record. */
   function renderTrackerMatch(s) {
@@ -1263,7 +1263,7 @@
     writeForm(s);
     renderAll();
     showToast(allowed ? 'The message will mention the referrer, because you recorded clear permission.' : 'The message will not mention the referrer, because you have no clear permission.');
-    say('Usha has set up outreach to ' + who + '.');
+    say('Email Kit has set up outreach to ' + who + '.');
     $('messageHeading').focus();
   }
 
@@ -1281,7 +1281,7 @@
     }
     writeForm(s);
     renderAll();
-    say('Usha has set up a first message to ' + contact.name + ' at ' + org.name + '.');
+    say('Email Kit has set up a first message to ' + contact.name + ' at ' + org.name + '.');
     $('messageHeading').focus();
   }
 
@@ -1330,10 +1330,10 @@
   }
 
   /* ---------- Device storage ---------- */
-  const failText = e => (e instanceof Engine.EngineError ? e.message : 'Usha could not save this on your device, so nothing was recorded. Please try again, and save a backup if this continues.');
+  const failText = e => (e instanceof Engine.EngineError ? e.message : 'Email Kit could not save this on your device, so nothing was recorded. Please try again, and save a backup if this continues.');
   let chain = Promise.resolve();
   let busy = 0;
-  const channelOut = typeof BroadcastChannel === 'function' ? new BroadcastChannel('usha-records') : null;
+  const channelOut = typeof BroadcastChannel === 'function' ? new BroadcastChannel('email-kit-records') : null;
 
   const agencyFields = {name:'agencyName',services:'agencyServices',sectors:'agencySectors',references:'agencyReferences',terms:'agencyTerms',reviewBy:'agencyReview'};
   let agencyLoaded;
@@ -1358,7 +1358,7 @@
     const stop = new AbortController();
     const timer = setTimeout(() => stop.abort(), 5000);
     try {
-      return await navigator.locks.request('usha-records', { signal: stop.signal }, () => { clearTimeout(timer); return fn(); });
+      return await navigator.locks.request('email-kit-records', { signal: stop.signal }, () => { clearTimeout(timer); return fn(); });
     } catch (e) {
       if (e && e.name === 'AbortError') return fn();
       throw e;
@@ -1372,9 +1372,10 @@
     Engine.applySettings(db);
     refreshViews();
   }
-  async function write(changes) {
+  /* The command name lets the server apply the right access level. */
+  async function write(changes, command) {
     const row = { id: 'rev', n: rev + 1 };
-    await Store.commit(changes.concat({ table: 'meta', id: 'rev', value: row, prev: db.meta.rev || null }), rev);
+    await Store.commit(changes.concat({ table: 'meta', id: 'rev', value: row, prev: db.meta.rev || null }), rev, command);
     Engine.applyChanges(db, changes);
     db.meta.rev = row;
     rev = row.n;
@@ -1394,7 +1395,7 @@
         await catchUp();
         const out = Engine.run(db, name, args, { actor: actorName(), source });
         if (!out.changes.length) return out;
-        try { await write(out.changes); return out; } catch (e) {
+        try { await write(out.changes, name); return out; } catch (e) {
           if (!(e instanceof Store.Stale) || attemptNo > 2) throw e;
         }
       }
@@ -1428,7 +1429,7 @@
         /* A record that has moved on since must not be pulled back. */
         const moved = changes.some(c => c.value && c.table !== 'events' && !sameState(c.table, db[c.table][c.id], c.value));
         if (moved) return true;
-        await write(Engine.invert(changes));
+        await write(Engine.invert(changes), 'undo');
         return false;
       });
       if (blocked) { showToast('This step can no longer be undone, because the record has changed since.'); return false; }
@@ -1448,7 +1449,8 @@
     if (['msgs', 'tasks', 'suppressions', 'meetings'].includes(table)) return now.status === then.status;
     return true;
   }
-  const actorName = () => $('senderName').value.trim() || 'Consultant';
+  /* History records the signed-in team member, not a typed name. */
+  const actorName = () => (Store.user && Store.user.name) || $('senderName').value.trim() || 'Consultant';
 
   function readSender() {
     try {
@@ -1460,6 +1462,8 @@
         if (data.senderName) $('senderBox').open = false;
       }
     } catch (e) { /* storage may be unavailable */ }
+    /* A new browser starts with the signed-in person's name. */
+    if (!$('senderName').value && Store.user && Store.user.name && !Store.user.name.includes('@')) $('senderName').value = Store.user.name;
   }
 
   /* Prepares a follow-up that has fallen due. A person still reviews it. */
@@ -1474,7 +1478,7 @@
   /* Each conversation runs on its own, so one fault cannot hold up the rest. */
   let reconciling = false;
   async function reconcile() {
-    if (reconciling || Store.mode === 'failed') return null;
+    if (reconciling || Store.mode === 'failed' || Store.readOnly) return null;
     reconciling = true;
     const report = { overdue: 0, drafted: 0, closed: 0, cancelled: 0, ready: 0, failed: 0 };
     try {
@@ -1485,7 +1489,9 @@
       const due = Array.from(new Set(Engine.rows(db, 'tasks').filter(t => t.status === 'open' && t.due && t.due <= today && t.convId).map(t => t.convId)));
       for (const convId of due) {
         try {
-          const out = await exec('reconcileConversation', { convId, sender, composer: autoCompose }, 'Usha');
+          /* Records are shared, so a follow-up is drafted by whoever continues it,
+             with their own sender details, never in the background. */
+          const out = await exec('reconcileConversation', { convId, sender, composer: () => null }, 'Usha');
           Object.keys(out.result).forEach(k => { report[k] += out.result[k]; });
         } catch (e) { report.failed++; }
       }
@@ -1509,8 +1515,8 @@
     };
     const tracked = list(STORE_TRACKER), marks = list(STORE_DNC);
     /* A damaged list stays where it is, and the user is told. Nothing is discarded quietly. */
-    if (damaged.includes(STORE_DNC)) legacyProblem = 'Your earlier Do not contact list is damaged, so Usha could not read it. Restore a backup, and check any contact on that list before writing.';
-    else if (damaged.includes(STORE_TRACKER)) legacyProblem = 'Your earlier tracker is damaged, so Usha could not read it. Restore a backup if you have one.';
+    if (damaged.includes(STORE_DNC)) legacyProblem = 'Your earlier Do not contact list is damaged, so Email Kit could not read it. Restore a backup, and check any contact on that list before writing.';
+    else if (damaged.includes(STORE_TRACKER)) legacyProblem = 'Your earlier tracker is damaged, so Email Kit could not read it. Restore a backup if you have one.';
     if (!tracked.length && !marks.length) return;
     const out = await attempt('migrateLegacy', { tracker: tracked, doNotContact: marks }, 'version 1');
     if (!out) return;
@@ -1525,13 +1531,13 @@
   function showStorage() {
     const bar = $('storeBar');
     bar.hidden = !['none', 'failed'].includes(Store.mode) && !legacyProblem;
-    bar.textContent = !['none', 'failed'].includes(Store.mode) ? legacyProblem : Store.mode === 'failed' ? 'Usha could not open your records, so it has stopped drafting to protect your Do not contact list. Close Usha and open it again. Your records have not been changed.'
-      : 'This browser is not allowing Usha to save, so your records will be lost when you close it. Save a backup, or open Usha in a normal browser window.';
+    bar.textContent = !['none', 'failed'].includes(Store.mode) ? legacyProblem : Store.mode === 'failed' ? (Store.problem || 'Email Kit could not open your records') + ' Drafting has stopped to protect your Do not contact list. Your records have not been changed.'
+      : 'This browser is not allowing Email Kit to save, so your records will be lost when you close it. Save a backup, or open Email Kit in a normal browser window.';
     $('generate').disabled = $('generate').disabled || Store.mode === 'failed';
     const count = Engine.rows(db, 'convs').length;
-    $('storageText').textContent = Store.mode === 'database' ? 'Your records are saved in a private database on this device. It holds ' + count + (count === 1 ? ' conversation.' : ' conversations.')
+    $('storageText').textContent = Store.mode === 'database' ? 'Client records are saved in the Working Platform and shared with your team. It holds ' + count + (count === 1 ? ' conversation.' : ' conversations.')
       : Store.mode === 'document' ? 'Your records are saved in this browser as one document, because its database is not available. Attachments need the database.'
-        : Store.mode === 'failed' ? 'Usha could not open your records.' : 'Nothing can be saved in this browser.';
+        : Store.mode === 'failed' ? 'Email Kit could not open your records.' : 'Nothing can be saved in this browser.';
     $('privacyLine').hidden = ['none', 'failed'].includes(Store.mode);
   }
 
@@ -1559,7 +1565,7 @@
       renderAll();
       return;
     }
-    await moveLegacyRecords();
+    if (!Store.readOnly) await moveLegacyRecords();
     const report = await reconcile();
     ready = true;
     document.body.dataset.ready = 'true';
@@ -1578,7 +1584,7 @@
       showToast(parts.join(', ') + '.');
     }
     Store.snapshot(db, Rules.localToday()).then(() => RecordViews.showRecovery()).catch(() => {});
-    purgeFiles();
+    if (!Store.readOnly) purgeFiles();
     if (channelOut) channelOut.onmessage = async () => { await catchUp(); renderAll(); };
     window.addEventListener('online', async () => { await reconcile(); renderAll(); });
     document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible') { await reconcile(); renderAll(); } });
@@ -1600,7 +1606,7 @@
   const backupNote = text => { $('backupStatus').textContent = text; };
 
   async function exportBackup() {
-    if (Store.mode === 'failed') { backupNote('Usha could not open your records, so there is nothing safe to back up. Close Usha and open it again.'); return; }
+    if (Store.mode === 'failed') { backupNote('Email Kit could not open your records, so there is nothing safe to back up. Close Email Kit and open it again.'); return; }
     const sender = {};
     if ($('rememberSender').checked) SENDER_FIELDS.forEach(f => { sender[f] = $(f).value; });
     const data = { app: 'usha', schema: SCHEMA, exportedAt: new Date().toISOString(), sender };
@@ -1611,7 +1617,7 @@
     const password = $('backupPassword').value;
     if (password.length < 12) { backupNote('Use a passphrase of at least 12 characters and keep it separately.'); return; }
     try {
-      const name = 'usha-backup-' + Rules.localToday() + '.json';
+      const name = 'email-kit-backup-' + Rules.localToday() + '.json';
       const sealed = await Backup.seal(data,password);
       if (await saveFile(name, JSON.stringify(sealed), 'application/json')) { $('backupPassword').value=''; backupNote('Protected backup saved.'); }
     } catch (error) { backupNote('Could not protect the backup. Use a browser with Web Crypto support.'); }
@@ -1619,8 +1625,8 @@
 
   /* Accepts only records that pass a check. Restrictions always survive. */
   async function restoreData(data) {
-    if (!data || data.app !== 'usha') { backupNote('That file is not a Usha backup, so nothing was restored.'); return; }
-    if (Number(data.schema) > SCHEMA) { backupNote('That backup came from a newer version. Please update Usha first.'); return; }
+    if (!data || data.app !== 'usha') { backupNote('That file is not an Email Kit backup, so nothing was restored.'); return; }
+    if (Number(data.schema) > SCHEMA) { backupNote('That backup came from a newer version. Please update Email Kit first.'); return; }
     const backupProfile = Array.isArray(data.meta) && data.meta.find(r => r && r.id === 'agency');
     if (backupProfile && (!db.meta.agency || db.meta.agency.value.name.toLowerCase() !== String(backupProfile.value && backupProfile.value.name).toLowerCase())) {
       backupNote('Set up the same agency in this browser profile before restoring. No records were imported.'); return;
@@ -1640,7 +1646,8 @@
         try { await Store.putFile(f.id, String(f.name), String(f.type), String(f.data)); } catch (e) { lost++; }
       }
       const r = out.result;
-      backupNote('The backup is restored. Usha added ' + r.added + ' and updated ' + r.updated + (r.added + r.updated === 1 ? ' record' : ' records') + (r.rejected ? ', and rejected ' + r.rejected + ' that failed a check.' : '.') + (lost ? ' ' + lost + ' attachments could not be stored.' : ''));
+      backupNote('The backup is restored. Email Kit added ' + r.added + ' and updated ' + r.updated + (r.added + r.updated === 1 ? ' record' : ' records') + (r.rejected ? ', and rejected ' + r.rejected + ' that failed a check.' : '.') + (lost ? ' ' + lost + ' attachments could not be stored.' : ''));
+      showRestoreReport(data, lost);
     }
     const sender = data.sender && typeof data.sender === 'object' ? data.sender : {};
     if (SENDER_FIELDS.some(f => typeof sender[f] === 'string' && sender[f])) {
@@ -1651,9 +1658,49 @@
     $('toast').hidden = true;
     renderAll();
   }
+  /* After a restore, every row in the backup is accounted for, so nothing can be
+     lost silently: stored as in the backup, kept as a newer saved version (or an
+     existing restriction), or not stored. Rows not stored can be downloaded. */
+  function showRestoreReport(data, lostFiles) {
+    const box = $('restoreReport');
+    box.textContent = '';
+    const missing = {};
+    const table = document.createElement('table');
+    const head = table.createTHead().insertRow();
+    ['Record type', 'In backup', 'Stored as in backup', 'Kept newer saved version', 'Not stored'].forEach(t => { const th = document.createElement('th'); th.scope = 'col'; th.textContent = t; head.appendChild(th); });
+    const body = table.createTBody();
+    let notStored = 0;
+    Engine.TABLES.filter(t => t !== 'meta').forEach(t => {
+      const rows = Array.isArray(data[t]) ? data[t] : [];
+      if (!rows.length) return;
+      let same = 0, kept = 0;
+      rows.forEach(row => {
+        const id = row && typeof row.id === 'string' ? row.id : '';
+        const now = id && db[t][id];
+        if (!now) { (missing[t] = missing[t] || []).push(row); return; }
+        if (JSON.stringify(now) === JSON.stringify(row)) same++; else kept++;
+      });
+      const gone = (missing[t] || []).length;
+      notStored += gone;
+      const tr = body.insertRow();
+      [t, rows.length, same, kept, gone].forEach((v, i) => { const td = tr.insertCell(); td.textContent = String(v); if (i === 4 && gone) td.className = 'bad'; });
+    });
+    const files = Array.isArray(data.files) ? data.files.length : 0;
+    const summary = document.createElement('p');
+    summary.textContent = 'Restore check: ' + (notStored ? notStored + (notStored === 1 ? ' row was' : ' rows were') + ' not stored (invalid, or linked to a record that is missing).' : 'every row in the backup is now saved.') + ' Attachments: ' + (files - lostFiles) + ' of ' + files + ' stored.' + ' Keep the protected backup until you have checked the records here.';
+    box.append(summary, table);
+    if (notStored) {
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'btn quiet small'; btn.textContent = 'Download rows not stored';
+      btn.addEventListener('click', () => saveFile('email-kit-not-restored-' + Rules.localToday() + '.json', JSON.stringify({ note: 'Rows from a backup that Email Kit did not store. Confidential client data: keep it protected and delete it when reviewed.', rows: missing }, null, 2), 'application/json'));
+      box.appendChild(btn);
+    }
+    box.hidden = false;
+  }
+
   async function restoreBackup(file) {
     if (!file) return;
-    if (file.size > 104857600) { backupNote('That file is too large to be a Usha backup.'); return; }
+    if (file.size > 104857600) { backupNote('That file is too large to be an Email Kit backup.'); return; }
     let data;
     try { data = JSON.parse(await file.text()); } catch (e) { data = null; }
     if (data && data.format === 'usha-backup-v1') {
@@ -1732,7 +1779,7 @@
     /* An edited draft is saved when you leave the box, so it survives a restart. */
     $('body').addEventListener('change', saveCurrentDraft);
     $('subject').addEventListener('change', saveCurrentDraft);
-    $('saveEml').addEventListener('click', () => saveFile('usha-draft-' + Rules.localToday() + '.eml', Rules.emailFile(readForm().recipientContact, $('subject').value, $('body').value), 'message/rfc822'));
+    $('saveEml').addEventListener('click', () => saveFile('email-kit-draft-' + Rules.localToday() + '.eml', Rules.emailFile(readForm().recipientContact, $('subject').value, $('body').value), 'message/rfc822'));
     $('queueLater').addEventListener('click', queueLater);
     $('subject').addEventListener('input', () => { if (draft) { draft.edited = true; draft.reusedSubject = false; } renderCounts(); renderGate(); });
     $('categoryUse').addEventListener('click', () => {
@@ -1775,7 +1822,7 @@
     });
     $('reset').addEventListener('click', resetForm);
     $('rememberSender').addEventListener('change', saveSender);
-    $('exportCsv').addEventListener('click', () => saveFile('usha-contacts-' + Rules.localToday() + '.csv', Rules.trackerCsv(tracker), 'text/csv'));
+    $('exportCsv').addEventListener('click', () => saveFile('email-kit-contacts-' + Rules.localToday() + '.csv', Rules.trackerCsv(tracker), 'text/csv'));
     $('exportBackup').addEventListener('click', exportBackup);
     $('importBackup').addEventListener('click', () => $('importFile').click());
     $('importFile').addEventListener('change', e => { restoreBackup(e.target.files[0]); e.target.value = ''; });
@@ -1786,7 +1833,7 @@
   }
 
   /* Lets the app layer check for work in progress before an update. */
-  window.UshaApp = {
+  window.EmailKitApp = {
     showToast,
     hasFormWork() {
       const s = readForm();

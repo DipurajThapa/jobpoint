@@ -194,7 +194,7 @@ const Rules = (function () {
     if (norm(s.priorTopic)) return clause(s.priorTopic);
     const subject = norm(s.priorSubject).replace(/^(re|fw|fwd):\s*/i, '');
     if (subject) {
-      /* Subjects Usha wrote itself name a sentence, not a topic. */
+      /* Subjects Email Kit wrote itself name a sentence, not a topic. */
       const about = /^(?:our conversation|your post|.*\bpost) about (.+)$/i.exec(subject);
       if (about) return clause(about[1]);
       if (/suggested that I contact you$/i.test(subject) || /^our recent conversation$/i.test(subject)) return shortCompany(s.company) ? 'recruitment support for ' + shortCompany(s.company) : 'recruitment support';
@@ -355,10 +355,10 @@ const Rules = (function () {
     if (dnc && !(followup && cat === 'optOut')) {
       if (dnc.exact) {
         const e = dnc.entry;
-        need('doNotContact', e.scope === 'review' ? 'A restriction on this contact needs your review, so Usha has paused outreach. Open the record and decide its scope.'
+        need('doNotContact', e.scope === 'review' ? 'A restriction on this contact needs your review, so Email Kit has paused outreach. Open the record and decide its scope.'
           : e.scope === 'channel' ? 'This person asked not to be contacted on this channel. Choose another channel, or clear the restriction only if they opted back in.'
-            : e.scope === 'organisation' ? 'This company asked for no further contact, so Usha will not draft outreach to anyone there.'
-              : 'This prospect is marked Do not contact, so Usha will not draft outreach. Clear the mark only with documented new permission covering its scope.');
+            : e.scope === 'organisation' ? 'This company asked for no further contact, so Email Kit will not draft outreach to anyone there.'
+              : 'This prospect is marked Do not contact, so Email Kit will not draft outreach. Clear the mark only with documented new permission covering its scope.');
       }
       else if (!s.dncDifferent) need('dncDifferent', 'This may be someone who asked for no further contact. Please confirm that this is a different person.');
     }
@@ -378,7 +378,7 @@ const Rules = (function () {
     const hits = checkScope(s);
     hits.forEach(h => {
       if (h.kind === 'type') {
-        need('hiringType', 'This recruitment edition supports permanent hiring and does not supply temporary manpower. Change the hiring type to permanent, or do not use Usha for this requirement.');
+        need('hiringType', 'This recruitment edition supports permanent hiring and does not supply temporary manpower. Change the hiring type to permanent, or do not use Email Kit for this requirement.');
       } else if (!s.scopeConfirmed) {
         if (h.kind === 'location') need('hiringLocations', '"' + h.term + '" looks like ' + h.label + '. This recruitment edition supports hiring across India. Revise the hiring locations, or confirm below that they are in India.');
         else need('roles', '"' + h.term + '" looks like ' + h.label + ', which This recruitment edition does not offer. Revise the roles, or confirm below that they are permanent, non-IT and white-collar.');
@@ -400,29 +400,29 @@ const Rules = (function () {
     if (followup) {
       if (!cat) need('responseCategory', 'Choose the response category.');
       const pasted = norm(s.responseText);
-      if (['closed', 'final'].includes(s.priorType) && !['noResponse', 'optOut', 'deliveryFailure'].includes(cat) && !pasted) need('responseText', 'This conversation has ended. Paste their reply, so Usha reopens it only on a real response.');
+      if (['closed', 'final'].includes(s.priorType) && !['noResponse', 'optOut', 'deliveryFailure'].includes(cat) && !pasted) need('responseText', 'This conversation has ended. Paste their reply, so Email Kit reopens it only on a real response.');
       if (cat === 'noResponse' && pasted) need('responseCategory', 'You pasted a response, so "No response" cannot be right. Confirm the correct category.');
       if (cat === 'noResponse') {
         if (followKind(s) === 'stop') need('priorType', s.priorType === 'closed'
-          ? 'This conversation is closed, so Usha will not draft a reminder. If they have replied, choose the response category.'
-          : 'You have already sent a final reminder, so Usha will not draft another one. Wait for the prospect to respond.');
+          ? 'This conversation is closed, so Email Kit will not draft a reminder. If they have replied, choose the response category.'
+          : 'You have already sent a final reminder, so Email Kit will not draft another one. Wait for the prospect to respond.');
         if (!deriveTopic(s)) need('priorTopic', 'Paste your earlier message or say what it was about. A reminder cannot refer to a message that is not on record.');
       }
       if (!noReply && s.channel === 'email' && s.priorChannel === 'email' && !norm(s.priorSubject)) need('priorSubject', 'Add the subject of your earlier email. The follow-up reuses that subject.');
       if (cat === 'referred' && !norm(s.referredName)) need('referredName', 'Add the name of the person they referred you to.');
       if (cat === 'moreInfo' && !(s.askTopics || []).length) note('No question topic is chosen, so the draft is a holding reply. Choose a topic to answer it now.', 'askTopics');
       if (s.channel === 'invite' && (cat !== 'noResponse' || s.priorChannel === 'invite' || ['final', 'checkIn', 'nudge'].includes(followKind(s)))) need('channel', 'A connection note cannot carry this follow-up. Choose email or a LinkedIn message.');
-      detectUnverified(s.responseText).forEach(u => note('They may have asked about ' + u + '. Usha has no verified answer for this, so the draft leaves it out. Add your own answer if you have one.', 'responseText'));
+      detectUnverified(s.responseText).forEach(u => note('They may have asked about ' + u + '. Email Kit has no verified answer for this, so the draft leaves it out. Add your own answer if you have one.', 'responseText'));
       if (s.agreedDate && AGREED_CATS.includes(cat)) {
-        note('Usha shows this date when you open it. For a reminder while Usha is closed, choose Add to calendar after you mark this as sent.', 'agreedDate');
+        note('Email Kit shows this date when you open it. For a reminder while Email Kit is closed, choose Add to calendar after you mark this as sent.', 'agreedDate');
         if (s.agreedDate < today) note('The agreed date has passed. Check it before sending.', 'agreedDate');
       }
       if (s.priorDate && s.priorDate > today) note('The date of your earlier message is in the future. Check it before sending.', 'priorDate');
       if (cat === 'noResponse' && s.priorChannel === 'invite' && s.channel === 'message') note('You can send a LinkedIn message only if the recipient has accepted your connection request.', 'channel');
-      if (cat === 'noResponse' && followKind(s) === 'final') note('This is the final reminder. Usha will not draft another one.', 'priorType');
+      if (cat === 'noResponse' && followKind(s) === 'final') note('This is the final reminder. Email Kit will not draft another one.', 'priorType');
     }
 
-    if (followup && cat === 'postponed' && !s.agreedDate) note('There is no agreed date, so the draft asks them for one. Usha will not guess a date.', 'agreedDate');
+    if (followup && cat === 'postponed' && !s.agreedDate) note('There is no agreed date, so the draft asks them for one. Email Kit will not guess a date.', 'agreedDate');
     if (followup && cat === 'meeting' && s.meetingDate && s.meetingDate < today && s.meetingAction !== 'cancel') need('meetingDate', 'The meeting date has passed, so this draft cannot confirm it. Correct the date, or choose Cancel the meeting.');
     if (followup && cat === 'meeting' && missingMeeting(s).length) note('The ' + joinList(missingMeeting(s)) + ' is not clear, so the draft asks for it and the meeting stays proposed.', 'meetingDate');
     const quoteWords = countWords(s.sourceQuote || '');
@@ -825,7 +825,7 @@ const Rules = (function () {
       return 'Thank them and ask whether you may mention their name to ' + who + '.';
     }
     if ((cat === 'noRequirement' || cat === 'otherAgency' || cat === 'interested') && ctx.hasAgreed) return 'Confirm the next step you agreed.';
-    if (cat === 'postponed' && !ctx.hasAgreed) return 'Ask for a suitable date. Usha pauses reminders while you wait.';
+    if (cat === 'postponed' && !ctx.hasAgreed) return 'Ask for a suitable date. Email Kit pauses reminders while you wait.';
     if (cat === 'meeting' && missingMeeting(s).length) return 'Ask for the ' + joinList(missingMeeting(s)) + '. The meeting stays proposed until then.';
     return base;
   }
@@ -973,9 +973,9 @@ const Rules = (function () {
     const end = next.toISOString().slice(0, 10).replace(/-/g, '');
     const who = [entry.recipientName, entry.company].filter(Boolean).join(' at ');
     const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
-    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Usha//Outreach Composer//EN', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Job Point Consultancy//Email Kit//EN', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
       'UID:usha-followup-' + encodeURIComponent(entry.id || [entry.company, entry.recipientName].join('-')) + '-' + date + '@usha.local', 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + date, 'DTEND;VALUE=DATE:' + end,
-      'SUMMARY:' + icsText('Follow up with ' + who), 'DESCRIPTION:' + icsText('Open Usha and choose Continue in the tracker.'), 'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT9H', 'DESCRIPTION:Review the follow-up in Usha', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'];
+      'SUMMARY:' + icsText('Follow up with ' + who), 'DESCRIPTION:' + icsText('Open Email Kit and choose Continue in the tracker.'), 'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT9H', 'DESCRIPTION:Review the follow-up in Email Kit', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'];
     return lines.map(icsFold).join('\r\n') + '\r\n';
   }
 
@@ -1022,7 +1022,7 @@ const Rules = (function () {
     scan(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/g, x => {
       const y = +x[3] < 100 ? 2000 + +x[3] : +x[3];
       const both = +x[1] <= 12 && +x[2] <= 12 && x[1] !== x[2];
-      add(x.index, isoDate(y, +x[2] - 1, +x[1]), x[0], !both, both ? 'This could be day first or month first. Usha read it as day first.' : '');
+      add(x.index, isoDate(y, +x[2] - 1, +x[1]), x[0], !both, both ? 'This could be day first or month first. Email Kit read it as day first.' : '');
     });
     scan(new RegExp('\\b(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+of)?\\s+(' + MONTH_NAMES + ')\\b\\.?,?(?:\\s+(\\d{4}))?', 'gi'), x => {
       const mi = monthIndex(x[2]);
@@ -1139,12 +1139,12 @@ const Rules = (function () {
     const questions = flat.split(/(?<=[.?!])\s+/).filter(q => /\?$/.test(q) && q.length > 6).slice(0, 5);
     const clarify = [];
     if (!flat) clarify.push('The reply is empty.');
-    else if (!category) clarify.push('Usha could not match this reply to a category. Choose one, or choose Generate message to keep it as Unclear.');
+    else if (!category) clarify.push('Email Kit could not match this reply to a category. Choose one, or choose Generate message to keep it as Unclear.');
     if (mixed.length) clarify.push('The reply could mean more than one thing. Please confirm the category.');
     dates.filter(d => !d.sure).forEach(d => clarify.push('"' + d.text + '": ' + d.note));
     times.filter(x => !x.sure).forEach(x => clarify.push('"' + x.text + '": ' + x.note));
     const vague = flat.match(/\b(?:after (?:diwali|holi|eid|christmas|the (?:holidays?|festival|quarter|budget))|(?:this|next) (?:morning|afternoon|evening)|sometime|soon|shortly)\b/gi) || [];
-    vague.forEach(v => clarify.push('"' + v + '" does not give a date Usha can use.'));
+    vague.forEach(v => clarify.push('"' + v + '" does not give a date Email Kit can use.'));
     return {
       body, category, alternatives: mixed, certain: !!category && !mixed.length && !dates.some(d => !d.sure), matches,
       optOut: category === 'optOut' || matches.includes('optOut') ? optOutScope(flat) : null,
@@ -1203,7 +1203,7 @@ const Rules = (function () {
   const headerWord = t => (/^[\x20-\x7e]*$/.test(t) ? t : '=?UTF-8?B?' + base64(t).replace(/\r\n/g, '') + '?=');
   /* An unsent email file. Mail apps open it as a draft with formatting intact. */
   function emailFile(to, subject, text) {
-    const boundary = 'usha-' + Date.now().toString(36);
+    const boundary = 'email-kit-' + Date.now().toString(36);
     return ['To: ' + (parseContact(to).email || ''), 'Subject: ' + headerWord(norm(subject)), 'X-Unsent: 1', 'MIME-Version: 1.0', 'Content-Type: multipart/alternative; boundary="' + boundary + '"', '',
       '--' + boundary, 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', base64(text.replace(/\r?\n/g, '\r\n')), '',
       '--' + boundary, 'Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', base64('<!doctype html><html><body>' + emailHtml(text) + '</body></html>'), '',
@@ -1225,9 +1225,9 @@ const Rules = (function () {
   function meetingFile(m, who, topic, cancelled, minutes) {
     const start = zonedUtc(m.date, m.time, m.zone);
     const end = start + (minutes || 30) * 60000;
-    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Usha//Outreach Composer//EN', 'CALSCALE:GREGORIAN', 'METHOD:' + (cancelled ? 'CANCEL' : 'PUBLISH'), 'BEGIN:VEVENT',
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Job Point Consultancy//Email Kit//EN', 'CALSCALE:GREGORIAN', 'METHOD:' + (cancelled ? 'CANCEL' : 'PUBLISH'), 'BEGIN:VEVENT',
       'UID:usha-' + m.id + '@usha.local', 'SEQUENCE:' + (m.sequence || 0), 'DTSTAMP:' + icsStamp(Date.now()), 'DTSTART:' + icsStamp(start), 'DTEND:' + icsStamp(end),
-      'STATUS:' + (cancelled ? 'CANCELLED' : 'CONFIRMED'), 'SUMMARY:' + icsText('Meeting with ' + who), 'DESCRIPTION:' + icsText(topic ? 'Topic: ' + topic : 'Open Usha for the conversation history.')];
+      'STATUS:' + (cancelled ? 'CANCELLED' : 'CONFIRMED'), 'SUMMARY:' + icsText('Meeting with ' + who), 'DESCRIPTION:' + icsText(topic ? 'Topic: ' + topic : 'Open Email Kit for the conversation history.')];
     if (!cancelled) lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:-PT30M', 'DESCRIPTION:' + icsText('Meeting with ' + who), 'END:VALARM');
     lines.push('END:VEVENT', 'END:VCALENDAR');
     return lines.map(icsFold).join('\r\n') + '\r\n';

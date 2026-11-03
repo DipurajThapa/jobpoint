@@ -23,6 +23,15 @@ const eslintConfig = defineConfig([
       "react-hooks/set-state-in-effect": "off",
     },
   },
+  {
+    files: ["tools/email-kit/src/**/*.js"],
+    rules: {
+      // Email Kit is a plain browser script (no React). Function names such as
+      // useFormerLink are not hooks; unused catch bindings are its house style.
+      "react-hooks/rules-of-hooks": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

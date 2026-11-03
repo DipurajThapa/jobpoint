@@ -1,5 +1,5 @@
 import { hashPassword, passwordProblem, sha256, verifyPassword } from "@/lib/platform/crypto";
-import { apiError, apiJson, auditStatement, authorizeApi, db, nowIso } from "@/lib/platform/auth";
+import { apiError, apiJson, auditStatement, authorizeApi, db, nowIso, readInput, seeOther } from "@/lib/platform/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -7,14 +7,17 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const user = await authorizeApi(request, { mutate: true });
   if (user instanceof Response) return user;
-  let body: { current?: unknown; next?: unknown };
-  try { body = await request.json(); } catch { return apiError("The request was not readable."); }
+  const input = await readInput(request);
+  if (!input) return apiError("The request was not readable.");
+  const body = input.data;
+  const fail = (message: string, code = "INVALID") => input.form ? seeOther(`/platform/account?error=${encodeURIComponent(message)}`) : apiError(message, 400, code);
   const current = typeof body.current === "string" ? body.current : "";
   const next = typeof body.next === "string" ? body.next : "";
   const row = await db().prepare("SELECT password_hash AS passwordHash FROM platform_users WHERE id = ?").bind(user.id).first<{ passwordHash: string | null }>();
-  if (!await verifyPassword(current, row?.passwordHash)) return apiError("Your current password is not correct.", 400, "CURRENT");
+  if (!await verifyPassword(current, row?.passwordHash)) return fail("Your current password is not correct.", "CURRENT");
   const problem = passwordProblem(next, user.email);
-  if (problem) return apiError(problem);
+  if (body.confirm !== undefined && body.confirm !== next) return fail("The two new passwords do not match.");
+  if (problem) return fail(problem);
   const cookie = request.headers.get("cookie") ?? "";
   const token = /(?:^|;\s*)(?:__Host-wp_session|wp_session)=([A-Za-z0-9_-]+)/.exec(cookie)?.[1] ?? "";
   await db().batch([
@@ -22,5 +25,5 @@ export async function POST(request: Request) {
     db().prepare("DELETE FROM platform_sessions WHERE user_id = ? AND token_hash != ?").bind(user.id, await sha256(token)),
     auditStatement(`platform:${user.id}`, "platform.password_changed", "platform_user", user.id),
   ]);
-  return apiJson({ ok: true });
+  return input.form ? seeOther("/platform/account?changed=1") : apiJson({ ok: true });
 }

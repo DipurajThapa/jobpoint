@@ -3,8 +3,8 @@
 // touches .wrangler/state (local, git-ignored). Start `npm run dev` once first
 // so Miniflare creates the database file.
 //   node scripts/local-db.mjs          apply pending migrations
-//   node scripts/local-db.mjs --reset  delete local data, then apply all
-import { readdirSync, readFileSync, rmSync, existsSync } from "node:fs";
+//   node scripts/local-db.mjs --reset  drop local tables, then apply all
+import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -25,8 +25,9 @@ if (process.argv.includes("--reset")) {
   db.exec("PRAGMA foreign_keys = OFF");
   for (const { name } of tables) db.exec(`DROP TABLE IF EXISTS "${name}"`);
   db.exec("PRAGMA foreign_keys = ON");
-  rmSync(resolve(root, ".wrangler/state/v3/r2"), { recursive: true, force: true });
-  console.log(`Reset ${tables.length} local tables and local R2 objects.`);
+  // Local R2 objects are left in place (Miniflare holds them open); without
+  // their D1 rows they are unreachable through the platform.
+  console.log(`Reset ${tables.length} local tables.`);
 }
 db.exec("CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL)");
 const applied = new Set(db.prepare("SELECT name FROM d1_migrations").all().map(r => r.name));

@@ -65,7 +65,7 @@ const CONFIG = {
     { id: 'interested', label: 'Interested', next: 'Thank them and suggest one practical next step.' },
     { id: 'moreInfo', label: 'Requests more information', next: 'Answer their question with verified details.' },
     { id: 'commercial', label: 'Requests commercial terms', next: 'Answer with the fee, payment and replacement terms.' },
-    { id: 'postponed', label: 'Asks me to contact them later', next: 'Confirm the later date. Usha pauses reminders until then.' },
+    { id: 'postponed', label: 'Asks me to contact them later', next: 'Confirm the later date. Email Kit pauses reminders until then.' },
     { id: 'meeting', label: 'Proposes, confirms or changes a meeting', next: 'Record the details. A meeting counts as confirmed only when the date, time and time zone are all agreed.' },
     { id: 'meetingHeld', label: 'We held the meeting', next: 'Thank them and repeat only what you confirmed.' },
     { id: 'referred', label: 'Refers us to another person', next: 'Thank them, and mention their name to the new contact only with clear permission.' },
@@ -76,7 +76,7 @@ const CONFIG = {
     { id: 'notInterested', label: 'Not interested', next: 'Close politely and do not try to change their decision.' },
     { id: 'optOut', label: 'Explicitly asks for no further contact', next: 'Mark the prospect as Do not contact. You may send the short acknowledgement by hand.' },
     { id: 'deliveryFailure', label: 'The message did not reach them', next: 'Send nothing. Correct the address or number, then decide whether to try again.' },
-    { id: 'unclear', label: 'Unclear, so I need to review it', next: 'Usha has saved the reply. Ask one question, or choose the right category.' }
+    { id: 'unclear', label: 'Unclear, so I need to review it', next: 'Email Kit has saved the reply. Ask one question, or choose the right category.' }
   ],
 
   /* Which restriction an opt-out creates. "review" pauses all outreach to the
@@ -94,7 +94,7 @@ const CONFIG = {
     { id: 'phone', label: 'Phone calls' }
   ],
 
-  /* Time zones offered for a meeting, and the abbreviations Usha can read. */
+  /* Time zones offered for a meeting, and the abbreviations Email Kit can read. */
   zones: [
     { id: 'Asia/Kolkata', label: 'IST, India' },
     { id: 'Asia/Dubai', label: 'GST, Gulf' },

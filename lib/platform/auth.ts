@@ -209,3 +209,25 @@ export const linkUrl = (requestUrl: string, purpose: "invite" | "reset", token: 
   `${new URL(requestUrl).origin}/platform/${purpose === "invite" ? "accept" : "reset"}?token=${token}`;
 
 export const nowIso = () => iso();
+
+/** Reads JSON or a plain form post. Forms keep working (and never put secrets in a URL) before scripts load. */
+export async function readInput(request: Request): Promise<{ data: Record<string, unknown>; form: boolean } | null> {
+  const type = request.headers.get("content-type") ?? "";
+  try {
+    if (type.includes("application/x-www-form-urlencoded") || type.includes("multipart/form-data")) {
+      const fields = await request.formData();
+      return { data: Object.fromEntries([...fields.entries()].filter(([, v]) => typeof v === "string")), form: true };
+    }
+    const data = await request.json();
+    return data && typeof data === "object" ? { data: data as Record<string, unknown>, form: false } : null;
+  } catch { return null; }
+}
+
+export function seeOther(location: string, cookies: string[] = []): Response {
+  const headers = new Headers({ ...NO_STORE, location });
+  for (const c of cookies) headers.append("set-cookie", c);
+  return new Response(null, { status: 303, headers });
+}
+
+export const safePlatformPath = (value: unknown) =>
+  typeof value === "string" && value.startsWith("/platform") && !value.startsWith("//") && !value.includes("\\") && !value.includes("\n") ? value : "/platform";

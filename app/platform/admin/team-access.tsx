@@ -10,7 +10,7 @@ const LEVELS: { value: Level | "none"; label: string }[] = [{ value: "none", lab
 
 async function call(url: string, method: string, body?: unknown) {
   const response = await fetch(url, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined, credentials: "same-origin" });
-  const data = await response.json().catch(() => ({}));
+  const data = await response.json().catch(() => ({})) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   if (response.status === 401) { window.location.assign("/platform/sign-in?next=/platform/admin"); throw new Error("Sign in again."); }
   if (!response.ok) throw new Error(data.error || "That did not work. Try again.");
   return data;
@@ -38,7 +38,7 @@ export default function TeamAccess({ tools }: { tools: Tool[] }) {
     try { const data = await call("/api/platform/admin/users", "GET"); setUsers(data.users); setActivity(data.activity); setMe(data.me); }
     catch (e) { setNotice({ text: e instanceof Error ? e.message : "Could not load the team.", good: false }); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { const timer = window.setTimeout(load, 0); return () => window.clearTimeout(timer); }, [load]);
 
   async function run(work: () => Promise<void>) {
     setBusy(true); setNotice(null);

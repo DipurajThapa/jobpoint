@@ -429,7 +429,7 @@ D1 has no interactive transactions, but `db.batch()` runs as one transaction.
 
 *   `drizzle/0002_working_platform.sql`, `drizzle/meta/_journal.json`,
     `db/schema.ts` (tables above).
-*   `lib/platform/{crypto,auth,tools,users}.ts`, `lib/email-kit/{guards,store}.ts`,
+*   `lib/platform/{crypto,auth,tools,users}.ts`, `lib/email-kit/server.ts`, `lib/email-kit/virtual.d.ts`,
     `build/email-kit-plugin.mjs`, `vite.config.ts` (register plugin).
 *   `app/platform/layout.tsx`, `platform.css`, pages: `page.tsx` (dashboard),
     `sign-in/`, `accept/`, `reset/`, `forgot/`, `account/`, `admin/`,

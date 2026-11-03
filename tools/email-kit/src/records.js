@@ -24,7 +24,14 @@ const RecordViews = (function () {
     kids.flat().filter(Boolean).forEach(k => node.append(k));
     return node;
   }
-  const button = (label, run, cls) => el('button', { type: 'button', class: 'btn quiet small ' + (cls || ''), text: label, on: run });
+  /* Buttons that only show or export records are available at every access level.
+     Anything that changes records needs Edit; restoring a recovery point needs Manage. */
+  const READ_ONLY = ['Add to calendar', 'Open the file', 'Open the record', 'Open', 'Hide', 'Dismiss', 'Review the draft', 'Review the saved draft'];
+  const button = (label, run, cls) => {
+    const b = el('button', { type: 'button', class: 'btn quiet small ' + (cls || ''), text: label, on: run });
+    if (!READ_ONLY.includes(label)) b.dataset.needs = label === 'Restore' ? 'manage' : 'edit';
+    return b;
+  };
 
   function miniForm(spec, submit, run) {
     const form = el('div', { class: 'mini' });
@@ -78,7 +85,7 @@ const RecordViews = (function () {
       const li = el('li', { 'data-kind': t.kind },
         el('strong', { text: t.title }),
         el('span', { class: 'who', text: whoOf(a) }),
-        el('span', { class: a.overdue || a.today ? 'due' : '', text: when + ' Owner: ' + t.owner + '.' }),
+        el('span', { class: a.overdue || a.today ? 'due' : '', text: when + ' Owner: ' + Engine.who(t.owner) + '.' }),
         el('span', { class: 'why', text: t.reason }));
       const row = el('div', { class: 'track-actions' });
       if (t.kind === 'review') row.append(...reviewButtons(t));
@@ -172,13 +179,13 @@ const RecordViews = (function () {
     Engine.timeline(ctx.db(), convId).forEach(item => {
       if (item.kind === 'event') {
         const e = item.event;
-        list.appendChild(el('li', {}, el('span', { class: 'hint', text: date(Engine.todayIn(CONFIG.timeZone, new Date(e.at))) + ', ' + e.actor }), el('span', { text: e.detail + (e.outcome ? ' (' + e.outcome + ')' : '') })));
+        list.appendChild(el('li', {}, el('span', { class: 'hint', text: date(Engine.todayIn(CONFIG.timeZone, new Date(e.at))) + ', ' + Engine.who(e.actor) }), el('span', { text: e.detail + (e.outcome ? ' (' + e.outcome + ')' : '') })));
         return;
       }
       const m = item.msg;
       const head = (m.direction === 'in' ? 'Received' : L.msg[m.status]) + ', ' + m.channel + (m.category ? ', ' + (CONFIG.responses.find(r => r.id === m.category) || {}).label : '');
       const text = m.body || m.summary || (m.noText ? 'No text was pasted.' : '');
-      const body = el('details', {}, el('summary', { text: head }), m.subject ? el('p', { text: 'Subject: ' + m.subject }) : null, el('p', { class: 'msg', text }), el('p', { class: 'hint', text: 'Source: ' + (m.source || 'Usha') + '. Recorded by ' + m.actor + '.' }));
+      const body = el('details', {}, el('summary', { text: head }), m.subject ? el('p', { text: 'Subject: ' + m.subject }) : null, el('p', { class: 'msg', text }), el('p', { class: 'hint', text: 'Source: ' + Engine.who(m.source || 'Usha') + '. Recorded by ' + Engine.who(m.actor) + '.' }));
       list.appendChild(el('li', { 'data-status': m.status }, el('span', { class: 'hint', text: date(Engine.todayIn(CONFIG.timeZone, new Date(item.at))) }), body));
     });
     return list;
@@ -186,7 +193,7 @@ const RecordViews = (function () {
 
   function meetingCalendar(m, cancelled) {
     const db = ctx.db(), contact = db.contacts[m.contactId] || {}, org = db.orgs[m.orgId] || {}, conv = db.convs[m.convId] || {};
-    ctx.saveFile('usha-meeting-' + m.date + '.ics', Rules.meetingFile(m, [contact.name, org.name].filter(Boolean).join(', '), conv.topic, !!cancelled), 'text/calendar');
+    ctx.saveFile('email-kit-meeting-' + m.date + '.ics', Rules.meetingFile(m, [contact.name, org.name].filter(Boolean).join(', '), conv.topic, !!cancelled), 'text/calendar');
   }
 
   function meetings(conv) {
@@ -238,7 +245,7 @@ const RecordViews = (function () {
       const row = el('div', { class: 'track-actions' });
       if (r.fileId) row.appendChild(button('Open the file', async () => {
         const f = await Store.getFile(r.fileId);
-        if (!f) { ctx.showToast('Usha could not find this file.'); return; }
+        if (!f) { ctx.showToast('Email Kit could not find this file.'); return; }
         const d = dataUrlBlob(f.data);
         ctx.saveFile(f.name, d.bytes, d.type);
       }));
@@ -263,14 +270,14 @@ const RecordViews = (function () {
 
   function attach(convId, file) {
     if (!file) return;
-    if (file.size > MAX_FILE) { ctx.showToast('That file is over 5 MB, so Usha did not attach it.'); return; }
+    if (file.size > MAX_FILE) { ctx.showToast('That file is over 5 MB, so Email Kit did not attach it.'); return; }
     const reader = new FileReader();
-    reader.onerror = () => ctx.showToast('Usha could not read that file, so nothing was attached.');
+    reader.onerror = () => ctx.showToast('Email Kit could not read that file, so nothing was attached.');
     reader.onload = async () => {
       const id = 'file' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
       try {
         await Store.putFile(id, file.name, file.type, reader.result);
-      } catch (e) { ctx.showToast('Usha could not store that file, so nothing was attached.'); return; }
+      } catch (e) { ctx.showToast('Email Kit could not store that file, so nothing was attached.'); return; }
       const out = await ctx.attempt('addSource', { convId, kind: 'attachment', label: file.name, fileId: id, fileType: file.type, size: file.size });
       if (!out) await Store.deleteFiles([id]);
       ctx.renderAll();
@@ -336,7 +343,7 @@ const RecordViews = (function () {
     row('Last message', last ? L.msg[last.status] + ', ' + date(Engine.todayIn(CONFIG.timeZone, new Date(last.at))) : 'None');
     if (conv.next) {
       row('Next action', conv.next.action);
-      row('Owner', conv.next.owner);
+      row('Owner', Engine.who(conv.next.owner));
       row('Due', conv.next.due ? date(conv.next.due) : 'No date set');
       row('Reason', conv.next.reason);
     } else row('Outcome', conv.outcome || 'No next step is set.');
@@ -348,7 +355,7 @@ const RecordViews = (function () {
     if (conv.lastType || conv.pending) actions.append(button(replyOnly ? 'They replied' : 'Continue', () => ctx.continueEntry({ id: conv.id })));
     if (conv.referredName && Engine.rows(db, 'tasks').some(t => t.convId === conv.id && t.kind === 'referral' && t.status === 'open')) actions.append(button('Contact ' + conv.referredName, () => ctx.prepareReferred({ id: conv.id })));
     const human = conv.next && conv.next.owner !== 'Usha' ? conv.next : null;
-    if (human && human.due) actions.append(button('Add to calendar', () => ctx.saveFile('usha-follow-up-' + human.due + '.ics', Rules.calendarFile({ id: conv.id, nextDate: human.due, recipientName: contact.name, company: org.name }), 'text/calendar')));
+    if (human && human.due) actions.append(button('Add to calendar', () => ctx.saveFile('email-kit-follow-up-' + human.due + '.ics', Rules.calendarFile({ id: conv.id, nextDate: human.due, recipientName: contact.name, company: org.name }), 'text/calendar')));
     if (conv.status === 'deliveryFailure') actions.append(button('Correct the address', () => openStep('Correct the address', [{ name: 'detail', label: 'Email or mobile number', value: contact.contact }], 'Save and try again', async v => { if (await ctx.attempt('addressFixed', { convId: conv.id, contact: v.detail })) ctx.renderAll(); })));
     if (!replyOnly && (conv.lastType || conv.pending)) {
       actions.append(button('Postpone', () => openStep('Postpone this', [{ name: 'date', label: 'New date', type: 'date' }, { name: 'reason', label: 'Reason' }], 'Postpone', async v => { if (await ctx.attempt('postpone', { convId: conv.id, date: v.date, reason: v.reason })) ctx.renderAll(); })));
@@ -385,7 +392,7 @@ const RecordViews = (function () {
     box.appendChild(el('dl', { class: 'status' }, el('dt', { text: 'Contact' }), el('dd', { text: L.contact[contact.status] })));
     const convs = Engine.rows(db, 'convs').filter(c => c.contactId === contact.id);
     convs.forEach(c => box.appendChild(button(title(c.topic || 'Conversation') + ': ' + L.conv[c.status], () => showConversation(c.id), 'plain')));
-    if (!convs.length) box.appendChild(el('p', { class: 'hint', text: 'No messages yet. Usha has not contacted this person.' }));
+    if (!convs.length) box.appendChild(el('p', { class: 'hint', text: 'No messages yet. Email Kit has not contacted this person.' }));
     box.appendChild(el('div', { id: 'recordStep', class: 'step', hidden: true }));
     box.appendChild(contactPanel(contact));
     box.hidden = false;
@@ -456,7 +463,9 @@ const RecordViews = (function () {
     box.textContent = '';
     box.textContent = '';
     list.forEach(p => box.appendChild(el('li', {}, el('span', { text: date(p.id) }), button('Restore', async () => {
-      const state = JSON.parse(p.data);
+      const raw = await Store.snapshotData(p.id);
+      if (!raw) { ctx.showToast('That recovery point is no longer available.'); return; }
+      const state = JSON.parse(raw);
       const data = { app: 'usha', schema: 3 };
       Engine.TABLES.forEach(t => { data[t] = Object.values(state[t] || {}); });
       await ctx.restoreData(data);
@@ -496,8 +505,8 @@ const RecordViews = (function () {
       if (stored) f.bytes = dataUrlBlob(stored.data).bytes;
       else f.text = 'This attachment could not be found.';
     }
-    const name = 'usha-clients-' + today() + '.zip';
-    if (await ctx.saveFile(name, zip(files), 'application/zip')) ctx.backupNote('The readable folder is saved as ' + name + '. Usha still treats its own database as the record.');
+    const name = 'email-kit-clients-' + today() + '.zip';
+    if (await ctx.saveFile(name, zip(files), 'application/zip')) ctx.backupNote('The readable folder is saved as ' + name + '. Email Kit still treats its own database as the record.');
   }
 
   async function importContacts(file) {
@@ -508,7 +517,7 @@ const RecordViews = (function () {
     const out = await ctx.attempt('importContacts', { rows: parsed.rows, source: 'imported from ' + file.name });
     if (!out) { ctx.backupNote('Nothing was imported.'); return; }
     const r = out.result;
-    ctx.backupNote('Usha added ' + r.added + ', found ' + r.existing + ' already on record, and flagged ' + r.review + ' for review.' + (r.skipped ? ' It skipped ' + r.skipped + ' with no company.' : '') + (r.restricted ? ' ' + r.restricted + ' remain restricted, and an import cannot change that.' : ''));
+    ctx.backupNote('Email Kit added ' + r.added + ', found ' + r.existing + ' already on record, and flagged ' + r.review + ' for review.' + (r.skipped ? ' It skipped ' + r.skipped + ' with no company.' : '') + (r.restricted ? ' ' + r.restricted + ' remain restricted, and an import cannot change that.' : ''));
     ctx.renderAll();
   }
 
