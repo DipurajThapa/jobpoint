@@ -37,6 +37,18 @@ const replyState = {...importedForm,activeRecordId:conv.id,stage:"followup",prio
 const processed = Engine.run(state,"processResponse",{s:replyState,text:intake.lastText,source:"verified import"},ctx);
 Engine.applyChanges(state,processed.changes);
 assert.equal(Engine.rows(state,"msgs").filter(m=>m.direction==="in").length,1);
+assert.equal(state.convs[conv.id].importedContext.lastDate,"2026-10-29");
+const draftedReply = Conversation.draft(state.convs[conv.id].importedContext,replyState);
+const savedReply = Engine.run(state,"saveDraft",{s:replyState,body:draftedReply.body,subject:draftedReply.subject,ready:true},ctx);
+Engine.applyChanges(state,savedReply.changes);
+const sentReply = Engine.run(state,"markSent",{s:replyState,convId:conv.id,msgId:savedReply.result.msgId,channel:"email",body:draftedReply.body,subject:draftedReply.subject},ctx);
+Engine.applyChanges(state,sentReply.changes);
+assert.equal(state.convs[conv.id].importedContext.lastSpeaker,"consultant");
+assert.equal(Conversation.advise({...state.convs[conv.id].importedContext,scenario:"after-reply"},today).action,"pause");
+const newResponse = {...replyState,priorDate:today,responseText:"Thank you. Please share a suitable meeting time.",responseCategory:"moreInfo"};
+const receivedAgain = Engine.run(state,"processResponse",{s:newResponse,text:newResponse.responseText,source:"pasted"},{...ctx,now:"2026-11-04T12:00:00.000Z",today:"2026-11-04"});
+Engine.applyChanges(state,receivedAgain.changes);
+assert.equal(state.convs[conv.id].importedContext.lastSpeaker,"client");
 assert.throws(()=>Engine.run(state,"importConversation",{s,intake},ctx),/already exists/);
 assert.throws(()=>Engine.run(Engine.emptyState(),"importConversation",{s,intake:{...intake,lastSpeaker:""}},ctx),/Confirm who/);
 assert.throws(()=>Engine.run(Engine.emptyState(),"importConversation",{s,intake:{...intake,lastText:""}},ctx),/latest client message/);
