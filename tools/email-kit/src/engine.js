@@ -916,6 +916,37 @@ const Engine = (function () {
 
   /* ---------- Commands ---------- */
   const COMMANDS = {
+    importConversation(tx, { s, intake }) {
+      const data = intake || {};
+      if (!s || !norm(s.company) || (!norm(s.recipientName) && !norm(s.recipientContact))) refuse('Add a company and a client name or contact address.');
+      if (!['client','consultant'].includes(data.lastSpeaker) || !/^\d{4}-\d{2}-\d{2}$/.test(data.lastDate) || data.lastDate > tx.today)
+        refuse('Confirm who sent the latest message and its date.');
+      if (data.lastSpeaker === 'client' && !norm(data.lastText)) refuse('Paste the latest client message before recording it as a reply.');
+      if (!norm(data.objective) || !norm(data.summary)) refuse('Confirm the objective and an editable summary before saving.');
+      if (String(data.history || '').length > 30000 || String(data.summary || '').length > 2000) refuse('The history or summary is too long.');
+      const { org, contact } = party(tx, s);
+      const existing = tx.all('convs').find(c => c.contactId === contact.id && c.orgId === org.id && !ENDED.includes(c.status));
+      if (existing) refuse('An open conversation already exists for this contact. Continue it from Clients instead of importing a duplicate.');
+      const conv = newConversation(tx, org, contact, s);
+      const stamp = data.lastDate + 'T12:00:00.000Z';
+      const message = { id:newId('m'), convId:conv.id, direction:data.lastSpeaker === 'client' ? 'in' : 'out',
+        status:data.lastSpeaker === 'client' ? 'received' : 'sent', type:data.lastSpeaker === 'client' ? 'response' : 'reply',
+        channel:s.channel || 'email', subject:norm(data.subject), body:String(data.lastText || ''), hash:hash(data.lastText || data.summary),
+        at:stamp, sentAt:data.lastSpeaker === 'consultant' ? stamp : '', actor:data.lastSpeaker === 'client' ? 'Client' : tx.actor,
+        source:'verified import', imported:true, createdAt:tx.now };
+      tx.put('msgs', message);
+      if (norm(data.history)) tx.put('sources', { id:newId('s'), convId:conv.id, label:'Pasted conversation history', url:'', body:String(data.history), createdAt:tx.now });
+      conv.subject = norm(data.subject); conv.topic = norm(data.objective); conv.lastType = 'reply';
+      conv.lastSentAt = data.lastSpeaker === 'consultant' ? data.lastDate : '';
+      conv.importedContext = { objective:norm(data.objective), summary:norm(data.summary), outstanding:norm(data.outstanding),
+        next:norm(data.next), lastSpeaker:data.lastSpeaker, lastDate:data.lastDate, lastText:String(data.lastText || ''), verifiedAt:tx.now, verifiedBy:tx.actor };
+      move(tx, conv, data.lastSpeaker === 'client' ? 'responseReceived' : 'awaiting', 'The consultant verified the imported context.');
+      if (data.lastSpeaker === 'client') addTask(tx, conv, 'reply', tx.today, { title:'Review and reply to the imported client message' });
+      else addTask(tx, conv, 'nudge', Rules.addWorkdays(data.lastDate, tx.settings.afterReply), { title:'Review whether a follow-up is due' });
+      setNext(tx, conv);
+      tx.log('imported', conv, 'Conversation context verified', 'Latest message: ' + data.lastSpeaker);
+      return { convId:conv.id, msgId:message.id, status:conv.status, next:conv.next };
+    },
     /* Saves a generated draft. It records text. It never records a send. */
     saveDraft(tx, { s, body, subject, ready, auto }) {
       /* Generating again for the same form stays in the same conversation. */
@@ -965,8 +996,8 @@ const Engine = (function () {
       /* Only the draft on screen can become a sent message. */
       if (msg && !['draft', 'ready'].includes(msg.status)) refuse('This draft is no longer current, so Email Kit did not record it as sent. Generate it again.');
       const profile = tx.get('meta','agency');
-      if (!profile || !msg || msg.convId !== convId || msg.agencyVersion !== profile.value.revision || !s.agencyVersion || s.agencyVersion !== CONFIG.profileVersion || profile.value.reviewBy < tx.today)
-        refuse('Generate a new draft with the current approved agency profile.');
+      if (!msg || msg.convId !== convId || msg.agencyVersion !== CONFIG.profileVersion || s.agencyVersion !== CONFIG.profileVersion || (profile && CONFIG.profileVersion !== 'platform-identity-v1' && profile.value.revision !== CONFIG.profileVersion))
+        refuse('Generate a new draft for the current organisation and conversation.');
       if (channel !== s.channel || channel !== msg.channel || body !== msg.body) refuse('The draft or channel has changed. Generate it again.');
       if (channel === 'whatsapp' && (!msg.waPermission || !s.whatsappConsent || !Rules.parseContact(s.waNumber).phone || msg.waPermission.number !== s.waNumber || !norm(s.waEvidence))) refuse('Record the WhatsApp permission and destination first.');
       if (s.stage === 'followup' && s.responseCategory === 'optOut' && (s.noReplyRequested || s.optOutScope === 'review')) refuse('No acknowledgement is permitted.');
