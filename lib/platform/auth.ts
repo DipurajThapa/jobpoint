@@ -23,6 +23,10 @@ export const db = () => {
   if (!env.DB) throw new Error("Cloudflare D1 binding `DB` is unavailable.");
   return env.DB;
 };
+export async function toolEnabled(key: string): Promise<boolean> {
+  const row = await db().prepare("SELECT enabled FROM platform_features WHERE tool_key=?").bind(key).first<{enabled:number}>();
+  return row?.enabled !== 0;
+}
 
 export const NO_STORE = { "cache-control": "no-store, private", "x-content-type-options": "nosniff" };
 export const apiJson = (data: unknown, status = 200, extra: Record<string, string> = {}) =>
@@ -153,6 +157,7 @@ export async function authorizeApi(request: Request, options: ApiOptions = {}): 
   if (!user) return apiError("Sign in to continue.", 401, "SIGN_IN");
   if (options.admin && user.role !== "admin") return apiError("Only an administrator can do this.", 403, "ADMIN_ONLY");
   if (options.tool) {
+    if (!await toolEnabled(options.tool)) return apiError("This tool is currently disabled by an administrator.", 403, "TOOL_DISABLED");
     const level = user.access[options.tool];
     if (!level) return apiError("You do not have access to this tool.", 403, "NO_TOOL_ACCESS");
     if (options.min && !levelAtLeast(level, options.min)) return apiError(`This needs ${options.min} access to the tool. Ask an administrator.`, 403, "LEVEL");
