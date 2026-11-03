@@ -64,7 +64,7 @@ const CONFIG = {
     { id: 'noResponse', label: 'No response', next: 'Send one brief reminder that adds no pressure.' },
     { id: 'interested', label: 'Interested', next: 'Thank them and suggest one practical next step.' },
     { id: 'moreInfo', label: 'Requests more information', next: 'Answer their question with verified details.' },
-    { id: 'commercial', label: 'Requests commercial terms', next: 'Answer with the fee, payment and replacement terms.' },
+    { id: 'commercial', label: 'Requests commercial terms', next: 'Share verified fee, payment and replacement terms when available.' },
     { id: 'postponed', label: 'Asks me to contact them later', next: 'Confirm the later date. Email Kit pauses reminders until then.' },
     { id: 'meeting', label: 'Proposes, confirms or changes a meeting', next: 'Record the details. A meeting counts as confirmed only when the date, time and time zone are all agreed.' },
     { id: 'meetingHeld', label: 'We held the meeting', next: 'Thank them and repeat only what you confirmed.' },

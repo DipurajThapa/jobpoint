@@ -66,4 +66,7 @@ const saved = Engine.run(fresh,"saveDraft",{s:first,body:composed.candidates[0].
 Engine.applyChanges(fresh,saved.changes);
 const marked = Engine.run(fresh,"markSent",{s:first,convId:saved.result.convId,msgId:saved.result.msgId,channel:"email",body:composed.candidates[0].body,subject:composed.candidates[0].subject},ctx);
 assert.equal(marked.result.status,"awaiting");
+const commercial = Rules.compose({...first,stage:"followup",responseCategory:"commercial",responseText:"What are your fees?",priorSubject:"Hiring discussion"},CONFIG.limits).candidates[0].body;
+assert.match(commercial,/confirm the current fee/);
+assert.doesNotMatch(commercial,/these terms/);
 console.log("Conversation scenarios passed: first contact without Agency, imported reply, latest consultant reply, duplicate, incomplete history, recent pause, overdue follow-up, opt-out, conflicting date.");
