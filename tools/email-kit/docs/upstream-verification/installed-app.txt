@@ -1,0 +1,10 @@
+> Install requirements and permanent identity
+> Works offline after the first visit
+> Saved data before upgrades
+> Update with work on screen asks first and keeps the form
+> Update now applies and keeps saved data
+> Empty form updates by itself
+> A failed update leaves the current version working
+> Backup and restore
+
+PASS 35  FAIL 0

@@ -45,6 +45,7 @@ next-env.d.ts
 !/build/sites-vite-plugin.LICENSE
 !/build/sites-vite-plugin.ts
 !/build/sites-worker.ts
+!/build/email-kit-plugin.mjs
 
 /dist/
 /.wrangler/

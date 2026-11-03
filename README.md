@@ -18,6 +18,15 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 - Shared public navigation follows About → Services → Jobs → Candidates → Employers → FAQs. White and neutral surfaces balance blue action accents.
 - Privacy, terms and safeguards pages describe actual behavior and unresolved legal facts; policy drafts are excluded from indexing and the sitemap.
 
+## Working Platform (internal team area)
+
+`/platform` is the internal, sign-in-only area for Job Point team members. After signing in, people see a dashboard of the tools an administrator has granted them. The first tool is **Email Kit**, the employer-outreach workspace formerly released as Usha. Tools are listed in `lib/platform/tools.ts`, so a future tool is one registry entry plus its route.
+
+- Accounts belong to the platform: email and password, PBKDF2-SHA256 hashing, and hashed session tokens in an HttpOnly cookie. Sessions expire after 12 hours idle or 7 days. Administrators invite people and send password resets as one-time links; no email service is configured. The site owner, verified by Sign in with ChatGPT, creates the first administrator and can recover administrators at `/platform/owner`.
+- Every `/platform` page and `/api/platform` endpoint checks the session and the per-tool level (View, Edit or Manage) on the server. Mutations also require a same-origin request. Without access, a page redirects to sign-in or returns 403, and an API returns 401 or 403 with no data.
+- Email Kit records, the shared Do not contact list and history are stored in D1. Attachments and daily recovery copies are in private R2. Writes are atomic and checked against the stored revision. The server enforces restriction safeguards: no deletion, narrowing or moving, and lifting requires a reason. It also validates every record with Email Kit's own row checks.
+- Guides: [administrator guide](docs/WORKING_PLATFORM_ADMIN_GUIDE.md), [Email Kit and migration from Usha](tools/email-kit/README.md), [design and review](docs/designs/working-platform.md), [test record](docs/verification/working-platform-2026-11-03.md).
+
 ## Runtime architecture
 
 - Next-compatible React app compiled through Vinext to a Cloudflare Worker.
@@ -43,6 +52,13 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 | `GET /api/admin/resumes/{applicationId}` | Site owner | Download a stored resume |
 | `GET /api/admin/privacy-requests` | Site owner | Review privacy requests and recent sensitive actions |
 | `PATCH /api/admin/privacy-requests/{id}` | Site owner | Record a verified request outcome |
+| `POST /api/platform/auth/{sign-in,sign-out,accept,password}` | Public / signed in | Platform sign-in, sign-out, invitation or reset redemption, password change |
+| `GET, POST /api/platform/admin/users`; `PATCH, DELETE /api/platform/admin/users/{id}`; `POST …/{id}/link` | Platform administrator | Team list and activity, invite, role/status/tool levels, delete, one-time links |
+| `POST /api/platform/owner` | Site owner (SIWC) | First administrator; administrator recovery link |
+| `GET /api/platform/email-kit/{state,revision}` | Email Kit View | Shared records and revision |
+| `POST /api/platform/email-kit/commit` | Email Kit Edit/Manage by step | Atomic, revision-checked save with restriction guards |
+| `GET, POST /api/platform/email-kit/files`; `GET, PUT …/files/{id}` | View / Edit | Attachments (deletes only unused files) |
+| `GET, POST /api/platform/email-kit/snapshots`; `GET …/summary` | View/Edit; Manage | Daily recovery copies; record counts |
 
 Candidate multipart fields: `fullName`, `email`, `phone`, `location`, `experience`, `consent=yes`, `adult=yes`; optional `jobId`, `message`, `resume`, `desiredRole`, `skills`, `education`, `availability`, `shareConsent=yes` and `futureConsent=yes`. General registration requires `futureConsent=yes`. Employer JSON fields: `contactName`, `company`, `email`, `phone`, `roleTitle`, `location`, `headcount`, `details`, `consent:"yes"`. Both forms include an anti-spam `website` honeypot.
 
@@ -54,7 +70,7 @@ The owner signs in at `/admin` using the owning ChatGPT account. Candidate recor
 
 ## Data model
 
-The immutable migrations are `drizzle/0000_job_point_recruitment.sql` and `drizzle/0001_recruitment_operations.sql`. D1 tables: `jobs`, `applications`, `employer_enquiries`, `privacy_requests`, `audit_events`, and `rate_limits`. Resume bytes stay in R2; D1 stores only a private object key and file metadata. The public role API excludes unpublished roles and all candidate/employer personal information.
+The immutable migrations are `drizzle/0000_job_point_recruitment.sql`, `drizzle/0001_recruitment_operations.sql` and `drizzle/0002_working_platform.sql`. D1 tables: `jobs`, `applications`, `employer_enquiries`, `privacy_requests`, `audit_events` (now with `detail`), `rate_limits`, plus Working Platform `platform_users`, `platform_tool_access`, `platform_sessions`, `platform_tokens`, and Email Kit `email_kit_records`, `email_kit_state`, `email_kit_files`, `email_kit_snapshots`. Resume bytes stay in R2; D1 stores only a private object key and file metadata. The public role API excludes unpublished roles and all candidate/employer personal information.
 
 ## Build and preview
 
@@ -63,6 +79,8 @@ Use the Sites-managed starter workflow. The package lock is unchanged. After ins
 The operating recommendation and decisions are in [docs/DIGITAL_RECRUITMENT_BLUEPRINT.md](docs/DIGITAL_RECRUITMENT_BLUEPRINT.md). Before public intake, Job Point Consultancy must confirm its legal identity and privacy contact, processor and storage arrangements, retention and deletion policy, backup restore process, CV malware-scanning approach, breach response, and any domestic/overseas recruiting obligations. The public privacy notice names these release dependencies. Sites published version 5 as a public read-only demo on 13 October 2026. Browser/API/security verification remains incomplete; do not accept live PII until these gates are verified.
 
 ## Demo verification
+
+Working Platform: with `npm run dev` running, `npm run db:local` applies the migrations to the local D1 (`-- --reset` starts empty). Then run `USHA_STANDALONE=/path/to/Usha-3.0.html npm run check:platform`. It is a browser and API test of the whole journey with fictional data, and blocks every external request.
 
 Run `node --experimental-vm-modules scripts/check-demo.mjs` for the read-only intake and anonymous admin boundary checks. Run `node --experimental-vm-modules scripts/check-local-dummy-jobs.mjs` for local-only sample vacancy behavior. Native Sites remote build validates the complete TSX bundle. Public URL access must be confirmed using Sites access settings; local tests do not prove the platform authentication boundary.
 

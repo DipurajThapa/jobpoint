@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0A1F5C">
+<title>Email Kit | Working Platform</title>
+<meta name="description" content="Email Kit prepares employer outreach and follow-ups for the Job Point team. It does not send messages.">
+<link rel="icon" href="__FAVICON__">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap">
+<style>/*__CSS__*/</style>
+</head>
+<body>
+<!--__PLATFORM_BAR__-->
+<a class="skip" href="#messageHeading">Skip to the message</a>
+<div class="storebar" id="storeBar" role="alert" hidden></div>
+<div class="update" id="updateBar" hidden>
+  <p id="updateText"></p>
+  <div class="update-actions">
+    <button type="button" class="btn quiet small" id="updateNow">Update now</button>
+    <button type="button" class="btn quiet small" id="updateLater">Later</button>
+  </div>
+</div>
+<dialog id="permissionDialog" aria-labelledby="permissionTitle">
+  <form method="dialog"><h2 id="permissionTitle">Record new permission</h2>
+  <p id="permissionScope"></p>
+  <div class="field"><label for="permissionEvidence">Who agreed, when, and what contact did they authorise?</label>
+  <textarea id="permissionEvidence" maxlength="800" rows="3" required></textarea></div>
+  <p class="hint">Only lift the full restriction if the new permission covers its entire scope. Otherwise keep the restriction.</p>
+  <button class="btn" value="cancel" formnovalidate>Keep restriction</button>
+  <button class="btn" value="confirm">Save permission</button></form>
+</dialog>
+<div class="app">
+
+<main class="brief">
+  <header class="masthead">
+    <!--__LOGO__-->
+    <p>Employer outreach · Job Point Consultancy</p>
+    <button type="button" class="btn text" id="reset" data-needs="edit">Reset form</button>
+  </header>
+
+  <details class="sender" id="agencyBox" open>
+    <summary>Agency setup</summary>
+    <p class="hint">Use one agency per browser profile. This edition covers permanent, non-IT white-collar recruitment across India. Enter only claims approved for outreach.</p>
+    <div class="grid">
+      <div class="field"><label for="agencyName">Agency name</label><input id="agencyName" maxlength="100"></div>
+      <div class="field"><label for="agencyReview">Review approval by</label><input type="date" id="agencyReview"></div>
+      <div class="field span2"><label for="agencyServices">Approved screening process or service description</label><textarea id="agencyServices" maxlength="1200"></textarea></div>
+      <div class="field"><label for="agencySectors">Sector statement (optional)</label><textarea id="agencySectors" maxlength="400"></textarea></div>
+      <div class="field"><label for="agencyReferences">Client names approved for public reference (optional)</label><textarea id="agencyReferences" maxlength="800"></textarea></div>
+      <div class="field span2"><label for="agencyTerms">Approved commercial terms, one per line (optional)</label><textarea id="agencyTerms" maxlength="1600"></textarea></div>
+    </div>
+    <label class="check"><input type="checkbox" id="agencyApproved"><span>I approve this agency identity, the India recruitment scope and the statements above.</span></label>
+    <button class="btn" id="saveAgency" data-needs="manage" type="button">Save agency profile</button>
+    <p class="hint" id="agencyStatus" role="status"></p>
+  </details>
+  <form id="form" novalidate autocomplete="off">
+
+    <details class="sender" id="senderBox" open>
+      <summary id="senderSummary">Your details</summary>
+      <div class="grid">
+        <div class="field"><label for="senderName">Your name</label><input id="senderName" autocomplete="name"></div>
+        <div class="field"><label for="senderRole">Your designation</label><input id="senderRole"></div>
+        <div class="field"><label for="senderPhone">Phone <span class="opt">optional</span></label><input id="senderPhone" type="tel"></div>
+        <div class="field"><label for="senderEmail">Email <span class="opt">optional</span></label><input id="senderEmail" type="email"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="rememberSender"><span>Remember my details on this device.</span></label>
+    </details>
+
+    <details class="tracker" id="trackerBox" hidden>
+      <summary id="trackerSummary">Clients</summary>
+      <div class="segment-row three" id="clientTabs">
+        <input type="radio" name="clientTab" id="tab-today" value="today" checked><label for="tab-today">Next actions</label>
+        <input type="radio" name="clientTab" id="tab-folders" value="folders"><label for="tab-folders">Clients</label>
+        <input type="radio" name="clientTab" id="tab-limits" value="limits"><label for="tab-limits">Do not contact</label>
+      </div>
+      <div id="panelToday">
+        <ul id="queueList"></ul>
+        <ul id="trackerList"></ul>
+        <p class="hint" id="todayEmpty" hidden>Nothing needs your attention.</p>
+      </div>
+      <div id="panelFolders" hidden>
+        <div class="field"><label for="clientSearch">Find a client</label><input id="clientSearch" type="search" autocomplete="off"></div>
+        <div id="folderTree"></div>
+      </div>
+      <div id="panelLimits" hidden>
+        <p class="hint" id="dncEmpty">Nobody is on this list.</p>
+        <div id="dncSection" hidden>
+          <h3 id="dncSummary">Do not contact list (0)</h3>
+          <ul id="dncList"></ul>
+        </div>
+      </div>
+    </details>
+
+    <fieldset class="segment" id="modeGroup">
+      <legend>Conversation stage</legend>
+      <div class="segment-row two">
+        <input type="radio" name="mode" id="mode-first" value="first" checked><label for="mode-first">First contact</label>
+        <input type="radio" name="mode" id="mode-followup" value="followup"><label for="mode-followup">Follow-up</label>
+      </div>
+    </fieldset>
+
+    <section class="block" aria-labelledby="hProspect">
+      <h2 id="hProspect">Prospect</h2>
+      <div class="grid">
+        <div class="field">
+          <label for="recipientName">Recipient name <span class="opt">optional</span></label>
+          <div class="name-row">
+            <select id="recipientTitle" aria-label="Recipient title">
+              <option value="">Title</option><option>Mr</option><option>Ms</option><option>Mrs</option><option>Dr</option>
+            </select>
+            <input id="recipientName">
+          </div>
+        </div>
+        <div class="field"><label for="company">Company</label><input id="company"></div>
+        <div class="field"><label for="designation">Designation <span class="opt">search or type</span></label><input id="designation" list="designationList"><datalist id="designationList"></datalist></div>
+        <div class="field"><label for="responsibility">Responsibility</label><select id="responsibility"></select><p class="hint" id="responsibilityHint" hidden></p></div>
+        <div class="field" id="wrapIndustry"><label for="industry">Industry <span class="opt">search or type</span></label><input id="industry" list="industryList"><datalist id="industryList"></datalist></div>
+        <div class="field" id="wrapLocation"><label for="location">Location <span class="opt">search or type</span></label><input id="location" list="locationList"><datalist id="locationList"></datalist></div>
+        <div class="field span2"><label for="recipientContact">Email or mobile number <span class="opt">optional</span></label><input id="recipientContact"></div>
+      </div>
+    </section>
+
+    <div class="suggest" id="trackerMatch" tabindex="-1" hidden>
+      <p id="trackerMatchText"></p>
+      <div class="track-actions">
+        <button type="button" class="btn quiet small" id="trackerMatchUse" data-needs="edit">Continue</button>
+        <button type="button" class="btn quiet small" id="trackerMatchRemove" data-needs="edit">Remove the record</button>
+      </div>
+    </div>
+
+    <div class="suggest" id="addressChoice" hidden>
+      <p id="addressChoiceText"></p>
+      <div class="track-actions">
+        <button type="button" class="btn quiet small" id="addressSame" data-needs="edit">The same person</button>
+        <button type="button" class="btn quiet small" id="addressOther" data-needs="edit">A different person</button>
+      </div>
+    </div>
+
+    <div class="suggest" id="nameChoice" hidden>
+      <p id="nameChoiceText"></p>
+      <div class="track-actions">
+        <button type="button" class="btn quiet small" id="nameCorrect" data-needs="edit">Correct the record</button>
+        <button type="button" class="btn quiet small" id="nameMoved" data-needs="edit" hidden>They moved to this company</button>
+        <button type="button" class="btn quiet small" id="nameDifferent" data-needs="edit">A different person</button>
+      </div>
+    </div>
+
+    <label class="check" id="wrapDncDifferent" hidden><input type="checkbox" id="dncDifferent"><span id="dncDifferentText"></span></label>
+
+    <section class="block" id="secEarlier" aria-labelledby="hEarlier" hidden>
+      <h2 id="hEarlier">Earlier message</h2>
+      <div class="grid">
+        <div class="field"><label for="priorChannel">Sent by</label><select id="priorChannel"></select></div>
+        <div class="field"><label for="priorType">Message type</label><select id="priorType"></select></div>
+        <div class="field span2" id="wrapPriorSubject"><label for="priorSubject">Email subject</label><input id="priorSubject"><p class="hint">Email follow-ups reuse this subject.</p></div>
+        <div class="field span2"><label for="priorText">Paste the earlier message <span class="opt">optional</span></label><textarea id="priorText" rows="3"></textarea></div>
+        <div class="field" id="wrapPriorTopic"><label for="priorTopic">What was it about?</label><input id="priorTopic"><p class="reads" id="readsPrior"></p></div>
+        <div class="field"><label for="priorDate">Date sent <span class="opt">optional</span></label><input id="priorDate" type="date"></div>
+      </div>
+    </section>
+
+    <section class="block" id="secResponse" aria-labelledby="hResponse" hidden>
+      <h2 id="hResponse">Their response</h2>
+      <div class="field"><label for="responseText">Paste their response <span class="opt">leave empty if they have not replied</span></label><textarea id="responseText" rows="3"></textarea></div>
+      <div class="field gap"><label for="responseCategory">Response category</label><select id="responseCategory"></select></div>
+      <div class="suggest" id="categorySuggest" hidden>
+        <p id="categoryText"></p>
+        <button type="button" class="btn quiet small" id="categoryUse" data-needs="edit">Use this category</button>
+      </div>
+      <div class="suggest" id="replyMatch" hidden>
+        <p id="replyMatchText"></p>
+        <button type="button" class="btn quiet small" id="replyMatchUse">Open this conversation</button>
+      </div>
+      <div class="reading" id="readBox" hidden>
+        <h3>What Email Kit found</h3>
+        <p class="hint">Email Kit reads only plain wording, so please check each point.</p>
+        <ul id="readList"></ul>
+      </div>
+
+      <fieldset class="reveal options" id="wrapAskTopics" hidden>
+        <legend>What did they ask about?</legend>
+        <div class="check-grid" id="askGroup"></div>
+      </fieldset>
+
+      <div class="reveal" id="wrapReferred" hidden>
+        <div class="grid">
+          <div class="field"><label for="referredName">Who did they refer you to?</label><input id="referredName"></div>
+          <div class="field"><label for="referredRole">Their designation <span class="opt">optional</span></label><input id="referredRole" list="designationList"></div>
+          <div class="field span2"><label for="referralPermission">May you mention the person who referred you?</label>
+            <select id="referralPermission">
+              <option value="unclear">Not clear, so ask them</option>
+              <option value="yes">Yes, they gave clear permission</option>
+              <option value="no">No, do not mention them</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="reveal" id="wrapNoReply" hidden>
+        <label class="check"><input type="checkbox" id="noReplyRequested"><span>They asked me not to reply.</span></label>
+        <div class="field gap"><label for="optOutScope">What does this restriction cover?</label><select id="optOutScope"></select></div>
+        <div class="check-grid" id="wrapOptOutChannels" hidden></div>
+      </div>
+
+      <div class="reveal" id="wrapMoved" hidden>
+        <div class="field"><label for="movedTo">New company <span class="opt">if they said</span></label><input id="movedTo"></div>
+      </div>
+
+      <div class="reveal" id="wrapMeeting" hidden>
+        <div class="grid">
+          <div class="field span2"><label for="meetingAction">What should this reply do?</label>
+            <select id="meetingAction">
+              <option value="accept">Accept the time they proposed</option>
+              <option value="confirmed">They confirmed the time I proposed</option>
+              <option value="change">Change an agreed meeting</option>
+              <option value="cancel">Cancel the meeting</option>
+            </select>
+          </div>
+          <div class="field"><label for="meetingDate">Date</label><input id="meetingDate" type="date"></div>
+          <div class="field"><label for="meetingTime">Time</label><input id="meetingTime" type="time"></div>
+          <div class="field"><label for="meetingZone">Time zone</label><select id="meetingZone"></select></div>
+          <div class="field"><label for="meetingMode">Type</label>
+            <select id="meetingMode"><option value="call">Call</option><option value="video">Video call</option><option value="visit">In person</option></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="reveal" id="wrapAgreed" hidden>
+        <div class="grid">
+          <div class="field"><label for="agreedStep">What will you do next? <span class="opt">optional</span></label><input id="agreedStep"></div>
+          <div class="field"><label for="agreedDate">Agreed date <span class="opt">optional</span></label><input id="agreedDate" type="date"></div>
+        </div>
+        <p class="reads" id="readsAgreed"></p>
+      </div>
+    </section>
+
+    <section class="block" aria-labelledby="hMessage">
+      <h2 id="hMessage">Message</h2>
+
+      <fieldset class="segment">
+        <legend>Channel</legend>
+        <div class="segment-row four" id="channelGroup"></div>
+        <p class="hint" id="channelNote" hidden></p>
+      </fieldset>
+
+      <div id="wrapWhatsapp" hidden>
+        <div class="field"><label for="waNumber">Recipient’s WhatsApp number with country code</label><input id="waNumber" type="tel" placeholder="+91… or +971…"></div>
+        <div class="field"><label for="waEvidence">Permission source and date</label><input id="waEvidence" maxlength="250" placeholder="For example, email dated 3 Nov asking for WhatsApp updates"></div>
+        <label class="check"><input type="checkbox" id="whatsappConsent"><span>The recipient supplied this number and opted in to messages from our agency for this conversation.</span></label>
+      </div>
+
+      <label class="check" id="wrapAccepted" hidden><input type="checkbox" id="accepted"><span>They accepted my connection request.</span></label>
+
+      <div class="grid top-gap" id="wrapRoleRow">
+        <div class="field span2"><label for="roles">Relevant job roles <span class="opt">optional, use commas</span></label><input id="roles"></div>
+        <div class="field"><label for="hiringLocations">Hiring locations <span class="opt">optional, use commas</span></label><input id="hiringLocations"></div>
+        <div class="field"><label for="hiringType">Hiring type</label>
+          <select id="hiringType"><option value="permanent">Permanent</option><option value="temporary">Temporary or contract</option></select>
+        </div>
+      </div>
+
+      <div class="reveal" id="wrapScope" hidden>
+        <label class="check"><input type="checkbox" id="scopeConfirmed"><span>I have checked this requirement. It is permanent, non-IT, white-collar and in India.</span></label>
+      </div>
+
+      <div class="grid top-gap">
+        <div class="field" id="wrapReason"><label for="reason" id="reasonLabel">Reason for contact</label><select id="reason"></select></div>
+        <div class="field" id="wrapDesired"><label for="desired">Desired response</label><select id="desired"></select></div>
+      </div>
+
+      <label class="check" id="wrapTerms"><input type="checkbox" id="includeTerms"><span>Include commercial terms in this message.</span></label>
+
+      <div class="research" id="wrapResearch">
+        <p class="hint">Search for a hiring signal. Searches open in your browser and send their terms to Google. You check the results yourself, because Email Kit works offline.</p>
+        <ul id="researchList"></ul>
+      </div>
+    </section>
+
+    <section class="block" id="secEvidence" aria-labelledby="hEvidence" hidden>
+      <h2 id="hEvidence">Evidence</h2>
+
+      <div class="reveal first" id="wrapReferrer" hidden>
+        <div class="field"><label for="referrer">Referrer's name</label><input id="referrer"></div>
+        <label class="check"><input type="checkbox" id="referrerConsent"><span>This person really referred me and agreed to be named.</span></label>
+      </div>
+
+      <div class="reveal first" id="wrapPostAuthor" hidden>
+        <div class="field"><label for="postAuthor">Who published it?</label>
+          <select id="postAuthor"><option value="recipient">The recipient</option><option value="company">The company</option></select>
+        </div>
+      </div>
+
+      <div class="reveal first" id="wrapWhen" hidden>
+        <div class="field"><label for="conversationWhen">Where did you speak? <span class="opt">optional</span></label><input id="conversationWhen"></div>
+      </div>
+
+      <div class="reveal first" id="wrapObservation" hidden>
+        <div class="field"><label for="observation" id="observationLabel">Observation</label><textarea id="observation" rows="2"></textarea><p class="reads" id="readsObservation"></p></div>
+      </div>
+
+      <div class="reveal" id="wrapVerification" hidden>
+        <div class="grid">
+          <div class="field span2"><label for="sourceUrl">Source URL <span class="opt">optional</span></label><input id="sourceUrl" type="url" inputmode="url"></div>
+          <div class="field"><label for="verification">Verification status</label>
+            <select id="verification">
+              <option value="unchecked">Not checked yet</option>
+              <option value="confirmed">I checked the source and confirmed it</option>
+              <option value="failed">I checked and could not confirm it</option>
+            </select>
+          </div>
+          <div class="field"><label for="dateChecked">Date checked</label><input id="dateChecked" type="date"></div>
+        </div>
+        <p class="hint">A link alone is not verification. The message uses this finding only after you confirm it.</p>
+        <div id="wrapQuote">
+          <div class="field gap"><label for="sourceQuote">Exact wording to quote <span class="opt">optional, only if the wording matters</span></label><textarea id="sourceQuote" rows="2"></textarea></div>
+          <label class="check"><input type="checkbox" id="includeSource"><span>Add a labelled source link to the email.</span></label>
+        </div>
+      </div>
+    </section>
+
+    <p class="privacy" id="privacyLine">Client records are saved in the Job Point Working Platform and shared with team members who have Email Kit access. Email Kit sends nothing: you send from your own mailbox, then record it here.</p>
+  </form>
+</main>
+
+<aside class="desk" aria-labelledby="messageHeading">
+  <div class="desk-top">
+    <h2 id="messageHeading" tabindex="-1">Draft</h2>
+    <p class="draft-state" id="draftState">No draft yet</p>
+  </div>
+
+  <div class="dnc" id="dncBanner" hidden tabindex="-1">
+    <h3>Do not contact</h3>
+    <p id="dncText"></p>
+    <div class="dnc-actions" id="dncActions">
+      <button type="button" class="btn quiet small" id="dncClear" data-needs="edit">Record new permission</button>
+    </div>
+  </div>
+
+  <dl class="summary" id="followSummary" hidden>
+    <dt>Response</dt><dd id="summaryCategory"></dd>
+    <dt>Recommended next step</dt><dd id="summaryNext"></dd>
+  </dl>
+
+  <button type="button" class="btn primary wide" id="generate" data-needs="edit">Generate message</button>
+
+  <div id="live" class="sr" role="status" aria-live="polite"></div>
+  <div class="toast" id="toast" hidden></div>
+
+  <div class="gaps" id="gaps" hidden tabindex="-1">
+    <h3>Please resolve these first</h3>
+    <ul id="gapList"></ul>
+  </div>
+
+  <div class="sheet" id="sheet">
+    <p class="empty" id="emptyState">Your draft will appear here.</p>
+    <p class="empty" id="noMessage" hidden>No message is needed. They asked for no reply, and Email Kit has marked this prospect as Do not contact.</p>
+
+    <div id="draftArea" hidden>
+      <div class="sheet-row" id="subjectRow">
+        <label for="subject">Email subject</label>
+        <input id="subject">
+        <p class="count" id="subjectCount"></p>
+      </div>
+      <div class="sheet-row">
+        <label for="body" id="bodyLabel">Message</label>
+        <textarea id="body" rows="2" spellcheck="true"></textarea>
+      </div>
+      <div class="meter" id="meter" aria-hidden="true">
+        <div class="band" id="meterBand"></div>
+        <div class="stop" id="meterStop"></div>
+        <div class="mark" id="meterMark"></div>
+      </div>
+      <p class="count" id="bodyCount"></p>
+      <p class="count" id="countRule"></p>
+    </div>
+  </div>
+
+  <details class="fold rich" id="richBox" hidden>
+    <summary>Formatted preview</summary>
+    <div class="richview" id="richView"></div>
+    <p class="hint">Copy message keeps this formatting and a plain-text version. An email link can carry plain text only, so use Save email file to keep the formatting.</p>
+  </details>
+
+  <div class="copyrow" id="copyRow" hidden>
+    <button type="button" class="btn primary" id="copyBody" disabled>Copy message</button>
+    <button type="button" class="btn quiet" id="copySubject" disabled>Copy email subject</button>
+  </div>
+  <p class="copy-reason" id="copyReason"></p>
+
+  <div class="next-row" id="nextRow" hidden>
+    <a class="btn quiet" id="openApp" hidden target="_blank" rel="noopener noreferrer"></a>
+    <button type="button" class="btn quiet" id="markSent" data-needs="edit" hidden>Mark as sent</button>
+    <button type="button" class="btn quiet" id="saveEml" hidden>Save email file</button>
+    <button type="button" class="btn quiet" id="queueLater" data-needs="edit" hidden>Queue for later</button>
+    <button type="button" class="btn quiet" id="alternative" disabled aria-expanded="false" aria-controls="altPanel">Choose an alternative</button>
+  </div>
+
+  <div class="alts" id="altPanel" hidden>
+    <h3>Other suitable versions</h3>
+    <ul id="altList"></ul>
+  </div>
+
+  <div class="restore" id="restoreBox" hidden>
+    <p>Your edited draft was replaced.</p>
+    <button type="button" class="btn quiet small" id="restore">Restore my edited draft</button>
+  </div>
+
+  <div class="notes" id="notesBox" hidden>
+    <h3>Check before sending</h3>
+    <ul id="noteList"></ul>
+  </div>
+
+  <section class="record" id="recordBox" tabindex="-1" hidden aria-labelledby="recordName"></section>
+
+  <details class="fold" id="whyBox" hidden>
+    <summary>Why this version</summary>
+    <p id="whyText"></p>
+    <div id="evidenceBox" hidden>
+      <h3>Evidence note, not copied</h3>
+      <dl id="evidenceList"></dl>
+    </div>
+  </details>
+
+  <details class="fold" id="appBox">
+    <summary id="appSummary">App, updates and backup</summary>
+    <p id="appVersion"></p>
+    <p id="appStatus"></p>
+    <button type="button" class="btn quiet small" id="checkUpdate">Check for updates</button>
+    <div id="installBlock">
+      <h3>Install</h3>
+      <p id="installText"></p>
+      <button type="button" class="btn quiet small" id="installApp" hidden>Install Email Kit</button>
+    </div>
+    <h3>Your records</h3>
+    <p id="storageText"></p>
+    <p>Save a backup regularly. A backup holds your full client history and your Do not contact list, so keep it somewhere safe. Email Kit never sends it anywhere.</p>
+    <div class="dnc-actions">
+      <div class="field"><label for="backupPassword">Backup passphrase (at least 12 characters for a new backup)</label><input type="password" id="backupPassword" autocomplete="off"><p class="hint">Keep the passphrase separately. Enter it here to save or restore a protected backup. CSV and folder exports are readable copies.</p></div>
+      <button type="button" class="btn quiet small" id="exportBackup">Save a backup</button>
+      <button type="button" class="btn quiet small" id="importBackup" data-needs="manage">Restore a backup</button>
+      <button type="button" class="btn quiet small" id="exportFolder">Save a readable folder</button>
+      <button type="button" class="btn quiet small" id="exportCsv">Export contacts as CSV</button>
+      <button type="button" class="btn quiet small" id="importContacts" data-needs="edit">Import contacts from CSV</button>
+      <button type="button" class="btn quiet small" id="eraseAll" data-needs="manage">Delete all client records</button>
+    </div>
+    <input type="file" id="importFile" accept=".json,application/json" hidden aria-label="Choose a backup file">
+    <input type="file" id="contactsFile" accept=".csv,text/csv" hidden aria-label="Choose a contacts file">
+    <p id="backupStatus"></p>
+    <div id="restoreReport" class="restore-report" role="status" hidden></div>
+    <div id="recoverySection" data-needs="manage" hidden>
+      <h3>Recovery points</h3>
+      <p>Email Kit keeps one a day for a week. Restoring adds back anything missing and never removes a Do not contact mark.</p>
+      <ul id="recoveryList"></ul>
+    </div>
+  </details>
+
+  <details class="fold" id="rulesBox">
+    <summary>Follow-up rules</summary>
+    <p>Email Kit counts from the day you mark a message as sent, never from when a draft was made. New rules apply to future messages.</p>
+    <div class="limit-grid">
+      <div class="field"><label for="setFirst">First reminder after, in working days</label><input id="setFirst" type="number" min="1" max="60"></div>
+      <div class="field"><label for="setFinal">Next reminder after, in working days</label><input id="setFinal" type="number" min="1" max="60"></div>
+      <div class="field"><label for="setAfterReply">Check after your reply, in working days</label><input id="setAfterReply" type="number" min="1" max="60"></div>
+      <div class="field"><label for="setClose">Close as no response after, in working days</label><input id="setClose" type="number" min="1" max="60"></div>
+      <div class="field"><label for="setMax">Maximum reminders</label><input id="setMax" type="number" min="0" max="5"></div>
+      <div class="field"><label for="setZone">Time zone</label><select id="setZone"></select></div>
+      <div class="field wide-field"><label for="setOwner">Owner of follow-up actions <span class="opt">your name if left empty</span></label><input id="setOwner"></div>
+    </div>
+    <fieldset class="options">
+      <legend>Days off</legend>
+      <div class="check-grid" id="setDays"></div>
+    </fieldset>
+    <button type="button" class="btn quiet small" id="saveRules" data-needs="manage">Save the rules</button>
+    <p id="rulesStatus"></p>
+  </details>
+
+  <details class="fold">
+    <summary>Length limits and counting</summary>
+    <p>These are editable drafting defaults from the brief, not verified platform limits. A hard limit blocks copying. A target is a guide only.</p>
+    <div class="limit-grid">
+      <div class="field wide-field"><label for="inviteHard">Connection note: hard limit in characters</label><input id="inviteHard" type="number" min="20" step="1"></div>
+      <div class="field"><label for="messageMin">LinkedIn and WhatsApp: target from, in characters</label><input id="messageMin" type="number" min="0" step="10"></div>
+      <div class="field"><label for="messageMax">LinkedIn and WhatsApp: target to, in characters</label><input id="messageMax" type="number" min="1" step="10"></div>
+      <div class="field"><label for="emailMin">Email: target from, in words</label><input id="emailMin" type="number" min="0" step="5"></div>
+      <div class="field"><label for="emailMax">Email: target to, in words</label><input id="emailMax" type="number" min="1" step="5"></div>
+    </div>
+    <p>Character counts use the final text and include spaces, punctuation and line breaks, with each line break counted as one character. Email word counts cover the body, including the greeting and sign-off, and leave out the subject. A list bullet does not count as a word. Minimum targets apply to first messages, because follow-ups should be shorter.</p>
+    <button type="button" class="btn quiet small" id="limitsDefault" data-needs="edit">Restore default limits</button>
+  </details>
+</aside>
+</div>
+
+<script id="company-data">/*__CONFIG__*/</script>
+<script id="message-library">/*__LIBRARY__*/</script>
+<script id="selection-rules">/*__RULES__*/</script>
+<script id="client-engine">/*__ENGINE__*/</script>
+<script id="local-store">/*__STORE__*/</script>
+<script id="record-views">/*__RECORDS__*/</script>
+<script id="backup">/*__BACKUP__*/</script>
+<script id="interface">/*__UI__*/</script>
+<script id="app-layer">/*__PWA__*/</script>
+</body>
+</html>

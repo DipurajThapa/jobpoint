@@ -1,0 +1,162 @@
+
+## Anonymous visitors see no internal data
+PASS  /platform redirects to sign-in (307)
+PASS  /platform returns no records
+PASS  /platform/admin redirects to sign-in (307)
+PASS  /platform/admin returns no records
+PASS  /platform/account redirects to sign-in (307)
+PASS  /platform/account returns no records
+PASS  /platform/email-kit redirects to sign-in (307)
+PASS  /platform/email-kit returns no records
+PASS  GET /api/platform/email-kit/state → 401 without data
+PASS  GET /api/platform/email-kit/revision → 401 without data
+PASS  GET /api/platform/email-kit/summary → 401 without data
+PASS  GET /api/platform/email-kit/files → 401 without data
+PASS  GET /api/platform/email-kit/files/file12345678 → 401 without data
+PASS  GET /api/platform/email-kit/snapshots → 401 without data
+PASS  GET /api/platform/admin/users → 401 without data
+PASS  POST /api/platform/email-kit/commit → 401 (401)
+PASS  POST /api/platform/email-kit/commit without same-origin → 403 (403)
+PASS  POST /api/platform/email-kit/files → 401 (401)
+PASS  POST /api/platform/email-kit/files without same-origin → 403 (403)
+PASS  PUT /api/platform/email-kit/files/file12345678 → 401 (401)
+PASS  PUT /api/platform/email-kit/files/file12345678 without same-origin → 403 (403)
+PASS  POST /api/platform/email-kit/snapshots → 401 (401)
+PASS  POST /api/platform/email-kit/snapshots without same-origin → 403 (403)
+PASS  POST /api/platform/admin/users → 401 (401)
+PASS  POST /api/platform/admin/users without same-origin → 403 (403)
+PASS  PATCH /api/platform/admin/users/u_abcdefghijklmnop → 401 (401)
+PASS  PATCH /api/platform/admin/users/u_abcdefghijklmnop without same-origin → 403 (403)
+PASS  DELETE /api/platform/admin/users/u_abcdefghijklmnop → 401 (401)
+PASS  DELETE /api/platform/admin/users/u_abcdefghijklmnop without same-origin → 403 (403)
+PASS  POST /api/platform/admin/users/u_abcdefghijklmnop/link → 401 (401)
+PASS  POST /api/platform/admin/users/u_abcdefghijklmnop/link without same-origin → 403 (403)
+PASS  POST /api/platform/auth/password → 401 (401)
+PASS  POST /api/platform/auth/password without same-origin → 403 (403)
+PASS  forged identity headers to owner setup → 404 (404)
+PASS  robots.txt disallows /platform
+PASS  unknown account gets the generic sign-in error
+
+## Owner creates the first administrator (Sign in with ChatGPT, local mock)
+PASS  owner page offers first-admin setup
+PASS  first administrator created
+PASS  a second first-admin is refused once an administrator exists
+
+## Administrator invites the team with per-tool permissions
+PASS  admin dashboard shows Email Kit
+PASS  invitation link created for rina@example.test (edit)
+PASS  invitation link created for vikram@example.test (view)
+PASS  invitation link created for noor@example.test (none)
+PASS  levels stored per tool
+PASS  an administrator cannot disable themself / the last administrator
+PASS  inviting an existing email (any case) is refused
+
+## Team members accept invitations
+PASS  Rina Das lands on the dashboard after accepting
+PASS  Vikram Rao lands on the dashboard after accepting
+PASS  Noor Khan lands on the dashboard after accepting
+PASS  an invitation link works only once
+PASS  Rina sees Email Kit with Edit access
+PASS  Vikram sees Email Kit with View access
+PASS  Noor sees no tools
+PASS  Noor gets a 403 page for Email Kit with no app or data
+PASS  Noor's Email Kit data request → 403
+PASS  non-admin sees no team list
+PASS  non-admin team API → 403
+
+## Email Kit: setup, first message and shared records
+PASS  Email Kit loads without script or CSP errors 
+PASS  page title and visible text say Email Kit, not Usha
+PASS  first message recorded as sent
+PASS  history records the signed-in person
+PASS  record persists after reload
+PASS  Rina sees the conversation Asha recorded (shared workspace)
+PASS  Rina's conversation saved to the shared records
+
+## Opt-out, Undo and restriction safeguards
+PASS  opt-out recorded as an active restriction
+PASS  on-screen Undo by the same person removes the new restriction
+PASS  restriction recorded again
+PASS  another person cannot delete the restriction, even as Undo
+PASS  a restriction cannot be deleted by any other step
+PASS  lifting without a reason is refused
+PASS  an unknown restriction status fails the engine's row check
+PASS  restriction keys cannot be narrowed
+PASS  restriction cannot be moved to another person
+PASS  restriction scope cannot be narrowed
+PASS  an ordinary step cannot delete history
+PASS  rewriting a restriction unchanged is accepted as a no-op
+PASS  touching a restriction does not open an Undo window for someone else's restriction
+PASS  an unchanged restriction write does not change the stored row
+PASS  a company-wide restriction can be added
+PASS  a company-wide restriction cannot be downgraded to one person
+PASS  a restriction cannot be moved off a contact being deleted
+PASS  an unknown step name (even an inherited one like toString) needs Manage
+PASS  Edit access cannot change the agency profile
+PASS  settings cannot be smuggled into an ordinary step
+PASS  Edit access cannot erase all records
+PASS  View access cannot save anything
+PASS  a commit against an old revision is refused as stale (409)
+PASS  lifting with a stated reason is accepted
+PASS  restriction lift is in the audit log with the acting person
+
+## Email Kit as View only
+PASS  view-only banner shown
+PASS  drafting and setup controls hidden for View
+PASS  View user can read shared records
+PASS  View user cannot upload
+
+## Follow-up falls due and is drafted by the person who continues it
+PASS  Karan's conversation is follow-up due (followUpDue)
+PASS  no follow-up drafted in the background
+PASS  sender name is pre-filled from the signed-in account
+PASS  the person continuing drafts the reminder
+
+## Attachments
+PASS  attachment stored on the server
+PASS  attachment content round-trips
+PASS  an attachment in use cannot be deleted
+
+## Migration from the original Usha 3.0 app
+PASS  original app produced a protected backup ({"convs":2,"msgs":4,"suppressions":1,"contacts":2,"events":19})
+PASS  a wrong passphrase changes nothing
+PASS  every backup row accounted for and stored: orgs/2/2/0/0, contacts/2/2/0/0, convs/2/2/0/0, msgs/4/4/0/0, events/19/19/0/0, tasks/5/5/0/0, suppressions/1/1/0/0
+PASS  restore check reports nothing lost
+PASS  server counts grew by the backup's conversations (2) and restrictions (1)
+PASS  a migrated company-wide opt-out still blocks new outreach
+PASS  migrated records are visible to other team members
+
+## Remove access, reset and sign-out
+PASS  admin removes Rina's Email Kit access
+PASS  Rina's next data request is refused
+PASS  Rina's reload shows no Email Kit
+PASS  admin disables Vikram
+PASS  Vikram's existing session no longer opens the platform
+PASS  a disabled person cannot sign in
+PASS  admin creates a reset link
+PASS  the reset ends Rina's older sessions
+PASS  the old password no longer works
+PASS  the new password works
+PASS  a reset link works only once
+PASS  a member changes their own password
+PASS  sign-out from Email Kit returns to sign-in
+PASS  sign-out clears Email Kit browser data
+PASS  after sign-out the platform needs sign-in again
+
+## Mobile layout (360 px)
+PASS  sign-in fits 360 px
+PASS  dashboard fits 360 px
+PASS  team access fits 360 px
+PASS  Email Kit fits 360 px
+
+## Public website regression
+PASS  / → 200
+PASS  /privacy → 200
+PASS  /terms → 200
+PASS  /compliance → 200
+PASS  /jobs/dummy-operations-coordinator → 200
+PASS  /api/jobs → 200
+PASS  public intake stays read-only (demo)
+PASS  /admin still requires the site owner
+PASS  no page errors ()
+135 passed, 0 failed

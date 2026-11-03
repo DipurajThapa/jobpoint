@@ -1,0 +1,18 @@
+version pairs compared 250 distinct pairings 19
+  83% short vs question [first/email]
+  71% question vs short [first/email]
+  67% evidence vs short [first/email]
+  50% evidence vs question [first/whatsapp]
+  50% reminder vs reminderDirection [follow/noResponse]
+  50% answerCall vs answerOnly [follow/moreInfo]
+  50% leaveOpen vs askLater [follow/otherAgency]
+  36% evidence vs question [first/email]
+  33% role vs short [first/email]
+  33% evidence vs question [first/message]
+  33% role vs question [first/whatsapp]
+  33% question vs role [first/whatsapp]
+  33% wrongDirection vs wrongClose [follow/wrongContact]
+  33% leaveOpen vs askLater [follow/noRequirement]
+  25% call vs requirement [follow/interested]
+  18% role vs question [first/email]
+near-duplicates at 85% or more: 0

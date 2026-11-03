@@ -1,0 +1,13 @@
+first-contact scenarios 8160 follow-up scenarios 189720 versions 215304
+{"emailOK":736,"emailLow":80,"emailHigh":0,"msgOK":2208,"msgLow":240,"msgHigh":0,"noteMax":200,"byCat":{"noResponse":6120,"interested":17280,"moreInfo":25920,"commercial":17280,"postponed":8640,"meeting":8640,"meetingHeld":8640,"referred":25920,"wrongContact":8640,"changedEmployer":8640,"noRequirement":8640,"otherAgency":8640,"notInterested":8640,"optOut":10800,"deliveryFailure":8640,"unclear":8640}}
+FAIL kinds 0
+
+OUT OF TARGET 8
+email/first/unknown Start with the question 71..81..40
+email/first/influencer Start with the question 74..84..40
+message/first/unknown Short question 117..138..40
+message/first/influencer Short question 132..153..40
+message/accepted/unknown Short question 164..185..40
+message/accepted/influencer Short question 179..200..40
+whatsapp/first/unknown Short question 196..217..40
+whatsapp/first/influencer Short question 211..232..40

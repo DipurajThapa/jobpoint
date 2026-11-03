@@ -1,0 +1,21 @@
+PASS 1 fresh installation blocks an unapproved agency
+PASS 2 neutral first email contains only the configured agency
+PASS 3 manual send starts one conversation
+PASS 4 manual edit cannot be handed off after reply changes meaning
+PASS 5 email interest does not permit WhatsApp
+PASS 6 ambiguous domestic phone rejected
+PASS 7 changed destination clears confirmation
+PASS 8 handoff resolves the exact permitted international destination
+PASS 9 sent history retains permission evidence
+PASS 10 stop wording overrides a conflicting manual interest category
+PASS 11 no usable acknowledgement when no reply requested
+PASS 12 suppression survives reopening
+PASS 13 destination restriction survives changed prospect name
+PASS 14 downloaded backup conceals contact content
+PASS 15 wrong passphrase leaves existing restrictions intact
+PASS 16 another agency cannot import this backup
+PASS 17 signed mandate closes outreach and cancels its next action
+PASS 18 CRM export preserves the signed mandate and conversation ID
+PASS 19 follow-up export has an alarm and repeatable event ID
+PASS 20 standalone walkthrough issued no external HTTP requests
+Release checks passed: 20

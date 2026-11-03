@@ -1,0 +1,81 @@
+> 1 Verified vacancy, HR decision-maker, with auto-fill
+> 2 Vendor manager, empanelment
+> 3 Business influencer, referral
+> 4 Unknown, no evidence, optional details missing
+> 5 Commercial enquiry
+> 6 Long names and evidence
+> 7 Limits are editable
+> 9 Out of scope
+> 10 Manual edit, input change, regenerate
+> 11 Terms typed into a connection note
+> 12 Alternatives
+> 13 Reminder sequence stops
+> 14 Unsafe text renders as text
+> 15 Privacy and offline
+> 15b Reason change and lists
+> 15c Example across channels
+> 16 Reset and undo
+> 17 Clipboard fallback
+> 18 Keyboard only
+> 20 Pasted responses suggest the right category
+> 21 Full workflow: outreach, tracker, reminders, response
+> 22 Referral permission and hand-over
+> 23 Do not contact
+> 24 Agreed date and agency
+> 25 Auto-fill respects user choices
+> 26 More information answers
+> 26b Commercial with a second question
+> 27 WhatsApp drafts need consent
+> 28 Open in email app
+> 29 Tracker, calendar and one record per prospect
+> 30 Opt-out keeps the history and stops the conversation
+> 31 Closing replies end the follow-up
+> 32 Tracker CSV and persistence
+> 33 Deliverability checks
+> 34 Referral hand-over after marking the thank-you as sent
+> 35 A blocked or outdated draft cannot be marked as sent
+> 36 Undo after marking as sent
+> 37 Continuing replaces unsaved work only with an undo
+> 38 WhatsApp follow-up rechecks consent
+> 39 Email subject survives a LinkedIn step
+> 40 The HTML page has no install or update controls
+> R1 Closed conversations never get a reminder
+> R1b Positive replies get a short check, not the pitch again
+> R2 Do not contact cannot be sidestepped
+> R3 An opt-out needs only name and company
+> R4 Sales text cannot be copied after an opt-out
+> R6 An edited draft can be marked after a form change
+> R7 The reminder count cannot be reset
+> R8 Referral: one path, reply recorded first
+> R9 Changing the referrer clears consent
+> R10 Reminders and subjects read correctly
+> R11 Natural typing still gives correct sentences
+> R12 A question with no verified answer gets a holding reply
+> R13 Connection notes block other commercial wording
+> R14 Hidden fields do not affect the result
+> R15 Undo and records keep work safe
+> S1 An opt-out is never reported without a mark
+> S2 Closed prospects need confirmation under any variant
+> S3 A loaded record lets go when the form changes person
+> S4 Records from version 1.1.0 are upgraded
+> S5 Message after an accepted connection works for tracked prospects
+> S6 Reopening needs a real reply
+> S7 A shared mailbox keeps people separate
+> S8 An agreed step without a date stays open
+> S9 Referral hand-over stays available
+> S10 Topic comes only from a real summary
+> S11 More wording and limit cases
+> T1 A loaded record does not excuse a new person
+> T2 The same contact details under another name need confirmation
+> T3 A final reminder reopens only on a real reply
+> T4 Closing the page needs no warning, because records save themselves
+> R16 Simplified controls
+> 19 Layout and overlap at 320
+> 19 Layout and overlap at 360
+> 19 Layout and overlap at 390
+> 19 Layout and overlap at 768
+> 19 Layout and overlap at 1024
+> 19 Layout and overlap at 1280
+> 19 Layout and overlap at 1440
+
+PASS 574  FAIL 0
