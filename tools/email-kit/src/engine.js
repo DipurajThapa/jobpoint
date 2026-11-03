@@ -1025,6 +1025,12 @@ const Engine = (function () {
       tx.all('queue').filter(q => q.msgId === rec.id && ['waiting', 'ready'].includes(q.status)).forEach(q => { q.status = 'done'; q.checkedAt = tx.now; tx.put('queue', q); });
       tx.all('msgs').filter(m => m.convId === convId && m.id !== rec.id && m.direction === 'out' && ['draft', 'ready'].includes(m.status)).forEach(m => { m.status = 'superseded'; tx.put('msgs', m); });
       afterSend(tx, conv, s, type);
+      if (conv.importedContext) {
+        conv.importedContext = Object.assign({}, conv.importedContext, {
+          lastSpeaker:'consultant', lastDate:tx.today, lastText:body,
+          outstanding:norm(s.agreedStep), next:'Allow the client time to review the latest reply', updatedAt:tx.now
+        });
+      }
       setNext(tx, conv);
       const meeting = tx.all('meetings').find(m => m.convId === conv.id && m.status === 'confirmed');
       return { convId, msgId: rec.id, next: conv.next, status: conv.status, meetingId: meeting ? meeting.id : '' };
@@ -1063,6 +1069,12 @@ const Engine = (function () {
       tx.put('msgs', msg);
       if (['draft', 'ready'].includes(conv.status)) move(tx, conv, 'responseReceived', 'A reply arrived, and nothing has been recorded as sent.');
       applyResponse(tx, conv, s, msg);
+      if (conv.importedContext) {
+        conv.importedContext = Object.assign({}, conv.importedContext, {
+          lastSpeaker:'client', lastDate:msg.imported ? msg.at.slice(0,10) : tx.today, lastText:body,
+          outstanding:norm(s.agreedStep), next:'Respond to the latest client message', updatedAt:tx.now
+        });
+      }
       setNext(tx, conv);
       const latest = tx.get('convs', conv.id);
       if (latest.status !== conv.status) conv.status = latest.status;
