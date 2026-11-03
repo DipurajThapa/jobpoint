@@ -1,0 +1,3 @@
+Installed: You are using version 2.0.0.
+Upgraded: You are using version 3.0.0.
+PASS 8  FAIL 0

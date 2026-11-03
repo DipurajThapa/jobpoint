@@ -1,0 +1,28 @@
+> A Returning client: history survives and opening adds nothing
+> B Duplicate imports
+> C Restart keeps a draft, and a draft starts no clock
+> D No response: sequence, automatic drafts, stop
+> D2 Rules are configurable
+> E Postponement suspends and resumes
+> F Wrong contact stops and offers a referral
+> G Employer change keeps history and needs verification
+> H Opt-outs: scope, queue, reimport, other campaign
+> I Ambiguous reply is preserved and guided
+> J Meetings: proposed, unclear, confirmed, changed, cancelled
+> J1 A written date beats a weekday, and a fee question gets the terms
+> J2 Reschedule and cancel from the record
+> K Failed operations leave nothing behind
+> L Offline queue is rechecked
+> M Email keeps its meaning in rich and plain text
+> N Export, backup, restore, delete
+> P Owed replies and promises decide the next message
+> Q A holding reply becomes an answer
+> R Bounces, mixed readings and held replies
+> S A name change on a loaded conversation asks first
+> T A restriction follows the person
+> U A known name with a new address is asked about, and stays cold until answered
+> V Wording that only looks like an opt-out pauses and sends nothing
+> W A saved draft reopens as what it was written for
+> O The form header and the firm name
+
+PASS 205  FAIL 0
