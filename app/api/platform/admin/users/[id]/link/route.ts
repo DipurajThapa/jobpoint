@@ -12,6 +12,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try { body = await request.json(); } catch { return apiError("The request was not readable."); }
   const purpose = body.purpose === "reset" ? "reset" : body.purpose === "invite" ? "invite" : null;
   if (!purpose) return apiError("Choose an invitation or reset link.");
+  if (purpose === "invite") {
+    const policy = await db().prepare("SELECT value FROM platform_settings WHERE key='invites_enabled'").first<{value:string}>();
+    if (policy?.value === "false") return apiError("Invitations are paused in system settings.",403,"INVITES_PAUSED");
+  }
   if (!/^u_[A-Za-z0-9_-]{8,40}$/.test(id)) return apiError("That person was not found.", 404);
   const user = await db().prepare("SELECT id, status, password_hash AS passwordHash FROM platform_users WHERE id = ?").bind(id).first<{ id: string; status: string; passwordHash: string | null }>();
   if (!user) return apiError("That person was not found.", 404);
