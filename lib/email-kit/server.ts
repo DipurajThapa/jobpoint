@@ -19,7 +19,7 @@ const COMMAND_LEVEL: Record<string, AccessLevel> = Object.fromEntries([
   ...["saveDraft", "markSent", "processResponse", "reconcileConversation", "reconcile", "reconcileQueue", "enqueue", "finishQueue", "postpone",
     "closeConversation", "addressFixed", "resolveTask", "setMeeting", "meetingHeld", "cancelMeeting", "addFact", "correctFact", "addSource",
     "removeSource", "changeEmployer", "verifyEmployer", "renameOrg", "renameContact", "mergeContacts", "resolveReview", "liftRestriction",
-    "importContacts", "setMandate", "deleteConversation", "deleteContact", "holdReply", "dropDraft", "undone", "undo"].map(c => [c, "edit"]),
+    "importContacts", "importConversation", "setMandate", "deleteConversation", "deleteContact", "holdReply", "dropDraft", "undone", "undo"].map(c => [c, "edit"]),
   ...["saveAgency", "updateSettings", "restore", "migrateLegacy", "eraseAll"].map(c => [c, "manage"]),
 ]) as Record<string, AccessLevel>;
 const META_COMMANDS = new Set(["saveAgency", "updateSettings", "restore", "migrateLegacy", "eraseAll"]);

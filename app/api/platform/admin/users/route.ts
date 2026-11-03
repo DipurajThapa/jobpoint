@@ -14,6 +14,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const admin = await authorizeApi(request, { admin: true, mutate: true });
   if (admin instanceof Response) return admin;
+  const invitations = await db().prepare("SELECT value FROM platform_settings WHERE key='invites_enabled'").first<{value:string}>();
+  if (invitations?.value === "false") return apiError("Invitations are paused in system settings.",403,"INVITES_PAUSED");
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return apiError("The request was not readable."); }
   const email = cleanEmail(body.email);

@@ -23,7 +23,7 @@ export const TOOLS: PlatformTool[] = [
     levels: {
       view: "Read records and drafts. Cannot change anything.",
       edit: "Daily outreach: draft, record sends and replies, manage contacts.",
-      manage: "Also agency profile, follow-up rules, backup restore and bulk deletion.",
+      manage: "Also follow-up rules, backup restore and bulk deletion.",
     },
   },
 ];

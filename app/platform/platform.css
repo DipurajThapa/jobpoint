@@ -89,6 +89,9 @@ body:has(.wp-root) .demo-banner{display:none}
 .wp-activity time{color:var(--muted)}
 .wp-activity span{overflow-wrap:anywhere}
 .wp-denied{max-width:560px}
+.wp-ops-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.wp-ops-nav a{padding:9px 12px;background:#fff;border:1px solid var(--line);border-radius:9px;text-decoration:none;font-weight:700}
+.wp-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:12px}.wp-stats>div{display:grid;gap:4px;background:#f5f7fb;border:1px solid var(--line);border-radius:10px;padding:16px}.wp-stats strong{font-size:26px}.wp-stats span{font-size:13px;color:var(--muted)}
+.wp-ops-row{display:flex;justify-content:space-between;align-items:start;gap:18px;padding:18px 0;border-top:1px solid var(--line);flex-wrap:wrap}.wp-ops-row h3{font-size:16px;margin:0 0 6px}.wp-ops-row p{margin:0}.wp-ops-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%}.wp-ops-actions select{max-width:240px}
 
 @media (max-width:860px){
   .wp-shell{grid-template-columns:minmax(0,1fr)}

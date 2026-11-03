@@ -203,7 +203,7 @@ try {
   await openKit(A.page);
   ok(A.page._errors.length === 0, `Email Kit loads without script or CSP errors ${A.page._errors.join(" | ")}`);
   ok((await A.page.title()).includes("Email Kit") && !(await A.page.evaluate(() => document.body.innerText + document.title)).includes("Usha"), "page title and visible text say Email Kit, not Usha");
-  await setupAgency(A.page);
+  ok(!(await A.page.locator("#agencyBox").count()), "Agency setup is removed from Email Kit");
   await firstMessage(A.page, "Asha Admin", "Priya Sharma", "Lumen Retail", "priya@lumen.example");
   let s = await state(A.page);
   ok(Object.values(s.msgs).some(m => m.status === "sent" && /Dear Priya/.test(m.body)), "first message recorded as sent");
@@ -278,7 +278,7 @@ try {
   const V = people.vik;
   await openKit(V.page);
   ok(await V.page.isVisible(".ek-readonly"), "view-only banner shown");
-  ok(!(await V.page.isVisible("#generate")) && !(await V.page.isVisible("#saveAgency")), "drafting and setup controls hidden for View");
+  ok(!(await V.page.isVisible("#generate")) && !(await V.page.locator("#saveAgency").count()), "drafting controls hidden for View and no Agency form exists");
   await panel(V.page);
   ok((await V.page.textContent("#trackerList")).includes("Karan"), "View user can read shared records");
   ok((await http("/api/platform/email-kit/files/file12345678", { method: "PUT", cookie: vikCookie, body: { name: "a", type: "text/plain", data: "data:text/plain;base64,QQ==" } })).status === 403, "View user cannot upload");

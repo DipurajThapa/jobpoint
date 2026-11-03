@@ -6,7 +6,7 @@ const CONFIG = {
   /* The list marker used in messages. It pastes cleanly into email and LinkedIn. */
   bullet: '\u2022 ',
 
-  firm: { name: '', descriptor: 'a recruitment agency', country: 'India' },
+  firm: { name: 'Job Point Consultancy', descriptor: 'a recruitment consultancy', country: 'India' },
   clients: [],
   clientCores: {},
   commercial: {lines: [], sentence: ''},
@@ -309,10 +309,10 @@ const CONFIG = {
 /* One operator and one agency per workspace. A backup must never silently
    activate the sender claims of another business. */
 function applyAgency(profile) {
-  const p = profile && profile.approved === true ? profile : {};
+  const p = profile && profile.approved === true && (!profile.reviewBy || profile.reviewBy >= new Date().toISOString().slice(0,10)) ? profile : {};
   const value = key => typeof p[key] === 'string' ? p[key].trim() : '';
-  CONFIG.firm.name = value('name');
-  CONFIG.profileVersion = CONFIG.firm.name ? value('revision') : '';
+  CONFIG.firm.name = value('name') || 'Job Point Consultancy';
+  CONFIG.profileVersion = value('revision') || 'platform-identity-v1';
   CONFIG.clients = value('references').split(/[,\n]/).map(s => s.trim()).filter(Boolean);
   CONFIG.clientCores = Object.fromEntries(CONFIG.clients.map(n => [n, n.toLowerCase().replace(/\.(com|in|co)\b/g, '').replace(/&/g, 'and').replace(/[^\p{L}\p{N}]/gu, '')]));
   CONFIG.answers.services = value('services');

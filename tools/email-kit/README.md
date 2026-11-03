@@ -31,18 +31,15 @@ used. They move through Usha's protected backup file.
 2. **Final backup per profile.** In each browser that used Usha, open
    *App, updates and backup*, enter a passphrase of 12 or more characters, and
    choose **Save a backup**. Keep the passphrase separately.
-3. **Agency profile.** In Email Kit (Manage access), open **Agency setup** and
-   enter the **same agency name** used in Usha. Fill in and approve the
-   profile, then save. A backup from a different agency name is refused.
-4. **Restore.** Open *Version and backup*, enter the backup's passphrase,
+3. **Restore.** Open *Version and backup*, enter the backup's passphrase,
    choose **Restore a backup** and select the file. Decryption happens in your
    browser. The records go to the server over HTTPS in your signed-in session.
-5. **Check.** Email Kit shows a table for each record type: *In backup*,
+4. **Check.** Email Kit shows a table for each record type: *In backup*,
    *Stored as in backup*, *Kept newer saved version*, *Not stored*, plus how
    many attachments were stored. *Not stored* should be 0. If it is not, use
    **Download rows not stored** and review those rows; they are usually
    invalid, or messages whose conversation is missing.
-6. **Next profile.** Repeat steps 4–5 for each backup. Restoring merges by
+5. **Next profile.** Repeat steps 3–4 for each backup. Restoring merges by
    record id and never removes a restriction. Afterwards, review possible
    duplicate people under **Clients**.
 7. **Keep the backups** offline for at least 90 days. Do not delete old data

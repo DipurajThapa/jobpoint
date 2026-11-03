@@ -14,6 +14,7 @@ const SCRIPTS = {
   "/*__LIBRARY__*/": "library.js",
   "/*__RULES__*/": "rules.js",
   "/*__ENGINE__*/": "engine.js",
+  "/*__CONVERSATION__*/": "conversation.js",
   "/*__STORE__*/": "server-store.js",
   "/*__RECORDS__*/": "records.js",
   "/*__BACKUP__*/": "backup.js",

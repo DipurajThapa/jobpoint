@@ -1,5 +1,5 @@
 import page from "virtual:email-kit/page";
-import { NO_STORE, requestUser, signInPath } from "@/lib/platform/auth";
+import { NO_STORE, audit, requestUser, signInPath, toolEnabled } from "@/lib/platform/auth";
 import { randomToken } from "@/lib/platform/crypto";
 import { LEVEL_LABEL } from "@/lib/platform/tools";
 import { TOOL } from "@/lib/email-kit/server";
@@ -32,6 +32,8 @@ export async function GET(request: Request) {
   if (!user) return new Response(null, { status: 307, headers: { ...NO_STORE, location: signInPath("/platform/email-kit") } });
   const level = user.access[TOOL];
   if (!level) return denied("No access to Email Kit", "Your account does not include Email Kit. Ask an administrator if you need it.", 403);
+  if (!await toolEnabled(TOOL)) return denied("Email Kit is unavailable", "An administrator has disabled this tool.", 403);
+  await audit(`platform:${user.id}`, "platform.tool_opened.email_kit", "tool", TOOL);
 
   const nonce = randomToken(18);
   const name = user.name || user.email;
