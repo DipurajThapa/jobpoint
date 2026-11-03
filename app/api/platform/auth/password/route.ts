@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   if (body.confirm !== undefined && body.confirm !== next) return fail("The two new passwords do not match.");
   if (problem) return fail(problem);
   const cookie = request.headers.get("cookie") ?? "";
-  const token = /(?:^|;\s*)(?:__Host-wp_session|wp_session)=([A-Za-z0-9_-]+)/.exec(cookie)?.[1] ?? "";
+  const token = /(?:^|;\s*)__Host-wp_session=([A-Za-z0-9_-]+)/.exec(cookie)?.[1] ?? (new URL(request.url).protocol === "http:" ? /(?:^|;\s*)wp_session=([A-Za-z0-9_-]+)/.exec(cookie)?.[1] : "") ?? "";
   await db().batch([
     db().prepare("UPDATE platform_users SET password_hash = ?, updated_at = ? WHERE id = ?").bind(await hashPassword(next), nowIso(), user.id),
     db().prepare("DELETE FROM platform_sessions WHERE user_id = ? AND token_hash != ?").bind(user.id, await sha256(token)),

@@ -39,8 +39,10 @@ function readCookie(header: string | null, name: string): string | null {
   return null;
 }
 
-function tokenFromCookieHeader(header: string | null): string | null {
-  const value = readCookie(header, SECURE_COOKIE) ?? readCookie(header, LOCAL_COOKIE);
+// The unprefixed cookie exists only for plain-HTTP local development; on HTTPS only the
+// __Host- cookie (which cannot be planted by a subdomain or over HTTP) is accepted.
+function tokenFromCookieHeader(header: string | null, secure: boolean): string | null {
+  const value = readCookie(header, SECURE_COOKIE) ?? (secure ? null : readCookie(header, LOCAL_COOKIE));
   return value && /^[A-Za-z0-9_-]{30,100}$/.test(value) ? value : null;
 }
 
@@ -101,7 +103,7 @@ export async function createSession(userId: string, userAgent: string): Promise<
 }
 
 export async function endSession(request: Request): Promise<string | null> {
-  const token = tokenFromCookieHeader(request.headers.get("cookie"));
+  const token = tokenFromCookieHeader(request.headers.get("cookie"), isSecureUrl(request.url));
   if (!token) return null;
   const tokenHash = await sha256(token);
   const row = await db().prepare("SELECT user_id AS userId FROM platform_sessions WHERE token_hash = ?").bind(tokenHash).first<{ userId: string }>();
@@ -109,12 +111,14 @@ export async function endSession(request: Request): Promise<string | null> {
   return row?.userId ?? null;
 }
 
-export const requestUser = (request: Request) => userFromToken(tokenFromCookieHeader(request.headers.get("cookie")));
+export const requestUser = (request: Request) => userFromToken(tokenFromCookieHeader(request.headers.get("cookie"), isSecureUrl(request.url)));
 
 /** For server components: the signed-in user or null. */
 export async function pageUser(): Promise<PlatformUser | null> {
   const store = await cookies();
-  const token = store.get(SECURE_COOKIE)?.value ?? store.get(LOCAL_COOKIE)?.value ?? null;
+  const h = await headers();
+  const secure = (h.get("x-forwarded-proto") ?? "").includes("https") || !!h.get("cf-visitor")?.includes("https") || !/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(h.get("host") ?? "");
+  const token = store.get(SECURE_COOKIE)?.value ?? (secure ? null : store.get(LOCAL_COOKIE)?.value) ?? null;
   return userFromToken(token && /^[A-Za-z0-9_-]{30,100}$/.test(token) ? token : null);
 }
 

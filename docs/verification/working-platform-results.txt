@@ -85,6 +85,13 @@ PASS  restriction keys cannot be narrowed
 PASS  restriction cannot be moved to another person
 PASS  restriction scope cannot be narrowed
 PASS  an ordinary step cannot delete history
+PASS  rewriting a restriction unchanged is accepted as a no-op
+PASS  touching a restriction does not open an Undo window for someone else's restriction
+PASS  an unchanged restriction write does not change the stored row
+PASS  a company-wide restriction can be added
+PASS  a company-wide restriction cannot be downgraded to one person
+PASS  a restriction cannot be moved off a contact being deleted
+PASS  an unknown step name (even an inherited one like toString) needs Manage
 PASS  Edit access cannot change the agency profile
 PASS  settings cannot be smuggled into an ordinary step
 PASS  Edit access cannot erase all records
@@ -152,4 +159,4 @@ PASS  /api/jobs → 200
 PASS  public intake stays read-only (demo)
 PASS  /admin still requires the site owner
 PASS  no page errors ()
-128 passed, 0 failed
+135 passed, 0 failed

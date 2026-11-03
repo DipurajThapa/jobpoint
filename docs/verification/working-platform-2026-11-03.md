@@ -5,7 +5,7 @@
 | Item | State |
 |---|---|
 | Implementation | Built and committed on branch `claude/fervent-albattani-fbii0e`. |
-| Local verification | Passed. 128 end-to-end checks against the dev server (`npm run dev`, Miniflare D1 and R2), production build, and a smoke test of the built Worker (`npm start`, workerd). |
+| Local verification | Passed. 135 end-to-end checks against the dev server (`npm run dev`, Miniflare D1 and R2), production build, and a smoke test of the built Worker (`npm start`, workerd). |
 | Deployed | **No.** Publishing goes through the OpenAI Sites control plane, and this session has no Sites credentials. Nothing is live until the owner publishes. Publishing applies `drizzle/0002_working_platform.sql`. |
 | Real client data | None used. All people, companies and emails in tests are fictional (`example.test`, `.example`). No email or message was sent; the browser tests block every request that leaves `127.0.0.1`. |
 
@@ -13,7 +13,7 @@
 
 | Check | Result |
 |---|---|
-| `scripts/check-platform.mjs` (browser + API, full journey) | **128 passed, 0 failed**. Full list: [working-platform-results.txt](working-platform-results.txt) |
+| `scripts/check-platform.mjs` (browser + API, full journey) | **135 passed, 0 failed**. Full list: [working-platform-results.txt](working-platform-results.txt) |
 | `npm run build` | Passed. Migration copied to `dist/.openai/drizzle`. The `seedy@sites.test` dev identity is absent from the server bundle. No Email Kit code or content is in the public client bundle. |
 | Built Worker smoke test (`npm start`) | Anonymous `/platform` → 307 to sign-in. Anonymous state API → 401. Owner API with forged dev identity → 404. Sign-in → 200 (PBKDF2 in workerd). Email Kit page → 200 with nonce CSP. Records persisted. |
 | `scripts/check-demo.mjs` | PASS: 32 demo intake, admin authorisation and crawler checks. |
@@ -54,6 +54,23 @@
 6. Test-harness issues (not product defects): a test password contained the
    email name, and the local reset removed Miniflare's R2 folder while it was
    running.
+
+## Independent security review of the implementation
+
+A fresh-context reviewer read the server code after the tests passed and
+reported 3 exploitable restriction-guard gaps and 4 low-severity issues. All
+were fixed, and the guard gaps have regression tests:
+
+| Finding | Fix |
+|---|---|
+| High: an Edit user could rewrite any restriction unchanged, become its "last writer", then delete or narrow it through the Undo window | Undo now depends on who **created** the row (`created_by` / `created_at`, set on insert only). Unchanged restriction writes are dropped. |
+| High: a company-wide (`organisation`) restriction could be changed to `all` (one person) | Scope may only widen (`channel` < `all` < `organisation`); `review` may become anything. Widening is audited. |
+| Medium: a restriction could be moved off a contact being deleted without keeping that person's identity | The identity check also covers restrictions moved away from the deleted contact. |
+| Low: the guard read rows outside the revision check | The revision is checked before and after the guard's reads. |
+| Low: two administrators demoting each other at once could leave none | Role, status and delete writes re-check the remaining administrators inside the same statement. |
+| Low: the plain `wp_session` cookie was accepted over HTTPS | On HTTPS only the `__Host-` cookie is read. |
+| Low: a snapshot built during an erasure could keep erased data | The snapshot is listed only if no save happened meanwhile; otherwise its object is deleted. |
+| Hardening: inherited names such as `toString` were looked up as commands | Commands are looked up with `Object.hasOwn`; unknown steps need Manage. |
 
 ## Not verified here (deployment checks for the owner)
 

@@ -34,3 +34,9 @@ Totals: 3 Blockers, 21 Major, 9 Nit (some overlap between reviewers).
 | 20 | Two revision counters (`meta/rev` and server rev) (zoom-out, critic) | Nit | Server ignores the client's `meta/rev` row and synthesises it from `email_kit_state.rev`. |
 | 21 | Invalid `IN json_each` SQL; 409 detection (critic, readiness) | Nit | Fixed in the plan and implementation. |
 | 22 | Admin may reset another admin and impersonate (critic) | Nit | Accepted: admins can already grant themselves everything; resets are audited with actor. |
+
+## Post-implementation security review
+
+A second fresh-context reviewer examined the finished server code. It found 3
+restriction-guard gaps (2 High, 1 Medium) and 4 Low issues. All were fixed
+before merge; see `docs/verification/working-platform-2026-11-03.md`.

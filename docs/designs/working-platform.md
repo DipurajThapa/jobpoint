@@ -294,8 +294,9 @@ by a person who knows its passphrase.
         only when the old contact is deleted in the same commit (merge);
         `orgId` may change only from empty.
     *   Deleting or narrowing a restriction is refused, except by command
-        `undo` from the same user who last wrote it within 15 minutes (the
-        on-screen Undo of an opt-out). Audited.
+        `undo` from the same user who **created** it within 15 minutes (the
+        on-screen Undo of an opt-out). Audited. Scope order:
+        `channel` < `all` < `organisation`.
     *   Deleting a contact requires each restriction linked to it to already
         hold the contact's name key and address keys.
     *   Audit (`audit_events.detail`): restriction lifted / decided / undone,

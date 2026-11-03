@@ -249,12 +249,27 @@ try {
   if (x.scope === "channel") ok((await commit(adminCookie, "processResponse", [{ table: "suppressions", id: x.id, value: { ...x, channels: [] } }])).status >= 403, "restriction channels cannot be removed");
   ok((await commit(adminCookie, "processResponse", [{ table: "suppressions", id: x.id, value: { ...x, scope: x.scope === "all" ? "channel" : "review" } }])).status >= 403, "restriction scope cannot be narrowed");
   ok((await commit(adminCookie, "markSent", [{ table: "events", id: Object.keys(s.events)[0], value: null }])).json.code === "HISTORY", "an ordinary step cannot delete history");
+  // Security review findings: touch-then-undo, scope downgrade, moving a restriction off a deleted contact.
+  const touched = await commit(adminCookie, "saveDraft", [{ table: "suppressions", id: x.id, value: x }]);
+  ok(touched.status === 200, "rewriting a restriction unchanged is accepted as a no-op");
+  ok((await commit(adminCookie, "undo", [{ table: "suppressions", id: x.id, value: null }], touched.json.rev)).json.code === "RESTRICTION", "touching a restriction does not open an Undo window for someone else's restriction");
+  const s2 = (await http("/api/platform/email-kit/state", { cookie: adminCookie })).json.state;
+  const rev3 = (await http("/api/platform/email-kit/revision", { cookie: adminCookie })).json.rev;
+  ok(rev3 === touched.json.rev, "an unchanged restriction write does not change the stored row");
+  const orgWide = { ...x, id: "xorgtest1", scope: "organisation", channels: [] };
+  const made = await commit(adminCookie, "processResponse", [{ table: "suppressions", id: orgWide.id, value: orgWide }], rev3);
+  ok(made.status === 200, "a company-wide restriction can be added");
+  ok((await commit(adminCookie, "processResponse", [{ table: "suppressions", id: orgWide.id, value: { ...orgWide, scope: "all" } }], made.json.rev)).json.code === "RESTRICTION", "a company-wide restriction cannot be downgraded to one person");
+  const contact = s2.contacts[x.contactId];
+  ok((await commit(adminCookie, "deleteContact", [{ table: "contacts", id: contact.id, value: null }, { table: "suppressions", id: orgWide.id, value: { ...orgWide, contactId: "", contactKeys: [], nameKeys: [] } }], made.json.rev)).json.code === "RESTRICTION", "a restriction cannot be moved off a contact being deleted");
+  ok((await commit(rinaCookie, "toString", [], made.json.rev)).json?.code === "LEVEL", "an unknown step name (even an inherited one like toString) needs Manage");
   ok((await commit(rinaCookie, "saveAgency", [{ table: "meta", id: "agency", value: { id: "agency", value: { name: "Other" } } }])).json.code === "LEVEL", "Edit access cannot change the agency profile");
   ok((await commit(rinaCookie, "markSent", [{ table: "meta", id: "settings", value: { id: "settings", value: {} } }])).status === 403, "settings cannot be smuggled into an ordinary step");
   ok((await commit(rinaCookie, "eraseAll", [])).json.code === "LEVEL", "Edit access cannot erase all records");
   ok((await commit(vikCookie, "markSent", [])).status === 403, "View access cannot save anything");
   ok((await commit(adminCookie, "markSent", [{ table: "orgs", id: "o1", value: { id: "o1", name: "X", keys: ["x"] } }], rev - 1)).json?.code === "STALE", "a commit against an old revision is refused as stale (409)");
-  const lifted = await commit(adminCookie, "liftRestriction", [{ table: "suppressions", id: x.id, value: { ...x, status: "lifted", liftedAt: new Date().toISOString(), liftReason: "Test: documented re-permission" } }]);
+  const liveRev = (await http("/api/platform/email-kit/revision", { cookie: adminCookie })).json.rev;
+  const lifted = await commit(adminCookie, "liftRestriction", [{ table: "suppressions", id: x.id, value: { ...x, status: "lifted", liftedAt: new Date().toISOString(), liftReason: "Test: documented re-permission" } }], liveRev);
   ok(lifted.status === 200, "lifting with a stated reason is accepted");
   await commit(adminCookie, "processResponse", [{ table: "suppressions", id: x.id, value: { ...x, status: "active" } }], lifted.json.rev);
   ok((await http("/api/platform/admin/users", { cookie: adminCookie })).json.activity.some(a => a.action === "email_kit.restriction_lifted"), "restriction lift is in the audit log with the acting person");

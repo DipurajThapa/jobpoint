@@ -72,12 +72,13 @@ function parseChanges(raw: unknown): Change[] {
   return out;
 }
 
-type Stored = { tbl: string; id: string; data: string; updatedBy: string; updatedAt: string };
+type Stored = { tbl: string; id: string; data: string; createdBy: string; createdAt: string };
+const SCOPE_RANK: Record<string, number> = { channel: 1, all: 2, organisation: 3 };
 
 async function storedRows(keys: string[]): Promise<Map<string, Stored & { row: Row }>> {
   const map = new Map<string, Stored & { row: Row }>();
   for (let i = 0; i < keys.length; i += 2000) {
-    const res = await db().prepare(`SELECT tbl, id, data, updated_by AS updatedBy, updated_at AS updatedAt FROM email_kit_records
+    const res = await db().prepare(`SELECT tbl, id, data, created_by AS createdBy, created_at AS createdAt FROM email_kit_records
         WHERE (tbl || char(31) || id) IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(keys.slice(i, i + 2000))).all<Stored>();
     for (const r of res.results ?? []) map.set(`${r.tbl}${SEP}${r.id}`, { ...r, row: JSON.parse(r.data) });
   }
@@ -90,9 +91,9 @@ const covers = (next: unknown, prev: unknown) => { const n = new Set(list(next))
 type Guarded = { audits: { action: string; target: string; detail: string }[]; deletesHistory: boolean };
 
 /** Server-side communication safeguards. They hold whatever the client sends. */
-async function guard(changes: Change[], command: string, user: PlatformUser): Promise<Guarded> {
+async function guard(changes: Change[], command: string, user: PlatformUser, expected: number): Promise<Guarded> {
   const level = user.access[TOOL];
-  const min = COMMAND_LEVEL[command] ?? "manage";
+  const min = Object.hasOwn(COMMAND_LEVEL, command) ? COMMAND_LEVEL[command] : "manage";
   if (!levelAtLeast(level, min)) throw new Refusal(min === "manage" ? "This needs Manage access to Email Kit. Ask an administrator." : "Your Email Kit access is view only.", 403, "LEVEL");
   if (changes.some(c => c.table === "meta") && !(META_COMMANDS.has(command) && levelAtLeast(level, "manage")))
     throw new Refusal("Changing the agency profile or follow-up rules needs Manage access.", 403, "LEVEL");
@@ -102,11 +103,15 @@ async function guard(changes: Change[], command: string, user: PlatformUser): Pr
   const audits: Guarded["audits"] = [];
   const deletedContacts = new Set(changes.filter(c => c.table === "contacts" && c.value === null).map(c => c.id));
   const keys = changes.filter(c => c.table === "suppressions" || (c.table === "contacts" && c.value === null)).map(c => `${c.table}${SEP}${c.id}`);
-  const stored = keys.length ? await storedRows(keys) : new Map();
+  // The guard must judge the same revision the batch writes against: the revision is
+  // checked before and after every read below, and revisions only ever increase.
+  if (await currentRev() !== expected) throw new Refusal("Someone else saved first.", 409, "STALE");
+  const stored = keys.length ? await storedRows(keys) : new Map<string, Stored & { row: Row }>();
 
   for (const c of changes.filter(x => x.table === "suppressions")) {
     const old = stored.get(`suppressions${SEP}${c.id}`);
-    const inUndoWindow = command === "undo" && !!old && old.updatedBy === user.id && Date.now() - Date.parse(old.updatedAt) < UNDO_WINDOW_MS;
+    // Undo may remove or narrow only a restriction this person created moments ago.
+    const inUndoWindow = command === "undo" && !!old && old.createdBy === user.id && Date.now() - Date.parse(old.createdAt) < UNDO_WINDOW_MS;
     if (!old) {
       if (!c.value) continue;
       if (c.value.status !== "active" && !(c.value.status === "lifted" && ["restore", "migrateLegacy"].includes(command)))
@@ -132,8 +137,10 @@ async function guard(changes: Change[], command: string, user: PlatformUser): Pr
       if (!["nameKeys", "contactKeys", "companyKeys", "channels"].every(k => covers(next[k], prev[k])))
         throw new Refusal("A restriction can be widened, never narrowed. Lift it with a reason instead.", 403, "RESTRICTION");
       if (prev.scope !== next.scope) {
+        // channel (one person, some channels) < all (one person) < organisation (everyone there).
         if (prev.scope === "review") audits.push({ action: "email_kit.restriction_scope_decided", target: c.id, detail: `review → ${String(next.scope)}` });
-        else if (next.scope !== "all") throw new Refusal("A restriction's scope can only be widened.", 403, "RESTRICTION");
+        else if (!(SCOPE_RANK[String(next.scope)] > (SCOPE_RANK[String(prev.scope)] ?? 99))) throw new Refusal("A restriction's scope can only be widened.", 403, "RESTRICTION");
+        else audits.push({ action: "email_kit.restriction_widened", target: c.id, detail: `${String(prev.scope)} → ${String(next.scope)}` });
       }
       if (prev.contactId !== next.contactId && prev.contactId && !deletedContacts.has(String(prev.contactId)))
         throw new Refusal("A restriction cannot be moved to another person.", 403, "RESTRICTION");
@@ -146,19 +153,22 @@ async function guard(changes: Change[], command: string, user: PlatformUser): Pr
   // A deleted contact's identity must already be copied into its restrictions.
   if (deletedContacts.size) {
     const all = await db().prepare("SELECT id, data FROM email_kit_records WHERE tbl = 'suppressions'").all<{ id: string; data: string }>();
-    const after = new Map((all.results ?? []).map(r => [r.id, JSON.parse(r.data) as Row]));
+    const before = new Map((all.results ?? []).map(r => [r.id, JSON.parse(r.data) as Row]));
+    const after = new Map(before);
     for (const c of changes) if (c.table === "suppressions") { if (c.value) after.set(c.id, c.value); else after.delete(c.id); }
     for (const id of deletedContacts) {
       const contact = stored.get(`contacts${SEP}${id}`)?.row;
       if (!contact) continue;
-      for (const x of after.values()) {
-        if (x.contactId !== id) continue;
+      for (const [sid, x] of after) {
+        // Check restrictions on this person now, and any moved away from them in this commit.
+        if (x.contactId !== id && before.get(sid)?.contactId !== id) continue;
         if (!list(x.nameKeys).includes(String(contact.nameKey ?? "")) || !covers(x.contactKeys, contact.keys))
           throw new Refusal("This contact has a restriction that does not yet hold their details, so the contact was not deleted.", 403, "RESTRICTION");
       }
     }
   }
 
+  if (await currentRev() !== expected) throw new Refusal("Someone else saved first.", 409, "STALE");
   const counts: Record<string, number> = {};
   for (const c of changes) if (c.value === null) counts[c.table] = (counts[c.table] ?? 0) + 1;
   const deletesHistory = changes.some(c => c.value === null && (c.table === "contacts" || c.table === "convs"));
@@ -172,9 +182,15 @@ export async function commit(body: unknown, user: PlatformUser): Promise<number>
   const { expected, command, changes: raw } = (body ?? {}) as { expected?: unknown; command?: unknown; changes?: unknown };
   if (!Number.isInteger(expected) || (expected as number) < 0) throw new Refusal("The request has no valid revision.");
   if (typeof command !== "string" || !/^[a-zA-Z]{1,40}$/.test(command)) throw new Refusal("The request does not name an Email Kit step.");
-  const changes = parseChanges(raw);
-  const { audits, deletesHistory } = await guard(changes, command, user);
   const rev = expected as number;
+  let changes = parseChanges(raw);
+  // Writing a restriction back unchanged would only rewrite who touched it last.
+  const restrictionKeys = changes.filter(c => c.table === "suppressions" && c.value).map(c => `suppressions${SEP}${c.id}`);
+  if (restrictionKeys.length) {
+    const now = await storedRows(restrictionKeys);
+    changes = changes.filter(c => !(c.table === "suppressions" && c.value && now.get(`suppressions${SEP}${c.id}`)?.data === JSON.stringify(c.value)));
+  }
+  const { audits, deletesHistory } = await guard(changes, command, user, rev);
   if (!changes.length) return rev;
 
   const token = crypto.randomUUID();
@@ -193,10 +209,11 @@ export async function commit(body: unknown, user: PlatformUser): Promise<number>
     return out.filter(c => c.length);
   };
   const upserts = changes.filter(c => c.value).map(c => JSON.stringify({ t: c.table, i: c.id, d: JSON.stringify(c.value) }));
-  for (const part of chunks(upserts)) statements.push(db().prepare(`INSERT INTO email_kit_records (tbl, id, data, updated_at, updated_by, updated_rev)
-      SELECT json_extract(value, '$.t'), json_extract(value, '$.i'), json_extract(value, '$.d'), ?, ?, ? FROM json_each(?) WHERE ${fresh}
+  // created_at / created_by are written on insert only.
+  for (const part of chunks(upserts)) statements.push(db().prepare(`INSERT INTO email_kit_records (tbl, id, data, updated_at, updated_by, updated_rev, created_at, created_by)
+      SELECT json_extract(value, '$.t'), json_extract(value, '$.i'), json_extract(value, '$.d'), ?, ?, ?, ?, ? FROM json_each(?) WHERE ${fresh}
       ON CONFLICT(tbl, id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at, updated_by = excluded.updated_by, updated_rev = excluded.updated_rev`)
-    .bind(now, user.id, rev + 1, `[${part.join(",")}]`, token));
+    .bind(now, user.id, rev + 1, now, user.id, `[${part.join(",")}]`, token));
   const deletes = changes.filter(c => !c.value).map(c => JSON.stringify(`${c.table}${SEP}${c.id}`));
   for (const part of chunks(deletes)) statements.push(db().prepare(`DELETE FROM email_kit_records WHERE (tbl || char(31) || id) IN (SELECT value FROM json_each(?)) AND ${fresh}`).bind(`[${part.join(",")}]`, token));
 
@@ -263,12 +280,15 @@ export async function createSnapshot(today: unknown, user: PlatformUser) {
   if (Math.abs(Date.parse(`${today}T12:00:00Z`) - Date.now()) > 36 * 3600_000) throw new Refusal("The date is not today.");
   if (!bucket()) return { created: false };
   if (await db().prepare("SELECT id FROM email_kit_snapshots WHERE id = ?").bind(today).first()) return { created: false };
-  const { state } = await readState();
+  const { rev, state } = await readState();
   if (!Object.keys(state.convs).length) return { created: false };
   const data = JSON.stringify(state);
   const key = `email-kit/snapshots/${today}.json`;
   await bucket()!.put(key, data, { httpMetadata: { contentType: "application/json" } });
-  await db().prepare("INSERT OR IGNORE INTO email_kit_snapshots (id, r2_key, bytes, created_at, created_by) VALUES (?, ?, ?, ?, ?)").bind(today, key, data.length, nowIso(), user.id).run();
+  // If anything was saved meanwhile (an erasure, perhaps), this copy is not listed and is removed.
+  const listed = await db().prepare(`INSERT OR IGNORE INTO email_kit_snapshots (id, r2_key, bytes, created_at, created_by)
+      SELECT ?, ?, ?, ?, ? WHERE (SELECT rev FROM email_kit_state WHERE id = 1) = ?`).bind(today, key, data.length, nowIso(), user.id, rev).run();
+  if (!listed.meta.changes) { await bucket()!.delete(key).catch(() => undefined); return { created: false }; }
   const old = (await db().prepare("SELECT id, r2_key AS k FROM email_kit_snapshots ORDER BY id DESC LIMIT -1 OFFSET 7").all<{ id: string; k: string }>()).results ?? [];
   if (old.length) {
     await db().prepare("DELETE FROM email_kit_snapshots WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(old.map(o => o.id))).run();

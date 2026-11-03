@@ -33,10 +33,13 @@ export async function PATCH(request: Request, { params }: Params) {
   const nextStatus = status === "active" && !user.passwordHash ? "invited" : status;
   const actor = `platform:${admin.id}`;
   const now = nowIso();
+  // Re-checked inside the write, so two administrators cannot remove each other at once.
+  const keepsAdmin = removesAdmin ? " AND (SELECT COUNT(*) FROM platform_users WHERE role = 'admin' AND status = 'active' AND id != ?) > 0" : "";
+  const guardArgs = removesAdmin ? [id] : [];
   const statements = [];
-  if (role && role !== user.role) statements.push(db().prepare("UPDATE platform_users SET role = ?, updated_at = ? WHERE id = ?").bind(role, now, id), auditStatement(actor, `platform.role.${role}`, "platform_user", id));
+  if (role && role !== user.role) statements.push(db().prepare(`UPDATE platform_users SET role = ?, updated_at = ? WHERE id = ?${keepsAdmin}`).bind(role, now, id, ...guardArgs), auditStatement(actor, `platform.role.${role}`, "platform_user", id));
   if (nextStatus && nextStatus !== user.status) {
-    statements.push(db().prepare("UPDATE platform_users SET status = ?, updated_at = ? WHERE id = ?").bind(nextStatus, now, id), auditStatement(actor, `platform.user_${nextStatus === "disabled" ? "disabled" : "enabled"}`, "platform_user", id));
+    statements.push(db().prepare(`UPDATE platform_users SET status = ?, updated_at = ? WHERE id = ?${keepsAdmin}`).bind(nextStatus, now, id, ...guardArgs), auditStatement(actor, `platform.user_${nextStatus === "disabled" ? "disabled" : "enabled"}`, "platform_user", id));
     if (nextStatus === "disabled") statements.push(
       db().prepare("DELETE FROM platform_sessions WHERE user_id = ?").bind(id),
       db().prepare("UPDATE platform_tokens SET used_at = ? WHERE user_id = ? AND used_at IS NULL").bind(now, id));
@@ -46,7 +49,10 @@ export async function PATCH(request: Request, { params }: Params) {
     statements.push(...accessStatements(id, access, admin.id));
     for (const [tool, level] of Object.entries(access)) statements.push(auditStatement(actor, `platform.access.${tool}.${level}`, "platform_user", id));
   }
-  if (statements.length) await db().batch(statements);
+  if (statements.length) {
+    const results = await db().batch(statements);
+    if (removesAdmin && !results[0].meta.changes) return apiError("At least one active administrator must remain.", 409, "LAST_ADMIN");
+  }
   return apiJson({ ok: true });
 }
 
@@ -60,12 +66,13 @@ export async function DELETE(request: Request, { params }: Params) {
   if (!user) return apiError("That person was not found.", 404);
   if (user.id === admin.id) return apiError("You cannot delete your own account.", 409, "SELF");
   if (user.role === "admin" && user.status === "active" && await otherActiveAdmins(user.id) === 0) return apiError("At least one active administrator must remain.", 409, "LAST_ADMIN");
-  await db().batch([
+  const results = await db().batch([
     db().prepare("DELETE FROM platform_sessions WHERE user_id = ?").bind(id),
     db().prepare("DELETE FROM platform_tokens WHERE user_id = ?").bind(id),
     db().prepare("DELETE FROM platform_tool_access WHERE user_id = ?").bind(id),
-    db().prepare("DELETE FROM platform_users WHERE id = ?").bind(id),
+    db().prepare("DELETE FROM platform_users WHERE id = ? AND (role != 'admin' OR status != 'active' OR (SELECT COUNT(*) FROM platform_users WHERE role = 'admin' AND status = 'active' AND id != ?) > 0)").bind(id, id),
     auditStatement(`platform:${admin.id}`, "platform.user_deleted", "platform_user", id),
   ]);
+  if (!results[3].meta.changes) return apiError("At least one active administrator must remain.", 409, "LAST_ADMIN");
   return apiJson({ ok: true });
 }

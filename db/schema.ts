@@ -143,6 +143,8 @@ export const emailKitRecords = sqliteTable("email_kit_records", {
   updatedAt: text("updated_at").notNull(),
   updatedBy: text("updated_by").notNull(),
   updatedRev: integer("updated_rev").notNull().default(0),
+  createdAt: text("created_at").notNull().default(""),
+  createdBy: text("created_by").notNull().default(""),
 }, (table) => [primaryKey({ columns: [table.tbl, table.id] })]);
 
 export const emailKitState = sqliteTable("email_kit_state", {

@@ -55,6 +55,8 @@ CREATE TABLE `email_kit_records` (
 	`updated_at` text NOT NULL,
 	`updated_by` text NOT NULL,
 	`updated_rev` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT '' NOT NULL,
+	`created_by` text DEFAULT '' NOT NULL,
 	PRIMARY KEY(`tbl`, `id`)
 );
 --> statement-breakpoint
