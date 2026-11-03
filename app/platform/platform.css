@@ -43,8 +43,8 @@ body:has(.wp-root) .demo-banner{display:none}
 .wp-side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:18px;padding:22px 16px;background:var(--navy);color:#fff}
 .wp-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
 .wp-brand img{width:46px;height:46px;object-fit:contain}
-.wp-brand b{display:block;font-size:16px}
-.wp-brand span{display:block;font-size:12px;letter-spacing:.12em;color:#b9caee;font-weight:800}
+.wp-brand b{display:block;font-size:16px;letter-spacing:0;color:#fff}
+.wp-brand>span>span{display:block;font-size:12px;letter-spacing:.12em;color:#b9caee;font-weight:800}
 .wp-nav{display:grid;gap:4px}
 .wp-nav a{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:9px;color:#cbd6ed;text-decoration:none;font-size:15px;font-weight:600}
 .wp-nav a:hover,.wp-nav a[aria-current=page]{background:#ffffff18;color:#fff}
