@@ -13,7 +13,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:local": "node scripts/local-db.mjs",
-    "check:platform": "node scripts/check-platform.mjs"
+    "check:platform": "node scripts/check-platform.mjs",
+    "check:ats": "node scripts/check-ats.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.4.0",
@@ -39,6 +40,7 @@
     "recharts": "^3.8.0",
     "sonner": "^2.0.8",
     "tailwind-merge": "3.6.0",
+    "unpdf": "1.8.1",
     "vaul": "^1.1.2",
     "zod": "^3.25.76"
   },

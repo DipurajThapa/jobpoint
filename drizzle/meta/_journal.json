@@ -29,6 +29,13 @@
       "when": 1793750401000,
       "tag": "0003_platform_operations",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794182400000,
+      "tag": "0004_ats_screening",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,8 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 - Live role search backed by D1. Only published D1 roles appear in production. Four clearly marked Dummy references appear only in local development; none are seeded into D1 or accepts applications.
 - Public candidate application and employer enquiry forms with validation, explicit consent, honeypot and IP-hash rate limits.
 - Structured candidate fields, recruiter search, possible-duplicate flags and human-controlled application stages.
-- Optional PDF/DOCX resume upload (5 MB maximum), stored in private R2 and delivered only through an owner-protected admin endpoint.
+- Mandatory PDF/DOCX CV upload (5 MB maximum), stored in private R2 and delivered only through an owner-protected admin endpoint.
+- Owner-only **CV screening (ATS)** in the admin console. It reads each CV into structured JSON, compares it with the client's job description and gives an explainable fit score with evidence. Recruiters make every decision; personal characteristics are removed before screening. See [docs/ATS_SCREENING.md](docs/ATS_SCREENING.md).
 - Owner-only administration using Sites sign-in: create and publish roles, review applications and hiring enquiries, update statuses and notes, and delete records.
 - Privacy request queue for access/correction/deletion/withdrawal/grievance, identity verification step, consent/version records, retention review indicators and audit events for sensitive admin actions.
 - Job detail pages with `JobPosting` structured data, plus company and FAQ schema on the homepage.
@@ -39,7 +40,7 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 | Method and path | Access | Purpose |
 |---|---|---|
 | `GET /api/jobs?q=&location=` | Public | Search published roles |
-| `POST /api/applications` | Public | Submit candidate details and an optional PDF/DOCX resume as multipart form data |
+| `POST /api/applications` | Public | Submit candidate details and a required PDF/DOCX CV as multipart form data |
 | `POST /api/employer-enquiries` | Public | Submit a hiring request as JSON |
 | `POST /api/privacy-requests` | Public | Submit a privacy request for manual identity verification and review |
 | `GET /api/admin/jobs` | Site owner | List all role records |
@@ -52,6 +53,9 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 | `GET /api/admin/resumes/{applicationId}` | Site owner | Download a stored resume |
 | `GET /api/admin/privacy-requests` | Site owner | Review privacy requests and recent sensitive actions |
 | `PATCH /api/admin/privacy-requests/{id}` | Site owner | Record a verified request outcome |
+| `GET /api/admin/ats`; `GET, PUT /api/admin/ats/jobs/{id}` | Site owner | CV screening: roles, editable requirements, candidates ranked by fit |
+| `POST /api/admin/ats/screen`; `GET, PATCH /api/admin/ats/screenings/{id}` | Site owner | Screen a stored CV against a role; read the report; record the recruiter's review |
+| `POST /api/admin/ats/analyze` | Site owner | One-off check of a CV against a role or pasted JD (not stored) |
 | `POST /api/platform/auth/{sign-in,sign-out,accept,password}` | Public / signed in | Platform sign-in, sign-out, invitation or reset redemption, password change |
 | `GET, POST /api/platform/admin/users`; `PATCH, DELETE /api/platform/admin/users/{id}`; `POST …/{id}/link` | Platform administrator | Team list and activity, invite, role/status/tool levels, delete, one-time links |
 | `POST /api/platform/owner` | Site owner (SIWC) | First administrator; administrator recovery link |
@@ -60,17 +64,17 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 | `GET, POST /api/platform/email-kit/files`; `GET, PUT …/files/{id}` | View / Edit | Attachments (deletes only unused files) |
 | `GET, POST /api/platform/email-kit/snapshots`; `GET …/summary` | View/Edit; Manage | Daily recovery copies; record counts |
 
-Candidate multipart fields: `fullName`, `email`, `phone`, `location`, `experience`, `consent=yes`, `adult=yes`; optional `jobId`, `message`, `resume`, `desiredRole`, `skills`, `education`, `availability`, `shareConsent=yes` and `futureConsent=yes`. General registration requires `futureConsent=yes`. Employer JSON fields: `contactName`, `company`, `email`, `phone`, `roleTitle`, `location`, `headcount`, `details`, `consent:"yes"`. Both forms include an anti-spam `website` honeypot.
+Candidate multipart fields: `fullName`, `email`, `phone`, `location`, `experience`, `resume` (PDF or DOCX), `consent=yes`, `adult=yes`; optional `jobId`, `message`, `desiredRole`, `skills`, `education`, `availability`, `shareConsent=yes` and `futureConsent=yes`. General registration requires `futureConsent=yes`. Employer JSON fields: `contactName`, `company`, `email`, `phone`, `roleTitle`, `location`, `headcount`, `details`, `consent:"yes"`. Both forms include an anti-spam `website` honeypot.
 
 ## Submission and access behavior
 
-A successful candidate submission creates an application record; its optional CV is private in R2. A successful employer submission creates an employer enquiry. Both confirmations show a reference derived from the saved record ID, also shown in the admin console. Recent duplicate candidate submissions return an explicit 409 response and do not overwrite an existing CV. Verified profile correction/withdrawal/deletion is handled through the existing privacy request and admin workflow; candidate self-service CV replacement is not implemented. No acknowledgement email, recruiter email notification or messaging integration is configured.
+A successful candidate submission creates an application record; its CV, which is required, is private in R2. A successful employer submission creates an employer enquiry. Both confirmations show a reference derived from the saved record ID, also shown in the admin console. Recent duplicate candidate submissions return an explicit 409 response and do not overwrite an existing CV. Verified profile correction/withdrawal/deletion is handled through the existing privacy request and admin workflow; candidate self-service CV replacement is not implemented. No acknowledgement email, recruiter email notification or messaging integration is configured.
 
 The owner signs in at `/admin` using the owning ChatGPT account. Candidate records are under **Candidate pipeline**; employer forms are under **Employer enquiries**; privacy requests are under **Privacy requests**. CV downloads are owner-authorised and audited. The owner account is currently `dipuraj.thapa@gmail.com`. A confirmed Job Point recruiter account and access policy must be configured before the company handover. The site is shared publicly as a read-only demo. `lib/demo.ts` sets `DEMO_MODE = true` for both the UI and API. Candidate, employer and privacy request forms are visibly disabled; their POST routes reject every request with HTTP 503 / `DEMO_READ_ONLY` before reading the body, rate limiting, database operations or CV storage. Owner admin access remains authenticated. Demo pages use noindex and an empty sitemap; robots.txt disallows `/admin` and `/api/` while letting crawlers read the public noindex tag. Public demo access does not authorise live recruitment intake. Changing the flag requires a reviewed source deployment after the launch checks below are satisfied.
 
 ## Data model
 
-The immutable migrations are `drizzle/0000_job_point_recruitment.sql`, `drizzle/0001_recruitment_operations.sql` and `drizzle/0002_working_platform.sql`. D1 tables: `jobs`, `applications`, `employer_enquiries`, `privacy_requests`, `audit_events` (now with `detail`), `rate_limits`, plus Working Platform `platform_users`, `platform_tool_access`, `platform_sessions`, `platform_tokens`, and Email Kit `email_kit_records`, `email_kit_state`, `email_kit_files`, `email_kit_snapshots`. Resume bytes stay in R2; D1 stores only a private object key and file metadata. The public role API excludes unpublished roles and all candidate/employer personal information.
+The immutable migrations are `drizzle/0000_job_point_recruitment.sql`, `drizzle/0001_recruitment_operations.sql`, `drizzle/0002_working_platform.sql`, `drizzle/0003_platform_operations.sql` and `drizzle/0004_ats_screening.sql` (CV screening: `ats_job_profiles`, `ats_screenings`). D1 tables: `jobs`, `applications`, `employer_enquiries`, `privacy_requests`, `audit_events` (now with `detail`), `rate_limits`, plus Working Platform `platform_users`, `platform_tool_access`, `platform_sessions`, `platform_tokens`, and Email Kit `email_kit_records`, `email_kit_state`, `email_kit_files`, `email_kit_snapshots`. Resume bytes stay in R2; D1 stores only a private object key and file metadata. The public role API excludes unpublished roles and all candidate/employer personal information.
 
 ## Build and preview
 

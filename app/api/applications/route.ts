@@ -32,21 +32,23 @@ export async function POST(request: Request) {
     const db = getDb();
     const [recent] = await db.select({ id: applications.id }).from(applications).where(and(eq(applications.email, email), jobId ? eq(applications.jobId, jobId) : isNull(applications.jobId), gt(applications.createdAt, cutoff))).limit(1);
     if (recent) return errorJson("We received a recent submission using this email for this role. Your earlier CV has not been replaced. To request a correction or CV replacement, use the privacy request form; a recruiter will verify your identity.", 409);
+    // A CV is mandatory: recruiters screen every application against the role from the CV itself.
     const file = form.get("resume");
+    if (!(file instanceof File) || !file.size) return errorJson("Please attach your CV as a PDF or DOCX file.");
     let resumeKey: string | null = null, resumeName: string | null = null, resumeType: string | null = null, resumeSize: number | null = null;
-    if (file instanceof File && file.size) {
+    {
       if (file.size > maxResumeBytes) return errorJson("The upload exceeds the 5 MB limit.", 413);
       const bytes = new Uint8Array(await file.arrayBuffer());
       const type = file.type;
       const pdf = type === "application/pdf" && file.name.toLowerCase().endsWith(".pdf") && new TextDecoder().decode(bytes.slice(0, 5)) === "%PDF-" && new TextDecoder().decode(bytes.slice(-2048)).includes("%%EOF");
       const docx = type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" && file.name.toLowerCase().endsWith(".docx") && bytes[0] === 0x50 && bytes[1] === 0x4b && new TextDecoder().decode(bytes).includes("[Content_Types].xml");
       if (!pdf && !docx) return errorJson("Upload a valid PDF or DOCX file.");
-      if (!env.BUCKET) return errorJson("Resume storage is not ready. Please submit without an attachment or try again later.", 503);
+      if (!env.BUCKET) return errorJson("CV storage is not ready. Please try again later.", 503);
       resumeKey = `resumes/${crypto.randomUUID()}`; resumeName = file.name.replace(/[\\/\r\n\0]/g, "_").slice(0, 140); resumeType = type; resumeSize = file.size;
       await env.BUCKET.put(resumeKey, bytes, { httpMetadata: { contentType: type, cacheControl: "private, no-store" } });
     }
     const id = crypto.randomUUID();
-    try { await db.insert(applications).values({ id, jobId, fullName, email, phone, location, experience, desiredRole, skills, education, availability, message, resumeKey, resumeName, resumeType, resumeSize, consent: true, shareConsent, futureConsent, privacyVersion: "2026-10-13", consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); }
+    try { await db.insert(applications).values({ id, jobId, fullName, email, phone, location, experience, desiredRole, skills, education, availability, message, resumeKey, resumeName, resumeType, resumeSize, consent: true, shareConsent, futureConsent, privacyVersion: "2026-11-09", consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); }
     catch (e) { if (resumeKey && env.BUCKET) await env.BUCKET.delete(resumeKey); throw e; }
     const reference = `JP-${id.slice(0, 13).replaceAll("-", "").toUpperCase()}`;
     return json({ reference, message: `Your details have been saved. Reference: ${reference}. A recruiter will review them and contact you if there is a relevant next step. Keep this reference for follow-up.` }, 201);
