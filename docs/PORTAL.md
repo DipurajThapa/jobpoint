@@ -1,0 +1,206 @@
+# Job portal (Phase 1): how it works, how to run it, what is still open
+
+Built 9 November 2026 on branch `claude/relaxed-planck-7ozou6`. The original proposal is [PORTAL_PHASE1_PLAN.md](PORTAL_PHASE1_PLAN.md). The research behind the decisions is in [research/portal-india-hr-legal-2026-11-09.md](research/portal-india-hr-legal-2026-11-09.md) (Indian portals, HR conventions, DPDP, email/SMS, assessments, anti-bypass) and [research/portal-matching-design-2026-11-09.md](research/portal-matching-design-2026-11-09.md) (matching, score fusion, psychometrics, anti-gaming, with sources).
+
+**Registration is closed in production** until the owner sets `PORTAL_OPEN=true`, which should happen only after legal sign-off (see [Before going live](#before-going-live)).
+
+---
+
+## 1. What it does
+
+| Who | Can | Cannot |
+|---|---|---|
+| **Candidate** (free) | Sign up, upload a CV (PDF/DOCX), correct the parsed profile, see matching live jobs with a band (Strong/Good/Partial/Weak), apply, take skill tests, hide their profile from named companies, give or withdraw each consent separately, export their data, delete their account. | See their exact score or other candidates. |
+| **Company user** | Post JDs (go live only after admin approval), see anonymised previews of CVs the system released to them, unlock a CV (uses one unit of quota), download a watermarked PDF of an unlocked CV, move applicants through stages, request parameter changes, propose a company assessment. | See any CV, contact or file outside its approved parameters and unlocked set; set its own parameters; see a CV file before unlock; see the original DOCX. |
+| **Admin** (site owner only, existing sign-in) | Approve companies, set each company's matching parameters, approve JDs and parameter change requests, assign plans and adjust quota, approve company assessments, resolve parse reviews and duplicates, merge candidates, resolve abuse flags, run the queue. | — |
+
+Working Platform staff have no access to the portal admin.
+
+## 2. Architecture
+
+- Same app and Worker as the consultancy site. New areas: `/candidate`, `/company`, `/portal/*` (sign-in, register, verify, forgot, reset) and the **Job portal** tab in `/admin`.
+- Domain logic: `lib/portal/*.ts`. These modules take a small `Db` interface (D1-compatible), so the same code runs in the Worker and in Node tests (`scripts/lib/d1-sqlite.mjs` applies the real migrations to an in-memory SQLite).
+- API routes:
+  - `app/api/portal/auth/[action]` — register, verify, sign-in, sign-out, reset-request, reset.
+  - `app/api/portal/candidate/[action]` — jobs, applications, profile, export, consent, block, apply, delete, assessments, upload.
+  - `app/api/portal/company/[action]` — dashboard, matches, candidate, download, JD lifecycle, params-request, unlock, application-status, assessment-create.
+  - `app/api/admin/portal/[action]` — owner only.
+- Data: migration `drizzle/0005_portal.sql`. CV files live in R2 under private keys; D1 holds metadata, parsed profiles, matches and ledgers.
+- Sessions: separate `portal_accounts`/`portal_sessions` with a `__Host-` cookie, not the Working Platform's. Every mutation checks same-origin.
+- No cron is available on this hosting. The score queue drains after each write (CV upload, JD approval, parameter decision) and from the admin **Run queue** button, which also purges expired deletion stubs. Each run handles at most 400 CV–JD pairs.
+
+## 3. Matching
+
+Engine version `portal-match-2026.11.1` (`lib/portal/match.ts`). It is deterministic and explainable: the same CV and JD always give the same score and the same reasons. It reuses the CV and JD parsers of the owner-only screening tool ([ATS_SCREENING.md](ATS_SCREENING.md)) and adds Indian fields (`lib/portal/india.ts`).
+
+### 3.1 Hard filters (two-sided)
+
+A candidate is considered for a JD only if all of these pass. Each failure is recorded with its reason.
+
+| Filter | Rule |
+|---|---|
+| Location | Same labour market as the job (metro mapping, e.g. Howrah = Kolkata), a remote job, or the candidate states they will relocate. |
+| Experience | At least the JD minimum, with a 0.25-year tolerance. |
+| Seniority | Within the company's approved bands (fresher <1, junior 1–3, mid 3–6, senior 6–10, lead 10+) with ±1 year tolerance, and within ±2 years of the JD's own band. |
+| Mandatory skills | Each mandatory any-of group is met. Mandatory comes only from JD lines saying must/mandatory/required/essential, core taxonomy skills only, at most 4. "A or B" lines form one group. |
+| Notice | Within the JD/company maximum if the candidate stated it. |
+| CTC | Expected CTC ≤ max × 1.1 if stated. |
+| Stated CTC/notice | Required only if the admin turned that on for the company. |
+| Candidate side | Consent to share is active; the company is not on the candidate's hidden list; the CV is not an unresolved duplicate whose twin is already eligible. |
+
+### 3.2 Score
+
+Weights are worked out per JD, so the same candidate ranks differently for different JDs:
+
+- must-have = 25 + 2.5·min(m, 8), where m is the number of must-have items;
+- nice-to-have = min(15, 3n);
+- experience, title/role and education defaults shift with seniority (entry 5/15/5, senior 20/5/15, otherwise mid);
+- location 5 (0 for remote);
+- company assessment, when attached, = clamp(15 + 25·coverage·relevance, 15, 40);
+- every weight has bounds, and the set is projected to sum to 100 (largest-remainder rounding).
+
+Each requirement's evidence becomes a mean and a variance:
+
+- evidence means: shown in work history 1.0, summary 0.8, skills list only 0.6·min(1, 25/number of listed skills). The last term stops keyword stuffing from paying.
+- a skill test result is an observation with known error. It is combined with the CV prior by normal–normal shrinkage, Z = τ²/(τ² + e²), with τ = .2 (work), .25 (summary), .3 (list). A requirement with a good test result therefore moves towards the test, and a bad test overrides an inflated CV claim.
+- CV-only requirements are treated as correlated (ρ = 0.3), so a CV cannot narrow its own uncertainty by listing more of the same.
+
+S = 100·Σwm/Σw, SD = 100·√(Σw²v)/Σw, and the **lower bound L = S − 1·SD**. Ranking and release both use L. A candidate who skips the tests keeps a valid CV-based score with a wider range; a candidate with the same mean and a confirmed test ranks above them. This is the "pessimistic ranking" approach (Evan Miller; Bühlmann credibility; Wainer). Sources are in the matching research note.
+
+Candidates see bands only. When they are near a release threshold the app suggests a relevant skill test.
+
+### 3.3 Release and unlock
+
+- `runReleases` releases a candidate to the company when L ≥ the company's approved minimum and every gate above passes. The admin sets a cap per JD (minimum 5). A better candidate displaces the lowest released-but-not-unlocked one.
+- No padding: if nobody qualifies, the company sees "No strong matches yet".
+- Previews are built from an allow-list (title, role family, seniority, years, up to 8 key skills, city, relocation, education level, notice band, CTC band, score and reasons). Then `redactLeaks` replaces the candidate's name, email, phone, links, employers and institutions anywhere they slip through.
+- Each company sees a different opaque reference per candidate (`c_` + HMAC), so references cannot be compared across companies.
+- **Unlock** is atomic in one D1 batch. The insert happens only if no unlock exists and quota > 0, and the ledger row is written only if the unlock row was. It is unique per company and candidate: unlocking the same person again, for any JD, costs nothing.
+- Quota is per **company account**, shared by all its users and JDs. Unused units expire with the plan. Unlocked CVs stay visible after a downgrade or expiry.
+- Downloads are a PDF: the original PDF, or a clean rendering of a DOCX. Every page carries the company name and a unique trace ID, which is logged.
+
+### 3.4 Measured on the seed set
+
+36 fictional CVs (real PDF/DOCX files through the real parser) × 5 JDs, each CV graded 0–3 per JD by hand. The full report is [verification/portal-ranking-2026-11-09.md](verification/portal-ranking-2026-11-09.md).
+
+| JD | P@5 | nDCG@10 | Release precision |
+|---|---|---|---|
+| Accounts Executive (Durgapur) | 1.00 | 0.88 | 1.00 |
+| Inside Sales (Kolkata) | 0.80 | 0.98 | 1.00 |
+| Customer Support – Voice (Kolkata) | 0.75 | 0.85 | 1.00 |
+| Warehouse (Durgapur) | 1.00 | 0.88 | 1.00 |
+| Full-stack developer | 0.80 | 0.94 | 1.00 |
+
+This is a small hand-made set. It shows the engine behaves sensibly, not that it is calibrated. Calibrate on real outcomes (shortlists, interviews) once they exist.
+
+## 4. Assessments
+
+`lib/portal/assessment.ts`. Classical test theory, Phase 1:
+
+- Randomised forms drawn per blueprint section. The deadline is server-side (30 s grace). Answers under 2.5 s count as wrong (rapid guessing).
+- **Integrity hold** (not a penalty): more than 3 tab switches, any paste, or rapid answers on more than a third of items. Held attempts do not count until the admin clears them.
+- Retakes: 30-day cooldown, at most 3 attempts in 12 months. The **score of record** is a precision- and recency-weighted pooled mean (half-life 180 days), not the best attempt, so retaking until lucky does not pay.
+- Item statistics: KR-20 reliability and point-biserial per item. Items with r_pb < .2 after 100 responses are retired.
+- **Company tests** need admin approval. Items are screened for questions about protected traits (religion, caste, marital status, age, pregnancy and similar) and rejected if found.
+- Skill tests feed the matching requirements they cover. A company test feeds that company's JDs only.
+
+## 5. Anti-bypass and abuse controls
+
+- No CV file or contact before unlock. Watermark and trace ID on every download.
+- Rate limits (`rate_limits` table), per account and per IP hash:
+
+  | Action | Limit |
+  |---|---|
+  | List | 120/hour, 600/day |
+  | View full | 60/hour |
+  | Download | 60/hour |
+  | Unlock | 30/hour |
+  | Sign-in | 20 per 15 minutes |
+  | Register | 10/hour |
+  | CV upload | 3 per 30 days |
+
+- `access_log` records every list, view, unlock and download. A high browse count with few unlocks raises an `abuse_flags` row for the admin.
+- Every company query is scoped to its approved, released or unlocked set. The end-to-end check probes for leaks (section 8).
+- Contract terms are still needed: hiring-only use, no resale or scraping, deletion on notice, and a direct-hire clause. The research suggests a 6-month introduction window. Counsel should confirm enforceability under s.27 of the Contract Act.
+
+## 6. Privacy and DPDP
+
+Status from the research (secondary sources, **counsel must confirm**):
+
+- The DPDP Rules 2025 were notified 13 Nov 2025. Consent-manager provisions start about **13 Nov 2026**. Most fiduciary duties (notice, security, breach, retention, rights) start about **13 May 2027**.
+- MeitY proposed in January 2026 to shorten the 18 months to 12. As of September 2026 that had not been notified. **Check the e-Gazette this week.**
+
+What the build does:
+
+1. **Itemised, standalone consent** at sign-up (`lib/portal/notice.ts`, version `portal-2026-11-09`). There are three separate purposes: profile and matching, sharing with companies, and optional service offers. Each grant or withdrawal is a new row in an append-only ledger, with the notice version.
+2. **Withdrawal takes effect immediately**:
+   - matches are deleted;
+   - unreleased and released-not-unlocked previews are revoked;
+   - companies that unlocked lose access (they see the withdrawal date);
+   - each such company is emailed to delete downloaded copies within 15 days.
+   The unlock record and quota unit stay as an audit record.
+3. **Account deletion** erases the CV files (R2), profiles, applications, attempts and contact details. A content-free stub (IDs, consent ledger, unlock records) is kept for one year for Rule 8(3) and s.11(1)(b) ("who was my data shared with"), then purged by the queue run.
+4. The 3-year inactivity erasure in the Third Schedule **does not apply** (a job portal is not a listed class). The general purpose-based erasure in s.8(7) does.
+5. The matcher never uses name, gender, age, religion, caste, marital status or photo. These are removed before scoring, as in the ATS tool.
+6. Adults only (18+ declaration). Data export is available to the candidate in one click.
+
+The research treats a company that unlocks a CV as most likely a **separate data fiduciary**. No source obliges the portal to pass on a withdrawal to independent fiduciaries; the 15-day deletion request is a contractual measure. Ask counsel to confirm this, and Rule 8(3) retention.
+
+## 7. Operations
+
+| Setting | Required | Purpose |
+|---|---|---|
+| `PORTAL_SECRET` | Yes in production (falls back to `PLATFORM_SECRET_KEY`) | Signs candidate references and tokens. Never change it after launch: references would change. |
+| `MAIL_API_KEY`, `MAIL_FROM` | Yes for self-registration | Transactional email via Zoho ZeptoMail (verification, reset, withdrawal notices). Without it, development returns the link on screen; production cannot verify sign-ups. |
+| `MAIL_API_URL` | No | Override the ZeptoMail endpoint (default `https://api.zeptomail.com/v1.1/email`). **The request body shape is unverified**; send one test email before launch. |
+| `PORTAL_OPEN` | Set to `true` only after legal sign-off | Opens registration in production. |
+| `ANTHROPIC_API_KEY` | No | Optional AI-assisted CV extraction, shared with the ATS tool. |
+
+- **Plans** (seeded on first visit to the admin tab, editable; prices exclude GST and are indicative, between Naukri Resdex Lite and Indeed India per-contact pricing):
+
+  | Plan | Unlocks | Validity | Price |
+  |---|---|---|---|
+  | Free, once per company | 5 | 30 days | — |
+  | Starter | 100 | 90 days | ₹7,999 |
+  | Growth | 250 | 180 days | ₹17,999 |
+  | Pro | 500 | 365 days | ₹29,999 |
+
+  Payment is a stub: assigning a paid plan records a `payment_intents` row with status `stub`.
+- **Future services** (CV writing, LinkedIn optimisation, spoken English, Tally and GST training) are seeded inactive. The tables `services`, `service_orders`, `service_enrolments` and `payment_intents` are ready, with no screens.
+- SMS OTP is not built. Commercial SMS in India needs TRAI DLT registration first (about two weeks).
+
+## 8. Checks
+
+```bash
+npm run check:portal
+```
+
+The unit and integration checks run in Node with no server: 37 checks plus the seed-set ranking. They cover parsing, scoring, hard filters, account-level quota, JD and parameter approval gates, duplicate unlock handling, preview redaction, consent withdrawal, deletion and services.
+
+```bash
+node scripts/local-db.mjs --reset && node scripts/local-db.mjs
+```
+
+```bash
+npm run check:portal-e2e
+```
+
+The end-to-end check needs `npm run dev` running and a reset local database. It has 57 checks in a real browser. They cover onboarding and approvals, CV upload, automatic release, preview, unlock, quota, watermark and withdrawal. They also probe that a company cannot reach another company's references, unreleased candidates, contacts, files or JDs.
+
+To write a fresh ranking report:
+
+```bash
+node scripts/check-portal-ranking.mjs docs/verification/portal-ranking-YYYY-MM-DD.md
+```
+
+## Before going live
+
+Only the owner can do these:
+
+1. **Legal review** of the consent notice, the privacy page, company terms (hiring-only use, deletion on notice, direct-hire clause) and the DPDP points above. Name a grievance officer and the legal entity.
+2. **Check the e-Gazette** for the 12-month compression of the DPDP timeline.
+3. Set `PORTAL_SECRET`, `MAIL_API_KEY` and `MAIL_FROM`, and send a test email.
+4. **Try real CVs.** The seed set is fictional; parse quality on real Indian CVs (scanned PDFs, Hindi/Bengali mixed text, unusual layouts) is unmeasured. Scanned PDFs without a text layer go to admin review.
+5. **Payments.** Choose a gateway (Razorpay or similar) and replace the stub.
+6. Processor agreements with hosting and email, with specific security safeguards (Rule 6(1)(f)).
+7. Then set `PORTAL_OPEN=true`.

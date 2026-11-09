@@ -16,7 +16,7 @@ export default function CandidateFields({ jobId }: { jobId?: string }) {
       <label>Availability<input name="availability" maxLength={100} placeholder="e.g. within 30 days" /></label>
       <label>Education<input name="education" maxLength={160} /></label>
       <label className={full}>Experience summary<textarea name="experience" required maxLength={1200} rows={3} /></label>
-      <label className={full}>CV / resume <span className="label-note">PDF or DOCX, up to 5 MB</span><input name="resume" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /></label>
+      <label className={full}>CV / resume <span className="label-note">Required · PDF or DOCX with selectable text, up to 5 MB</span><input name="resume" type="file" required accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /></label>
       <label className={consentClass}><input name="consent" type="checkbox" value="yes" required /> I agree that Job Point Consultancy may use these details {general ? "to register my interest in recruitment opportunities" : "to process this application"}. <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy notice</a>.</label>
       <label className={consentClass}><input name="adult" type="checkbox" value="yes" required /> I confirm I am at least 18 years old.</label>
       <label className={consentClass}><input name="shareConsent" type="checkbox" value="yes" /> You may share my CV with {general ? "an employer for a suitable role" : "the employer for this role"} after reviewing the fit.</label>

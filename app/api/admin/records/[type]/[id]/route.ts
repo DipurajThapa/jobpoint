@@ -69,10 +69,12 @@ export async function DELETE(request: Request, context: { params: Promise<{ type
       if (record.resume_key && !env.BUCKET) return errorJson("File storage is unavailable; deletion has not completed.", 503);
       if (record.resume_key) await env.BUCKET!.delete(record.resume_key);
       await env.DB!.batch([
+        // Screening results hold the parsed CV, so they go with the application.
+        env.DB!.prepare("DELETE FROM ats_screenings WHERE application_id = ?").bind(id),
         env.DB!.prepare("DELETE FROM applications WHERE id = ?").bind(id),
         audit(request, "record.deleted", "application", id),
       ]);
-      return json({ message: "Application and stored CV deleted." });
+      return json({ message: "Application, stored CV and screening results deleted." });
     }
     if (type === "enquiries") {
       const existing = await env.DB!.prepare("SELECT id FROM employer_enquiries WHERE id = ?").bind(id).first();
