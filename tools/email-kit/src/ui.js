@@ -1022,7 +1022,9 @@
     if (['import','reconnect'].includes($('scenario').value) && !activeEntry) {
       reviewIntake(); showToast('Save and verify the conversation context before drafting.'); return;
     }
-    if (activeEntry && ['after-reply','no-response'].includes($('scenario').value)) {
+    /* A pasted reply means the client spoke last, so the wait-after-sending pause
+       does not apply; the reply (an opt-out above all) must still be recorded. */
+    if (activeEntry && ['after-reply','no-response'].includes($('scenario').value) && !$('responseText').value.trim()) {
       const conv = db.convs[activeEntry];
       const lastDate = conv && (conv.importedContext?.lastDate || conv.lastSentAt);
       const advice = Conversation.advise({lastSpeaker:'consultant',lastDate,outstanding:conv?.importedContext?.outstanding || '',scenario:$('scenario').value}, Rules.localToday());
