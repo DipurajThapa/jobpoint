@@ -669,4 +669,36 @@ await check("Withdrawn consent hides the candidate in the pipeline and cancels i
   assert.equal((await client.clientOverview(db, comp.id)).placements[0].name, "Candidate", "no name after deletion");
 });
 
+await check("A placed candidate who withdraws consent is no longer named in the company's hires", async () => {
+  const { db, comp, jd, cands, refs } = await releasedSetup(1);
+  await quota.unlockCandidate(db, { companyId: comp.id, userId: comp.userId, candidateRef: refs[cands[0]], jdId: jd });
+  const { id } = await client.addToPipeline(db, comp.id, comp.userId, refs[cands[0]], jd);
+  await client.moveStage(db, comp.id, comp.userId, id, { stage: "offered" });
+  await client.moveStage(db, comp.id, comp.userId, id, { stage: "offer_accepted", joiningDate: "2026-11-09" });
+  await client.moveStage(db, comp.id, comp.userId, id, { stage: "joined", joiningDate: "2026-11-09" });
+  assert.equal((await client.clientOverview(db, comp.id)).placements[0].name, "Cand A");
+  await consent.withdrawSharing(db, cands[0], "candidate");
+  const after = (await client.clientOverview(db, comp.id)).placements;
+  assert.deepEqual([after.length, after[0].name, after[0].status], [1, "Candidate", "active"], "business record kept, name hidden");
+});
+
+await check("Concurrent stage changes: the losing request changes nothing (application and interviews included)", async () => {
+  const { db, comp, jd, cands, refs } = await releasedSetup(1);
+  await quota.unlockCandidate(db, { companyId: comp.id, userId: comp.userId, candidateRef: refs[cands[0]], jdId: jd });
+  await candidate.applyToJd(db, cands[0], jd);
+  const { id } = await client.addToPipeline(db, comp.id, comp.userId, refs[cands[0]], jd);
+  await client.scheduleInterview(db, comp.id, comp.userId, id, { round: "Technical 1", scheduledAt: "2026-11-20T05:30:00Z", mode: "video" });
+  const out = await Promise.allSettled([
+    client.moveStage(db, comp.id, comp.userId, id, { stage: "offered" }),
+    client.moveStage(db, comp.id, comp.userId, id, { stage: "rejected", reason: "other" }),
+  ]);
+  assert.equal(out.filter(r => r.status === "fulfilled").length, 1, "exactly one change wins");
+  assert.equal(out.find(r => r.status === "rejected").reason.code, "CONFLICT");
+  const stage = (await db.prepare("SELECT stage FROM pipeline WHERE id = ?").bind(id).first()).stage;
+  const app = (await db.prepare("SELECT status FROM portal_applications WHERE candidate_id = ? AND jd_id = ?").bind(cands[0], jd).first()).status;
+  const iv = (await db.prepare("SELECT status FROM interviews WHERE pipeline_id = ?").bind(id).first()).status;
+  const events = (await db.prepare("SELECT COUNT(*) AS n FROM pipeline_events WHERE pipeline_id = ? AND stage IN ('offered','rejected')").bind(id).first()).n;
+  assert.deepEqual([app, iv, events], stage === "offered" ? ["offer", "scheduled", 1] : ["rejected", "cancelled", 1], `application, interview and history follow the winner (${stage})`);
+});
+
 console.log(`\n${passed} portal checks passed.`);
