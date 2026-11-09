@@ -8,16 +8,16 @@ const fontsUrl = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wgh
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   alternates: { canonical: "/" },
-  title: { default: "Job Point Consultancy | Recruitment & Jobs in India", template: "%s | Job Point Consultancy" },
-  description: "Find your next opportunity or hire with Job Point Consultancy. People-first recruitment support from Durgapur, West Bengal, connecting talent and employers across India.",
-  keywords: ["recruitment consultancy Durgapur", "jobs in West Bengal", "job placement consultancy India", "hiring support India", "Job Point Consultancy"],
-  openGraph: { type: "website", url: siteUrl, locale: "en_IN", title: "Job Point Consultancy", description: "Thoughtful recruitment support for candidates and employers across India.", images: ["/images/career-conversation.webp"] },
-  twitter: { card: "summary_large_image", title: "Job Point Consultancy", description: "Find your next opportunity or hire with confidence." },
+  title: { default: "Jobboard300 | Recruitment & Jobs in India", template: "%s | Jobboard300" },
+  description: "Find your next opportunity or hire with Jobboard300. People-first recruitment support from Kolkata, West Bengal, connecting talent and employers across India.",
+  keywords: ["recruitment consultancy Kolkata", "jobs in West Bengal", "job placement consultancy India", "hiring support India", "Jobboard300"],
+  openGraph: { type: "website", url: siteUrl, locale: "en_IN", title: "Jobboard300", description: "Thoughtful recruitment support for candidates and employers across India.", images: ["/images/career-conversation.webp"] },
+  twitter: { card: "summary_large_image", title: "Jobboard300", description: "Find your next opportunity or hire with confidence." },
   robots: { index: !DEMO_MODE, follow: !DEMO_MODE, googleBot: { index: !DEMO_MODE, follow: !DEMO_MODE, "max-image-preview": "large" } },
   icons: {
-    icon: "/favicon.ico",
+    icon: [{ url: "/favicon.ico", sizes: "any" }, { url: "/icon-192.png", type: "image/png", sizes: "192x192" }],
     shortcut: "/favicon.ico",
-    apple: "/images/job-point-light.png",
+    apple: "/apple-touch-icon.png",
   },
 };
 

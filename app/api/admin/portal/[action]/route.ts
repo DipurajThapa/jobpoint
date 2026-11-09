@@ -9,6 +9,8 @@ import { adminOverview } from "@/lib/portal/views";
 import { decideAssessment, decideHeldAttempt } from "@/lib/portal/assessment";
 import { DEFAULT_PLANS, seedServices } from "@/lib/portal/plans";
 import { audit } from "@/lib/portal/db";
+import { adminClientWork, inviteClient, setJdService, submissionCandidates, submitByRecruiter, updateClientTerms } from "@/lib/portal/client";
+import { sendMail } from "@/lib/portal/mailer";
 import { canonicalCity, seniorityFor } from "@/lib/portal/india";
 import { resolveSkill } from "@/lib/ats/taxonomy";
 import { roleFamilyFor } from "@/lib/portal/roles";
@@ -25,8 +27,9 @@ export async function GET(request: Request, context: Ctx) {
     if (action === "overview") {
       const plans = await db.prepare("SELECT COUNT(*) AS n FROM plans").first<{ n: number }>();
       if (!plans?.n) { await upsertPlans(db, DEFAULT_PLANS); await seedServices(db); }
-      return json(await adminOverview(db));
+      return json({ ...await adminOverview(db), clientWork: await adminClientWork(db) });
     }
+    if (action === "submission-candidates") return json({ candidates: await submissionCandidates(db, new URL(request.url).searchParams.get("jd") ?? "") });
     if (action === "review-cv") {
       // Admin opens an unreadable CV to transcribe it. Audited.
       const id = new URL(request.url).searchParams.get("candidate") ?? "";
@@ -50,6 +53,31 @@ export async function POST(request: Request, context: Ctx) {
     const s = (v: unknown, max = 200) => typeof v === "string" ? v.slice(0, max) : "";
     const done = async (message: string, extra: object = {}) => { const queue = await drainQueue(db, portalSecret(), 400); return json({ message, queue, ...extra }); };
     switch (action) {
+      case "client-invite": {
+        const out = await inviteClient(db, { displayName: s(b.displayName, 120), legalName: s(b.legalName, 160), city: s(b.city, 80), website: s(b.website), gstin: s(b.gstin, 15), ownerEmail: s(b.ownerEmail, 254), ownerName: s(b.ownerName, 120), guaranteeDays: Number(b.guaranteeDays ?? 90), nonSolicitMonths: Number(b.nonSolicitMonths ?? 12), feeTerms: s(b.feeTerms, 300), params: b.params, plan: s(b.plan, 20) || "free" }, admin);
+        const link = `${new URL(request.url).origin}/portal/accept?token=${out.token}`;
+        const mail = await sendMail({ to: s(b.ownerEmail, 254), subject: "Your Jobboard300 hiring account is ready", text: `Jobboard300 has set up a hiring account for ${s(b.displayName, 120)}. Open this link to set your password and sign in (valid for 7 days):\n${link}` }, link);
+        return done(mail.sent ? "Client created and the owner has been emailed a one-time link. Copy of the link:" : "Client created. Send the owner this one-time link (valid for 7 days):", { link });
+      }
+      case "client-terms": await updateClientTerms(db, s(b.companyId, 60), Number(b.guaranteeDays), s(b.feeTerms, 300), admin, Number(b.nonSolicitMonths ?? 12)); return json({ message: "Client terms saved." });
+      case "jd-service": {
+        const jd = await db.prepare("SELECT company_id, openings FROM jds WHERE id = ?").bind(s(b.jdId, 60)).first<{ company_id: string; openings: number }>();
+        if (!jd) return fail("Job not found.", 404);
+        await setJdService(db, jd.company_id, s(b.jdId, 60), s(b.service, 10), Number(b.openings ?? jd.openings), admin);
+        return json({ message: "Job service updated." });
+      }
+      case "submit-candidate": {
+        const out = await submitByRecruiter(db, portalSecret(), { companyId: s(b.companyId, 60), jdId: s(b.jdId, 60), candidateId: s(b.candidateId, 60), note: s(b.note, 2000) }, admin);
+        return json({ ...out, message: "Submitted to the client. It appears in their pipeline for review." });
+      }
+      case "placement-status": {
+        const status = s(b.status, 20);
+        if (!["active", "left_in_guarantee", "replaced", "left"].includes(status)) return fail("Invalid status.");
+        const r = await db.prepare("UPDATE placements SET status = ?, note = CASE WHEN ? = '' THEN note ELSE ? END WHERE id = ?").bind(status, s(b.note, 500), s(b.note, 500), s(b.placementId, 60)).run();
+        if (!r.meta.changes) return fail("Placement not found.", 404);
+        await audit(db, admin, "placement.status", "placement", s(b.placementId, 60), status);
+        return json({ message: "Placement updated." });
+      }
       case "company-activate": await activateCompany(db, s(b.companyId, 60), b.params, admin, s(b.plan, 20) || "free"); return done("Company approved with its matching parameters and plan.");
       case "company-params": { const id = await requestParamChange(db, s(b.companyId, 60), b.params, admin); const out = await decideParamRequest(db, id, true, admin, "Set by admin"); return done(`Parameters updated.${out.paused.length ? ` ${out.paused.length} live JD(s) paused because they no longer fit.` : ""}`); }
       case "company-status": {
@@ -74,7 +102,7 @@ export async function POST(request: Request, context: Ctx) {
         const id = s(b.candidateId, 60), p = await primaryProfile(db, id);
         if (!p) return fail("Candidate not found.", 404);
         const years = Math.max(0, Math.min(45, Number(b.years ?? 0)));
-        const skills = String(b.skills ?? "").split(",").map(x => resolveSkill(x.trim())).filter(Boolean).map(r => ({ ...r!, evidence: "work" as const, months: Math.round(years * 12), lastUsedYear: new Date().getFullYear(), snippet: "Transcribed by a Job Point reviewer from the original CV." }));
+        const skills = String(b.skills ?? "").split(",").map(x => resolveSkill(x.trim())).filter(Boolean).map(r => ({ ...r!, evidence: "work" as const, months: Math.round(years * 12), lastUsedYear: new Date().getFullYear(), snippet: "Transcribed by a Jobboard300 reviewer from the original CV." }));
         const profile = { ...p.profile, headline: s(b.title, 120), skills, totalExperienceMonths: Math.round(years * 12), statedExperienceYears: years,
           work: s(b.title) ? [{ title: s(b.title, 120), employer: "", location: "", start: null, end: null, current: true, months: Math.round(years * 12), highlights: [] }] : [],
           parse: { ...p.profile.parse, confidence: 0.7, warnings: [...p.profile.parse.warnings, "Transcribed manually by a reviewer."] },

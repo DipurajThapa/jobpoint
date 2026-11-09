@@ -138,6 +138,7 @@ ok(!JSON.stringify(salesOnly).includes("Inside sales"), "an accounts company nev
 // Company UI screenshot.
 const ferroPage = await ferro.context.newPage();
 await ferroPage.goto(`${BASE}/company`, { waitUntil: "networkidle" });
+await ferroPage.getByRole("button", { name: "Jobs", exact: true }).click();
 await ferroPage.getByRole("button", { name: "View matches" }).first().click();
 await ferroPage.locator(".pj-item").first().waitFor();
 await ferroPage.screenshot({ path: `${OUT}/company-matches.png`, fullPage: true });
@@ -168,10 +169,87 @@ const { extractText, getDocumentProxy } = await import(resolve(import.meta.dirna
 const pdfText = (await extractText(await getDocumentProxy(new Uint8Array(await dl.body())), { mergePages: true })).text;
 ok(pdfText.includes("Unlocked by Demo Ferro Alloys") && pdfText.includes(full.traceId), "the downloaded CV is watermarked with the company and trace ID");
 await ferroPage.goto(`${BASE}/company`, { waitUntil: "networkidle" });
+await ferroPage.getByRole("button", { name: "Jobs", exact: true }).click();
 await ferroPage.getByRole("button", { name: "View matches" }).first().click();
 await ferroPage.getByRole("button", { name: "View CV" }).first().click();
 await ferroPage.getByText("Download CV (watermarked PDF)").waitFor();
 await ferroPage.screenshot({ path: `${OUT}/company-unlocked.png`, fullPage: true });
+
+// ---------- Client workspace: pipeline, interviews, offers ----------
+await ferroPage.getByRole("button", { name: "Add to pipeline" }).click();
+await ferroPage.getByText("Added to your pipeline as shortlisted.").waitFor();
+const pipe1 = await (await api(ferro.context, "GET", "/api/portal/company/pipeline")).json();
+const entry = pipe1.pipeline.find(e => e.ref === ref);
+ok(entry && entry.stage === "shortlisted", "an unlocked candidate is added to the pipeline from the profile page");
+await ferroPage.getByRole("button", { name: "Pipeline", exact: true }).click();
+await ferroPage.getByRole("button", { name: "Schedule interview" }).first().click();
+await ferroPage.locator("input[name=round]").fill("Technical 1");
+await ferroPage.locator("input[name=when]").fill("2030-01-15T11:00");
+await ferroPage.locator("input[name=interviewer]").fill("Finance lead");
+await ferroPage.getByRole("button", { name: "Schedule", exact: true }).click();
+await ferroPage.getByText("Interview scheduled.").waitFor();
+const pipe2 = await (await api(ferro.context, "GET", "/api/portal/company/pipeline")).json();
+const iv = pipe2.pipeline.find(e => e.ref === ref);
+ok(iv.stage === "interview" && iv.interviews.length === 1, "scheduling an interview from the pipeline moves the candidate to interviewing");
+ok((await api(ferro.context, "POST", "/api/portal/company/pipeline-stage", { pipelineId: entry.id, stage: "joined", joiningDate: "2026-11-01" })).status() === 400, "stages cannot be skipped (interview → joined is refused)");
+ok((await api(fintech.context, "POST", "/api/portal/company/pipeline-stage", { pipelineId: entry.id, stage: "rejected", reason: "other" })).status() === 404, "another company cannot move this company's candidate");
+ok((await (await api(fintech.context, "GET", "/api/portal/company/pipeline")).json()).pipeline.length === 0, "another company sees none of this pipeline");
+ok((await api(ferro.context, "POST", "/api/portal/company/interview-record", { interviewId: iv.interviews[0].id, status: "completed", outcome: "advance", rating: 4, feedback: "Good GST knowledge" })).ok(), "interview feedback is recorded");
+ok((await api(ferro.context, "POST", "/api/portal/company/pipeline-stage", { pipelineId: entry.id, stage: "offered", offerCtcInr: 420000 })).ok(), "an offer is recorded with its CTC");
+ok((await api(ferro.context, "POST", "/api/portal/company/pipeline-stage", { pipelineId: entry.id, stage: "offer_accepted", joiningDate: "2030-02-01", lastWorkingDay: "2030-01-30", competingOffers: "none known" })).ok(), "offer acceptance records joining date, last working day and other offers");
+await ferroPage.getByRole("button", { name: "Overview", exact: true }).click();
+await ferroPage.getByText("Offers accepted, waiting to join").waitFor();
+ok(await ferroPage.getByText(/Next check-in|Check in now/).first().isVisible(), "the overview shows the next joining check-in");
+await ferroPage.screenshot({ path: `${OUT}/client-overview.png`, fullPage: true });
+await ferroPage.getByRole("button", { name: "Pipeline", exact: true }).click();
+await ferroPage.locator(".pj-item").first().waitFor();
+await ferroPage.screenshot({ path: `${OUT}/client-pipeline.png`, fullPage: true });
+
+// Team: the owner adds a colleague who sets a password from the link; members cannot manage the team.
+const inv = await (await api(ferro.context, "POST", "/api/portal/company/team-invite", { name: "Finance Lead", email: "finance.lead@demo-ferro.example.com" })).json();
+ok(typeof inv.link === "string" && inv.link.includes("/portal/accept?token="), "the owner gets a one-time link for a new colleague");
+const colleague = await ctx();
+ok((await api(colleague, "POST", "/api/portal/auth/accept", { token: new URL(inv.link).searchParams.get("token"), password: PASSWORD })).ok(), "the colleague sets a password from the link");
+ok((await api(colleague, "POST", "/api/portal/auth/sign-in", { email: "finance.lead@demo-ferro.example.com", password: PASSWORD })).ok(), "the colleague signs in");
+ok((await (await api(colleague, "GET", "/api/portal/company/pipeline")).json()).pipeline.length >= 1, "the colleague sees the company's pipeline");
+ok((await api(colleague, "POST", "/api/portal/company/team-invite", { name: "X", email: "x@demo-ferro.example.com" })).status() === 403, "a team member cannot add people");
+await ferroPage.getByRole("button", { name: "Team", exact: true }).click();
+await ferroPage.getByText("Add a colleague").waitFor();
+await ferroPage.screenshot({ path: `${OUT}/client-team.png`, fullPage: true });
+
+// Managed search: the client asks Jobboard300 to recruit; Jobboard300 submits a candidate with a note.
+const managedJd = JDS.find(j => j.key === "jd-accounts-durgapur");
+const mj = await (await api(ferro.context, "POST", "/api/portal/company/jd-create", { title: "Accounts Executive (managed)", text: managedJd.text, location: managedJd.location, workMode: managedJd.workMode, service: "managed", openings: 2 })).json();
+await api(ferro.context, "POST", "/api/portal/company/jd-submit", { jdId: mj.id });
+await adminApi("jd-decide", { jdId: mj.id, approve: true });
+await adminApi("run-queue", {});
+const ovm = await (await api(admin, "GET", "/api/admin/portal/overview")).json();
+ok(ovm.clientWork.managed.some(j => j.id === mj.id), "the managed search appears in the admin console");
+const sc = await (await api(admin, "GET", `/api/admin/portal/submission-candidates?jd=${mj.id}`)).json();
+const pickC = sc.candidates.find(c => Number(c.hard_pass) && !Number(c.in_pipeline));
+ok(!!pickC, "the admin sees ranked candidates to submit");
+const q1 = (await (await api(ferro.context, "GET", "/api/portal/company/dashboard")).json()).quota.remaining;
+const sub = await adminApi("submit-candidate", { companyId: ferro.id, jdId: mj.id, candidateId: pickC.candidate_id, note: "Strong Tally and GST; 30 days notice; expects 4.2 LPA" });
+ok(sub.ok(), "Jobboard300 submits a candidate to the client with a note");
+const pipe3 = await (await api(ferro.context, "GET", `/api/portal/company/pipeline?jd=${mj.id}`)).json();
+ok(pipe3.pipeline[0]?.stage === "submitted" && pipe3.pipeline[0].recruiterNote.includes("Tally"), "the client sees the submission and the recruiter's note");
+ok((await (await api(ferro.context, "GET", "/api/portal/company/dashboard")).json()).quota.remaining === q1, "a managed submission uses no unlock quota");
+ok((await api(ferro.context, "GET", `/api/portal/company/candidate?ref=${pipe3.pipeline[0].ref}`)).ok(), "the client can open the submitted candidate's full profile");
+ok((await api(fintech.context, "GET", `/api/portal/company/candidate?ref=${pipe3.pipeline[0].ref}`)).status() !== 200, "another company cannot open the submitted profile");
+
+// Admin-invited client: works without public registration.
+const ci = await (await adminApi("client-invite", { displayName: "Example Infotech", legalName: "Example Infotech Pvt Ltd", city: "Kolkata", ownerName: "Owner", ownerEmail: "owner@example-infotech.example.com", guaranteeDays: 90, nonSolicitMonths: 12, feeTerms: "8.33% of fixed CTC", params: { minScore: 65, roleFamilies: ["software-it"], seniority: ["junior", "mid"], cities: ["Kolkata"], allowRemote: true, ctcBands: [], maxNoticeDays: 90, mandatoryFilters: [], maxReleasePerJd: 25, maxLiveJds: 10 }, plan: "free" })).json();
+ok(typeof ci.link === "string" && ci.link.includes("/portal/accept?token="), "the admin creates a client and gets a one-time sign-in link");
+const infotech = await ctx();
+const acceptPage = await infotech.newPage();
+await acceptPage.goto(ci.link, { waitUntil: "networkidle" });
+await acceptPage.locator("input[name=password]").fill(PASSWORD);
+await acceptPage.locator("input[name=confirm]").fill(PASSWORD);
+await acceptPage.getByRole("button", { name: "Set password" }).click();
+await acceptPage.getByText("Your password is set.").waitFor();
+ok(true, "the client owner sets a password on the accept page");
+ok((await api(infotech, "POST", "/api/portal/auth/sign-in", { email: "owner@example-infotech.example.com", password: PASSWORD })).ok(), "the invited client signs in");
+ok((await (await api(infotech, "GET", "/api/portal/company/dashboard")).json()).company.status === "active", "the invited client is active straight away");
 
 // Quota exhaustion prompts an upgrade (free allowance = 5).
 const refs = m.matches.map(x => x.ref).filter(r => r !== ref);
@@ -185,13 +263,11 @@ ok((await api(ferro.context, "GET", `/api/portal/company/candidate?ref=${ref}`))
 // ---------- Candidate side ----------
 const cPage = await cands["acc-01"].context.newPage();
 await cPage.goto(`${BASE}/candidate`, { waitUntil: "networkidle" });
-await cPage.getByText("Jobs that fit your profile").waitFor();
+await cPage.getByText("Details read from your CV").waitFor();
+ok(await cPage.getByRole("navigation", { name: "Candidate" }).count() === 0 && await cPage.getByRole("heading", { name: "Sharing with employers" }).isVisible(), "the candidate area is one page: My CV and privacy");
 const jobs = await (await api(cands["acc-01"].context, "GET", "/api/portal/candidate/jobs")).json();
 ok(jobs.jobs.some(j => j.title === "Accounts Executive") && jobs.jobs.every(j => typeof j.band === "string" && !("score" in j)), "the candidate sees fitting jobs with a band, not a raw score");
-await cPage.screenshot({ path: `${OUT}/candidate-jobs.png`, fullPage: true });
 ok((await api(cands["acc-01"].context, "POST", "/api/portal/candidate/apply", { jdId: accJd })).ok(), "the candidate applies");
-await cPage.getByRole("button", { name: "My CV" }).click();
-await cPage.getByText("Details read from your CV").waitFor();
 await cPage.screenshot({ path: `${OUT}/candidate-cv.png`, fullPage: true });
 
 // ---------- Consent withdrawal ----------
@@ -201,7 +277,11 @@ ok(wd.ok(), "the candidate withdraws sharing consent");
 const after = await (await api(ferro.context, "GET", `/api/portal/company/matches?jd=${accJd}`)).json();
 const unlockedNow = await api(ferro.context, "GET", `/api/portal/company/candidate?ref=${ref}`);
 ok(after.matches.length <= m.matches.length - (full.profile.contact.email.startsWith("sourav") ? 1 : 0), "the withdrawn CV leaves the company's list");
-if (full.profile.contact.email.startsWith("sourav")) ok(unlockedNow.status() === 410, "an unlocked copy becomes unavailable after withdrawal");
+if (full.profile.contact.email.startsWith("sourav")) {
+  ok(unlockedNow.status() === 410, "an unlocked copy becomes unavailable after withdrawal");
+  const pw = (await (await api(ferro.context, "GET", "/api/portal/company/pipeline")).json()).pipeline.find(e => e.ref === ref);
+  ok(pw && pw.available === false && pw.name === "Candidate withdrew consent", "the pipeline hides a candidate who withdrew consent");
+}
 
 // ---------- Admin UI ----------
 await adminPage.goto(`${BASE}/admin`, { waitUntil: "networkidle" });
@@ -216,7 +296,7 @@ const phone = await ctx({ ...devices["iPhone 13"] });
 await phone.addCookies(await cands["sal-01"].context.cookies());
 const pp = await phone.newPage();
 await pp.goto(`${BASE}/candidate`, { waitUntil: "networkidle" });
-await pp.getByText("Jobs that fit your profile").waitFor();
+await pp.getByText("Details read from your CV").waitFor();
 ok(await pp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), "the candidate portal has no horizontal scroll on a phone");
 await pp.screenshot({ path: `${OUT}/candidate-phone.png` });
 await browser.close();

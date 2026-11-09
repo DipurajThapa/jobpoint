@@ -19,14 +19,14 @@ export async function sendMail(mail: Mail, link?: string): Promise<SendResult> {
   const key = env.MAIL_API_KEY, from = env.MAIL_FROM;
   if (!key || !from) {
     if (process.env.NODE_ENV !== "production") return { sent: false, devLink: link, reason: "Email is not configured; showing the link because this is local development." };
-    return { sent: false, reason: "Email delivery is not configured yet. Ask Job Point to send your link." };
+    return { sent: false, reason: "Email delivery is not configured yet. Ask Jobboard300 to send your link." };
   }
   const url = env.MAIL_API_URL ?? "https://api.zeptomail.com/v1.1/email";
   const response = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json", authorization: `Zoho-enczapikey ${key}` },
     body: JSON.stringify({
-      from: { address: from, name: "Job Point" },
+      from: { address: from, name: "Jobboard300" },
       to: [{ email_address: { address: mail.to } }],
       subject: mail.subject,
       textbody: mail.text,

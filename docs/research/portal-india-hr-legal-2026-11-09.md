@@ -1,6 +1,6 @@
 > Research notes from the portal build, 9 November 2026. Facts come from search-engine extracts of the cited pages (direct fetches were blocked in the build session); confidence is marked per finding. This is not legal advice; counsel must confirm the DPDP points.
 
-# Research report for Job Point Consultancy's job portal
+# Research report for Jobboard300's job portal
 
 **Prepared 9 November 2026**
 

@@ -1,4 +1,4 @@
-// Seed and test data for the JobPoint CV–JD matching engine.
+// Seed and test data for the Jobboard300 CV–JD matching engine.
 //
 // Everything here is fictional: the people, employers ("Example …", "Sample …",
 // "Demo …", "Fictional …"), email addresses (example.com / example.in only) and

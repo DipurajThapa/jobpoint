@@ -11,7 +11,7 @@ import { formatLpa } from "./india";
 const latin = (s: string) => s.replace(/₹/g, "Rs. ").replace(/[‘’]/g, "'").replace(/[“”]/g, "\"").replace(/[–—]/g, "-").replace(/•/g, "-").replace(/[^\x09\x0a\x0d\x20-\x7e\xa0-\xff]/g, "?");
 
 export type Stamp = { company: string; traceId: string; date: string };
-const stampText = (s: Stamp) => latin(`Unlocked by ${s.company} on ${s.date} via Job Point - Trace ${s.traceId} - Confidential: for this hiring purpose only`);
+const stampText = (s: Stamp) => latin(`Unlocked by ${s.company} on ${s.date} via Jobboard300 - Trace ${s.traceId} - Confidential: for this hiring purpose only`);
 
 export async function watermarkPdf(original: Uint8Array, stamp: Stamp): Promise<Uint8Array | null> {
   const { PDFDocument, StandardFonts, rgb, degrees } = await import("pdf-lib");
@@ -29,7 +29,7 @@ export async function watermarkPdf(original: Uint8Array, stamp: Stamp): Promise<
   }
   doc.setSubject(`Unlocked copy · trace ${stamp.traceId}`);
   doc.setKeywords([`trace:${stamp.traceId}`, `company:${stamp.company}`]);
-  doc.setProducer("Job Point portal");
+  doc.setProducer("Jobboard300 portal");
   return doc.save();
 }
 
@@ -65,6 +65,6 @@ export async function renderCvPdf(profile: PortalProfile, extractedText: string,
   doc.setTitle(latin(`CV - ${profile.contact.name || "candidate"}`));
   doc.setSubject(`Unlocked copy · trace ${stamp.traceId}`);
   doc.setKeywords([`trace:${stamp.traceId}`, `company:${stamp.company}`]);
-  doc.setProducer("Job Point portal");
+  doc.setProducer("Jobboard300 portal");
   return doc.save();
 }

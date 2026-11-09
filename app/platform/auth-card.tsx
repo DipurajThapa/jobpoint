@@ -5,7 +5,7 @@ export default function AuthCard({ title, intro, children }: { title: string; in
   return <main className="wp-auth">
     <section className="wp-auth-card" aria-labelledby="auth-title">
       <header>
-        <Image src="/images/job-point-light.png" width={64} height={64} alt="Job Point Consultancy" />
+        <Image src="/images/jobboard300-logo.png" width={499} height={81} alt="Jobboard300" />
         <span className="wp-overline">Working Platform</span>
         <h1 id="auth-title">{title}</h1>
         {intro && <p className="hint">{intro}</p>}

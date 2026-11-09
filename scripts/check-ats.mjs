@@ -164,5 +164,23 @@ await check("Edited requirements are validated", () => {
 await check("Unsupported files are refused", async () => {
   await assert.rejects(analyseCv({ bytes: encode("hello"), fileName: "cv.txt" }), /PDF or DOCX/);
 });
+const { findSkills } = await lib("taxonomy.ts");
+const ids = (text, opts) => findSkills(text, opts).map(f => f.skill.id).sort();
+await check("IT skills: frameworks are separate from languages; a CV framework implies its language, a JD does not", () => {
+  const jd = parseJobDescription({ title: "Java Developer", description: "Must have Spring Boot, Microservices and Kafka. Good to have Kubernetes and AWS." });
+  const must = jd.mustHave.map(x => x.id);
+  assert.ok(must.includes("spring-boot") && must.includes("microservices") && must.includes("kafka"), must.join());
+  assert.ok(!must.includes("java"), "the JD's Spring Boot does not add a separate Java requirement");
+  assert.deepEqual(ids("Built REST services in Java 11 at work"), ["java"], "Java alone is not Spring Boot");
+  assert.ok(ids("Developed Spring Boot microservices", { implied: true }).includes("java"), "Spring Boot in a CV also counts as Java");
+  assert.ok(ids("ASP.NET Core Web API", { implied: true }).includes("c-sharp") && ids("ASP.NET Core Web API").includes("dotnet"));
+  assert.ok(ids("Next.js and Tailwind", { implied: true }).join() === ["css-frameworks", "javascript", "nextjs", "react"].sort().join());
+  assert.ok(!ids("Docker").includes("kubernetes") && ids("Kubernetes (EKS)", { implied: true }).includes("docker"));
+});
+await check("IT skills: everyday words do not create IT skills out of context", () => {
+  assert.deepEqual(ids("Processed SWIFT transfers and handled iOS users' complaints in a rust-coloured spring catalogue").filter(x => ["ios", "rust", "spring-boot"].includes(x)), [], "bare ios, rust, spring and swift are ignored in prose");
+  assert.ok(ids("iOS, Rust", { allowShortAliases: true }).includes("ios"), "but count in a skills section");
+});
+
 console.log(`\n${passed} checks passed.`);
 for (const [name, r] of Object.entries(results)) console.log(`${name.padEnd(11)} ${String(r.score).padStart(3)}  ${r.verdictLabel}`);

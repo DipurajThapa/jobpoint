@@ -44,7 +44,7 @@ export function Register({ kind }: { kind: "candidate" | "company" }) {
     {f.error && <p className="pj-notice bad" role="alert">{f.error}</p>}
     {kind === "candidate" ? <>
       <label>Full name<input name="name" required maxLength={120} autoComplete="name" /></label>
-      <label>Current city<input name="city" required maxLength={80} placeholder="e.g. Durgapur" /></label>
+      <label>Current city<input name="city" required maxLength={80} placeholder="e.g. Kolkata" /></label>
     </> : <>
       <label>Company name (shown to candidates)<input name="companyName" required maxLength={120} /></label>
       <label>Registered legal name<input name="legalName" required maxLength={160} placeholder="e.g. Example Steel Works Private Limited" /></label>
@@ -56,9 +56,9 @@ export function Register({ kind }: { kind: "candidate" | "company" }) {
     <label>Mobile number<input name="phone" type="tel" required maxLength={16} autoComplete="tel" /></label>
     <label>Password <span className="pj-muted">at least 12 characters</span><input name="password" type="password" required minLength={12} autoComplete="new-password" /></label>
     {kind === "candidate" && <label className="pj-row"><input type="checkbox" name="adult" value="yes" required /> I am 18 or older.</label>}
-    <label className="pj-row"><input type="checkbox" name="terms" value="yes" required /> I accept the <a href="/terms" target="_blank">terms</a>{kind === "company" ? ", including using candidate data only for hiring, never contacting candidates outside Job Point before unlocking, and deleting CVs on request." : " and have read the "}{kind === "candidate" && <a href="/privacy" target="_blank">privacy notice</a>}.</label>
+    <label className="pj-row"><input type="checkbox" name="terms" value="yes" required /> I accept the <a href="/terms" target="_blank">terms</a>{kind === "company" ? ", including using candidate data only for hiring, never contacting candidates outside Jobboard300 before unlocking, and deleting CVs on request." : " and have read the "}{kind === "candidate" && <a href="/privacy" target="_blank">privacy notice</a>}.</label>
     <button className="wp-btn" disabled={f.busy}>{f.busy ? "Creating…" : "Create account"}</button>
-    {kind === "company" && <p className="pj-muted">Job Point reviews every company and sets its matching rules before any candidate is shared.</p>}
+    {kind === "company" && <p className="pj-muted">Jobboard300 reviews every company and sets its matching rules before any candidate is shared.</p>}
   </form>;
 }
 
@@ -101,3 +101,21 @@ export function Reset({ token }: { token: string }) {
 }
 
 export const NOTICE = CONSENT_NOTICE;
+
+/** Invited client users (added by Jobboard300 or their company owner) set their first password. */
+export function Accept({ token }: { token: string }) {
+  const f = useForm();
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault(); const d = new FormData(e.currentTarget);
+    if (d.get("password") !== d.get("confirm")) { f.setError("The two passwords do not match."); return; }
+    f.setBusy(true); try { f.setNotice((await post<{ message: string }>("/api/portal/auth/accept", { token, password: d.get("password") })).message); } catch (err) { f.setError((err as Error).message); } finally { f.setBusy(false); }
+  }
+  if (f.notice) return <div className="pj-list"><p className="pj-notice good">{f.notice}</p><a className="wp-btn" href="/portal/sign-in">Sign in</a></div>;
+  return <form onSubmit={submit} className="pj-list">
+    <p className="pj-muted">Choose a password of at least 12 characters. You will use it with your email address to sign in.</p>
+    {f.error && <p className="pj-notice bad">{f.error}</p>}
+    <label>Password<input name="password" type="password" minLength={12} required autoComplete="new-password" /></label>
+    <label>Repeat password<input name="confirm" type="password" minLength={12} required autoComplete="new-password" /></label>
+    <button className="wp-btn" disabled={f.busy}>Set password</button>
+  </form>;
+}

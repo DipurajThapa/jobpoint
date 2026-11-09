@@ -32,7 +32,7 @@ const Conversation = (() => {
     const greeting = first ? `Hello ${first},` : 'Hello,';
     const subject = clean(context.subject || form.priorSubject);
     const topic = clean(context.objective);
-    const sign = [clean(form.senderName),clean(form.senderRole),clean('Job Point Consultancy')].filter(Boolean).join('\n');
+    const sign = [clean(form.senderName),clean(form.senderRole),clean('Jobboard300')].filter(Boolean).join('\n');
     let lines;
     if (context.lastSpeaker === 'client' && form.scenario === 'reply') {
       if (!clean(form.contextAnswer)) return null;

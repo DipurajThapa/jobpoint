@@ -8,7 +8,7 @@
 
 ## Overview
 
-Job Point Consultancy needs an internal, web-based team area inside its existing
+Jobboard300 needs an internal, web-based team area inside its existing
 website. Authorised team members open `/platform`, sign in, and see a dashboard
 listing only the tools they are permitted to use. The first and only tool in
 this phase is **Email Kit**, the employer-outreach workspace previously shipped

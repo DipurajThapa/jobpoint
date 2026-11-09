@@ -13,7 +13,7 @@ export default async function Shell({ user, current, children }: Props) {
     <a href={href} aria-current={current === href ? "page" : undefined}><Icon name={icon} />{label}</a>;
   return <div className="wp-shell">
     <aside className="wp-side">
-      <a className="wp-brand" href="/platform"><Image src="/images/job-point-dark.png" width={46} height={46} alt="" /><span><b>Working Platform</b><span>JOB POINT</span></span></a>
+      <a className="wp-brand" href="/platform"><Image src="/images/jobboard300-icon.png" width={512} height={512} alt="" /><span><b>Working Platform</b><span>JOBBOARD300</span></span></a>
       <nav className="wp-nav" aria-label="Working Platform">
         {link("/platform", "dashboard", "Dashboard")}
         {tools.length > 0 && <span className="wp-nav-label">TOOLS</span>}

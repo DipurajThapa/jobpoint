@@ -17,7 +17,7 @@ body:has(.wp-root) .demo-banner{display:none}
 .wp-auth{min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:linear-gradient(160deg,#0a1f5c 0%,#1237a0 60%,#1d4ed8 100%)}
 .wp-auth-card{width:min(440px,100%);background:#fff;border-radius:16px;padding:28px;box-shadow:0 24px 60px #0a1f5c40;display:grid;gap:16px}
 .wp-auth-card header{display:grid;gap:10px;justify-items:start}
-.wp-auth-card header img{width:64px;height:64px;object-fit:contain}
+.wp-auth-card header img{width:190px;height:auto;object-fit:contain}
 .wp-overline{font-size:12px;letter-spacing:.14em;font-weight:800;color:var(--blue);text-transform:uppercase}
 .wp-auth-card form{display:grid;gap:14px}
 .wp-auth-foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:14px}

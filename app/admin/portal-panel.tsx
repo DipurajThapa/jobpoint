@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Row = Record<string, string | number | null>;
-type Overview = { companies: Row[]; paramRequests: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; plans: Row[]; heldAttempts?: Row[] };
+type Overview = { companies: Row[]; paramRequests: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; plans: Row[]; heldAttempts?: Row[]; clientWork?: { managed: Row[]; placements: Row[] } };
 const ROLE_FAMILIES = ["accounts-finance", "sales-bd", "customer-support", "operations-supply", "hr-admin", "software-it", "marketing", "manufacturing-engineering", "healthcare", "education", "hospitality-retail", "field-services"];
 const SENIORITY = ["fresher", "junior", "mid", "senior", "lead"];
 
@@ -29,7 +29,7 @@ function paramsFrom(f: FormData) {
 function ParamsFields() {
   return <div className="form-grid">
     <label>Minimum match score<input name="minScore" type="number" min={40} max={95} defaultValue={70} required /></label>
-    <label>Cities (comma-separated, empty = any)<input name="cities" placeholder="Durgapur, Asansol" /></label>
+    <label>Cities (comma-separated, empty = any)<input name="cities" placeholder="Kolkata, Howrah" /></label>
     <fieldset className="full-field"><legend>Permitted role families</legend>{ROLE_FAMILIES.map(r => <label key={r} className="consent"><input type="checkbox" name="roleFamilies" value={r} /> {r}</label>)}</fieldset>
     <fieldset className="full-field"><legend>Permitted seniority</legend>{SENIORITY.map(s => <label key={s} className="consent"><input type="checkbox" name="seniority" value={s} defaultChecked={s === "junior" || s === "mid"} /> {s}</label>)}</fieldset>
     <label>CTC band from (LPA)<input name="ctcMin" type="number" step={0.5} min={0} /></label>
@@ -46,13 +46,48 @@ function ParamsFields() {
   </div>;
 }
 
+function InviteClient({ plans, act }: { plans: Row[]; act: (action: string, body: object) => Promise<boolean> }) {
+  return <form className="admin-form" onSubmit={async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const form = e.currentTarget, f = new FormData(form);
+    const ok = await act("client-invite", { displayName: f.get("displayName"), legalName: f.get("legalName"), city: f.get("city"), website: f.get("website"), gstin: f.get("gstin"), ownerName: f.get("ownerName"), ownerEmail: f.get("ownerEmail"), guaranteeDays: Number(f.get("guaranteeDays")), nonSolicitMonths: Number(f.get("nonSolicitMonths")), feeTerms: f.get("feeTerms"), params: paramsFrom(f), plan: f.get("plan") });
+    if (ok) form.reset(); }}>
+    <div className="form-grid">
+      <label>Company name<input name="displayName" required maxLength={120} /></label><label>Registered legal name<input name="legalName" required maxLength={160} /></label>
+      <label>City<input name="city" maxLength={80} /></label><label>Website<input name="website" maxLength={200} /></label><label>GSTIN<input name="gstin" maxLength={15} /></label>
+      <label>Owner&apos;s name<input name="ownerName" maxLength={120} /></label><label>Owner&apos;s work email<input name="ownerEmail" type="email" required maxLength={254} /></label>
+      <label>Replacement guarantee (days)<input name="guaranteeDays" type="number" min={0} max={365} defaultValue={90} required /></label>
+      <label>Non-solicitation of placed people (months)<input name="nonSolicitMonths" type="number" min={0} max={36} defaultValue={12} required /></label>
+      <label className="full-field">Fee terms (shown to you only)<input name="feeTerms" maxLength={300} placeholder="e.g. 8.33% of annual fixed CTC, payable within 30 days of joining" /></label>
+    </div>
+    <ParamsFields />
+    <label>Starting plan<select name="plan">{plans.map(p => <option key={String(p.code)} value={String(p.code)}>{p.name} ({p.unlock_quota} unlocks, {p.validity_days} days)</option>)}</select></label>
+    <button className="button button-small">Create client and get sign-in link</button>
+  </form>;
+}
+
+function ManagedSearch({ jd, act }: { jd: Row; act: (action: string, body: object) => Promise<boolean> }) {
+  const [list, setList] = useState<Row[] | null>(null), [error, setError] = useState("");
+  const load = () => fetch(`/api/admin/portal/submission-candidates?jd=${jd.id}`, { cache: "no-store" }).then(r => r.json() as Promise<{ candidates?: Row[]; error?: string }>).then(d => { if (d.error) setError(d.error); else setList(d.candidates ?? []); }).catch(() => setError("Could not load candidates."));
+  return <article className="admin-detail"><div>
+    <b>{jd.title}</b> · {jd.company} <span className="pill">{jd.status}</span>
+    <p>{jd.openings} opening(s) · {jd.submitted} submitted · {jd.in_process} in process · {jd.joined} joined</p>
+    <button className="text-link" onClick={() => list ? setList(null) : load()}>{list ? "Hide candidates" : "Find candidates to submit"}</button>
+    {error && <p className="admin-help">{error}</p>}
+    {list && (list.length === 0 ? <p className="admin-help">No scored candidates for this job yet. Run scoring, or source candidates and ask them to upload a CV.</p> : list.map(c => <div className="admin-submit" key={String(c.candidate_id)}>
+      <p><b>{c.display_name || "Candidate"}</b> · {c.current_city || "city not stated"} · score {Math.round(Number(c.score))} (floor {Math.round(Number(c.lower_bound))}) · {Number(c.hard_pass) ? "meets the hard filters" : "misses a hard filter"}{Number(c.in_pipeline) ? " · already submitted" : ""}</p>
+      <p className="admin-help">{c.explanation}</p>
+      {!Number(c.in_pipeline) && <form className="admin-record-actions" onSubmit={async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const note = new FormData(e.currentTarget).get("note"); if (await act("submit-candidate", { companyId: jd.company_id, jdId: jd.id, candidateId: c.candidate_id, note })) load(); }}>
+        <input name="note" required maxLength={2000} placeholder="Recruiter note: why this candidate, notice, CTC, availability" style={{ minWidth: "min(420px, 100%)" }} /><button className="button button-small">Submit to client</button></form>}
+    </div>))}
+  </div></article>;
+}
+
 export default function PortalPanel() {
   const [o, setO] = useState<Overview | null>(null), [notice, setNotice] = useState(""), [open, setOpen] = useState<string | null>(null);
   const load = useCallback(() => fetch("/api/admin/portal/overview", { cache: "no-store" }).then(r => r.json() as Promise<Overview>).then(setO).catch(() => setNotice("The portal overview could not be loaded.")), []);
   useEffect(() => { load(); }, [load]);
   const act = async (action: string, body: object, confirm?: string) => {
-    if (confirm && !window.confirm(confirm)) return;
-    try { const d = await call(action, body); setNotice(d.link ? `${d.message} ${d.link}` : d.message ?? "Done."); await load(); } catch (e) { setNotice((e as Error).message); }
+    if (confirm && !window.confirm(confirm)) return false;
+    try { const d = await call(action, body); setNotice(d.link ? `${d.message} ${d.link}` : d.message ?? "Done."); await load(); return true; } catch (e) { setNotice((e as Error).message); return false; }
   };
   if (!o) return <p>Loading the job portal…</p>;
   const pending = o.companies.filter(c => c.status === "applied");
@@ -65,9 +100,26 @@ export default function PortalPanel() {
           <input name="email" type="email" placeholder="account email" required /><select name="purpose"><option value="verify">Verification link</option><option value="reset">Password reset link</option></select><button className="text-link">Issue link</button></form></div>
     </section>
 
+    <section className="admin-records"><h2>Clients</h2>
+      <p className="admin-help">Set up a client account yourself. This works while public registration is closed. You get a one-time link for the client&apos;s owner, valid for 7 days. If email is configured, the owner is also emailed.</p>
+      <button className="text-link" onClick={() => setOpen(open === "invite" ? null : "invite")}>{open === "invite" ? "Cancel" : "Invite a client"}</button>
+      {open === "invite" && <InviteClient plans={o.plans} act={async (a, b) => { const ok = await act(a, b); if (ok) setOpen(null); return ok; }} />}
+    </section>
+
+    <section className="admin-records"><h2>Managed searches <span>{o.clientWork?.managed.length ?? 0}</span></h2>
+      <p className="admin-help">Jobs where the client asked Jobboard300 to recruit. Submitting a candidate needs their consent to share. It uses no unlock quota; the fee is on placement.</p>
+      {(o.clientWork?.managed ?? []).length === 0 ? <p>None.</p> : o.clientWork!.managed.map(j => <ManagedSearch key={String(j.id)} jd={j} act={act} />)}
+    </section>
+
+    <section className="admin-records"><h2>Placements <span>{o.clientWork?.placements.length ?? 0}</span></h2>
+      {(o.clientWork?.placements ?? []).length === 0 ? <p>None yet.</p> : <table className="pj-table"><thead><tr><th>Client</th><th>Role</th><th>Joined</th><th>CTC</th><th>Guarantee until</th><th>No job approaches until</th><th>Fee terms</th><th>Status</th></tr></thead>
+        <tbody>{o.clientWork!.placements.map(p => <tr key={String(p.id)}><td>{p.company}</td><td>{p.title}</td><td>{p.joined_on}</td><td>{p.ctc_inr ? `₹${(Number(p.ctc_inr) / 100000).toFixed(1)} LPA` : ""}</td><td>{p.guarantee_ends_on}</td><td>{p.non_solicit_until}</td><td>{p.fee_terms}</td>
+          <td><select value={String(p.status)} onChange={e => act("placement-status", { placementId: p.id, status: e.target.value })}>{["active", "left_in_guarantee", "replaced", "left"].map(s => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select>{p.left_on ? ` · left ${p.left_on}` : ""}{p.note ? ` · ${p.note}` : ""}</td></tr>)}</tbody></table>}
+    </section>
+
     <section className="admin-records"><h2>Companies <span>{o.companies.length}</span></h2>
       {o.companies.map(c => <article className="admin-detail" key={String(c.id)}><div>
-        <b>{c.display_name}</b> <span className="pill">{c.status}</span><p>{c.legal_name} · {c.city} · {c.owner_email}</p>
+        <b>{c.display_name}</b> <span className="pill">{c.status}</span><p>{c.legal_name} · {c.city} · {c.owner_email} · guarantee {c.guarantee_days ?? 90} days · non-solicit {c.non_solicit_months ?? 12} months{c.fee_terms ? ` · ${c.fee_terms}` : ""}</p>
         {c.status === "applied" && <>
           <button className="text-link" onClick={() => setOpen(open === c.id ? null : String(c.id))}>{open === c.id ? "Cancel" : "Approve with matching parameters"}</button>
           {open === c.id && <form className="admin-form" onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); act("company-activate", { companyId: c.id, params: paramsFrom(f), plan: f.get("plan") }).then(() => setOpen(null)); }}>
@@ -78,6 +130,7 @@ export default function PortalPanel() {
           <select defaultValue="" onChange={e => e.target.value && act("plan-assign", { companyId: c.id, plan: e.target.value }, `Assign the ${e.target.value} plan? Record the invoice separately (payments are a stub).`)}><option value="">Assign plan…</option>{o.plans.filter(p => !p.is_free).map(p => <option key={String(p.code)} value={String(p.code)}>{p.name}</option>)}</select>
           <button className="text-link" onClick={() => { const d = window.prompt("Adjust unlock quota by (e.g. 10 or -5):"); const n = d && window.prompt("Reason:"); if (d && n) act("quota-adjust", { companyId: c.id, delta: Number(d), note: n }); }}>Adjust quota</button>
           <button className="text-link" onClick={() => setOpen(open === `p${c.id}` ? null : `p${c.id}`)}>Change parameters</button>
+          <button className="text-link" onClick={() => { const g = window.prompt("Replacement guarantee (days):", String(c.guarantee_days ?? 90)); if (g === null) return; const n = window.prompt("Months Jobboard300 will not approach people placed here about other jobs:", String(c.non_solicit_months ?? 12)); if (n === null) return; const t = window.prompt("Fee terms:", String(c.fee_terms ?? "")); if (t !== null) act("client-terms", { companyId: c.id, guaranteeDays: Number(g), nonSolicitMonths: Number(n), feeTerms: t }); }}>Client terms</button>
           <button className="delete-link" onClick={() => act("company-status", { companyId: c.id, status: "suspended" }, "Suspend this company? Its users lose access to the portal.")}>Suspend</button>
           {open === `p${c.id}` && <form className="admin-form" onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); act("company-params", { companyId: c.id, params: paramsFrom(new FormData(e.currentTarget)) }).then(() => setOpen(null)); }}><ParamsFields /><button className="button button-small">Save parameters</button></form>}
         </div>}

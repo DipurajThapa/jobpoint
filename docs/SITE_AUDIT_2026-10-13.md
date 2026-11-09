@@ -1,4 +1,4 @@
-# Job Point Consultancy — local source audit, 13 October 2026
+# Jobboard300 — local source audit, 13 October 2026
 
 **Scope and evidence.** Audited the actual `.sites-checkout` source tree on branch `audit/site-readiness-2026-10-13`, including page components, API routes, D1 schema, R2 access and source checks. This is a local code audit, not an audit of the public demo, its hosting environment or a measured browser session. The author of the local dummy fixture also performed this review; runtime controls need independent verification before live intake.
 
