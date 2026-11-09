@@ -119,7 +119,7 @@ export async function POST(request: Request, context: Ctx) {
       await enqueue(db, "candidate", id, "assessment").run();
       await drainQueue(db, portalSecret(), 300);
       await audit(db, account.id, "assessment.submitted", "candidate", id, out.onHold ? "on hold" : "ok");
-      return json({ ...out, message: out.onHold ? "Submitted. This attempt is on hold for a quick review before it counts; you can take a free verification test." : "Submitted. Your result now counts towards matching jobs." });
+      return json({ ...out, message: out.onHold ? "Submitted. This attempt is on hold for a quick review by Job Point before it counts. Your CV-based matching is not affected." : "Submitted. Your result now counts towards matching jobs." });
     }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }

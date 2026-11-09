@@ -1,6 +1,6 @@
 # Job portal Phase 1: plan for approval
 
-Status: **proposal, not built.** Nothing below is implemented until you approve it.
+Status: **built** (9 November 2026). This was the proposal. Where research changed a recommendation (free allowance 5 unlocks for 30 days; plan validity 90/180/365 days; Zoho ZeptoMail; deterministic matching with assessment-aware scoring), the build follows the research. How the portal works now: [PORTAL.md](PORTAL.md).
 Date: 9 November 2026. Base: `main` at `202c20e`, plus the CV screening engine in open draft PR #7.
 
 ---

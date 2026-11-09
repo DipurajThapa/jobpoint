@@ -479,6 +479,9 @@ await check("Assessment attempts: randomised forms, cooldown, yearly cap, rapid 
   assert.equal(held.onHold, true);
   const ev = await assess.skillEvidence(db, cand);
   assert.ok(ev.tally && ev.tally.label.includes("80%"), "held attempt not used; first attempt is the score of record");
+  await assess.decideHeldAttempt(db, second.attemptId, false, "admin");
+  assert.ok((await assess.skillEvidence(db, cand)).tally.label.includes("80%"), "voided attempt never counts");
+  await rejects(assess.decideHeldAttempt(db, second.attemptId, true, "admin"), "NOT_FOUND");
   tick(31 * 86_400_000);
   await assess.startAttempt(db, cand, aid);
   tick(31 * 86_400_000);
@@ -508,6 +511,29 @@ await check("Queue scores every live JD and releases automatically within parame
   const rel = (await db.prepare("SELECT candidate_id FROM releases WHERE jd_id = ? AND revoked_at IS NULL").bind(jd).all()).results.map(r => r.candidate_id);
   assert.deepEqual(rel, [good], JSON.stringify(rows.map(r => [r.candidate_id === good ? "good" : "poor", r.score, r.lower_bound, r.hard_pass])));
   assert.ok(!rel.includes(poor));
+});
+
+
+// ---------- Future services data model ----------
+await check("Services catalogue, orders and enrolments link to the candidate; payments are a stub", async () => {
+  const db = await setup();
+  const { seedServices } = await mod("plans.ts");
+  await seedServices(db);
+  const svc = await db.prepare("SELECT id, active FROM services WHERE code = 'spoken-english'").first();
+  assert.equal(svc.active, 0, "seeded inactive: no service screens in Phase 1");
+  const cand = await makeCandidate(db, "Service Buyer");
+  await db.batch([
+    db.prepare("INSERT INTO payment_intents (id, payer_kind, payer_id, purpose, ref_id, amount_inr, created_at) VALUES ('pi1', 'candidate', ?, 'service_order', 'o1', 4999, ?)").bind(cand, clock.toISOString()),
+    db.prepare("INSERT INTO service_orders (id, candidate_id, service_id, status, amount_inr, payment_intent_id, created_at, updated_at) VALUES ('o1', ?, ?, 'awaiting_payment', 4999, 'pi1', ?, ?)").bind(cand, svc.id, clock.toISOString(), clock.toISOString()),
+    db.prepare("INSERT INTO service_enrolments (id, order_id, candidate_id, batch_code, created_at) VALUES ('e1', 'o1', ?, 'SE-2027-01', ?)").bind(cand, clock.toISOString()),
+  ]);
+  assert.equal((await db.prepare("SELECT status FROM payment_intents WHERE id = 'pi1'").first()).status, "stub");
+  const { r2Keys } = await candidate.deleteCandidateData(db, cand, "candidate");
+  assert.ok(r2Keys.length >= 1);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM service_orders WHERE candidate_id = ?").bind(cand).first()).n, 0, "orders and enrolments go with account deletion");
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM service_enrolments").first()).n, 0);
+  const stub = await db.prepare("SELECT status, display_name, dedupe_email_hash FROM candidates WHERE id = ?").bind(cand).first();
+  assert.deepEqual([stub.status, stub.display_name, stub.dedupe_email_hash], ["deleted", "", ""], "only a content-free stub remains");
 });
 
 console.log(`\n${passed} portal checks passed.`);

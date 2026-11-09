@@ -1,13 +1,13 @@
 import { env } from "cloudflare:workers";
 import { isOwnerRequest } from "@/lib/admin";
 import { portalDb, portalSecret, json, fail, failFrom, sameOrigin } from "@/lib/portal/session";
-import { activateCompany, decideJd, decideParamRequest, requestParamChange } from "@/lib/portal/company";
+import { activateCompany, decideJd, decideParamRequest, enqueue, requestParamChange } from "@/lib/portal/company";
 import { adjustQuota, assignPlan, upsertPlans } from "@/lib/portal/quota";
-import { mergeCandidates, primaryProfile, resolveReview } from "@/lib/portal/candidate";
+import { mergeCandidates, primaryProfile, purgeExpiredStubs, resolveReview } from "@/lib/portal/candidate";
 import { drainQueue } from "@/lib/portal/queue";
 import { adminOverview } from "@/lib/portal/views";
-import { decideAssessment } from "@/lib/portal/assessment";
-import { DEFAULT_PLANS } from "@/lib/portal/plans";
+import { decideAssessment, decideHeldAttempt } from "@/lib/portal/assessment";
+import { DEFAULT_PLANS, seedServices } from "@/lib/portal/plans";
 import { audit } from "@/lib/portal/db";
 import { canonicalCity, seniorityFor } from "@/lib/portal/india";
 import { resolveSkill } from "@/lib/ats/taxonomy";
@@ -24,7 +24,7 @@ export async function GET(request: Request, context: Ctx) {
   try {
     if (action === "overview") {
       const plans = await db.prepare("SELECT COUNT(*) AS n FROM plans").first<{ n: number }>();
-      if (!plans?.n) await upsertPlans(db, DEFAULT_PLANS);
+      if (!plans?.n) { await upsertPlans(db, DEFAULT_PLANS); await seedServices(db); }
       return json(await adminOverview(db));
     }
     if (action === "review-cv") {
@@ -64,6 +64,12 @@ export async function POST(request: Request, context: Ctx) {
       case "params-decide": { const out = await decideParamRequest(db, s(b.requestId, 60), b.approve === true, admin, s(b.note, 500)); return done(b.approve === true ? `Parameters approved.${out.paused.length ? ` ${out.paused.length} live JD(s) paused.` : ""}` : "Request rejected."); }
       case "jd-decide": await decideJd(db, s(b.jdId, 60), b.approve === true, admin, s(b.note, 500)); return done(b.approve === true ? "JD is live. Matching CVs will be released automatically." : "JD rejected.");
       case "assessment-decide": await decideAssessment(db, s(b.assessmentId, 60), b.approve === true, admin); return json({ message: "Assessment decision saved." });
+      case "attempt-review": {
+        const candidateId = await decideHeldAttempt(db, s(b.attemptId, 60), b.accept === true, admin);
+        await enqueue(db, "candidate", candidateId, "assessment").run();
+        await drainQueue(db, portalSecret(), 300);
+        return json({ message: b.accept === true ? "Attempt cleared; it now counts." : "Attempt voided; it does not count." });
+      }
       case "review-resolve": {
         const id = s(b.candidateId, 60), p = await primaryProfile(db, id);
         if (!p) return fail("Candidate not found.", 404);
@@ -96,7 +102,7 @@ export async function POST(request: Request, context: Ctx) {
         await audit(db, admin, "portal.link_issued", "account", row.id, String(b.purpose ?? "verify"));
         return json({ link: `${new URL(request.url).origin}/portal/${b.purpose === "reset" ? "reset" : "verify"}?token=${token}`, message: "One-time link created. Send it to the account holder." });
       }
-      case "run-queue": return done("Scoring queue processed.");
+      case "run-queue": { const purged = await purgeExpiredStubs(db); return done(`Scoring queue processed.${purged ? ` ${purged} expired deletion record(s) purged.` : ""}`); }
       default: return fail("Unknown action.", 404);
     }
   } catch (error) { return failFrom(error); }

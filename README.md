@@ -12,6 +12,7 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 - Structured candidate fields, recruiter search, possible-duplicate flags and human-controlled application stages.
 - Mandatory PDF/DOCX CV upload (5 MB maximum), stored in private R2 and delivered only through an owner-protected admin endpoint.
 - Owner-only **CV screening (ATS)** in the admin console. It reads each CV into structured JSON, compares it with the client's job description and gives an explainable fit score with evidence. Recruiters make every decision; personal characteristics are removed before screening. See [docs/ATS_SCREENING.md](docs/ATS_SCREENING.md).
+- **Job portal (Phase 1)**, closed to registration until legal sign-off. Candidates upload CVs free; hiring companies post JDs that go live after admin approval. CVs are released automatically only within each company's admin-set parameters, as anonymised previews. Companies unlock full CVs from a quota plan, with watermarked downloads, rate limits and DPDP-style itemised consent. Optional skill tests feed the score. See [docs/PORTAL.md](docs/PORTAL.md).
 - Owner-only administration using Sites sign-in: create and publish roles, review applications and hiring enquiries, update statuses and notes, and delete records.
 - Privacy request queue for access/correction/deletion/withdrawal/grievance, identity verification step, consent/version records, retention review indicators and audit events for sensitive admin actions.
 - Job detail pages with `JobPosting` structured data, plus company and FAQ schema on the homepage.
@@ -56,6 +57,8 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 | `GET /api/admin/ats`; `GET, PUT /api/admin/ats/jobs/{id}` | Site owner | CV screening: roles, editable requirements, candidates ranked by fit |
 | `POST /api/admin/ats/screen`; `GET, PATCH /api/admin/ats/screenings/{id}` | Site owner | Screen a stored CV against a role; read the report; record the recruiter's review |
 | `POST /api/admin/ats/analyze` | Site owner | One-off check of a CV against a role or pasted JD (not stored) |
+| `/api/portal/auth/{action}`, `/api/portal/candidate/{action}`, `/api/portal/company/{action}` | Portal accounts | Job portal: sign-up and sign-in, candidate CV and consent, company JDs, previews and unlocks (see docs/PORTAL.md) |
+| `/api/admin/portal/{action}` | Site owner | Job portal administration: approvals, parameters, plans and quota, reviews, duplicates, abuse flags |
 | `POST /api/platform/auth/{sign-in,sign-out,accept,password}` | Public / signed in | Platform sign-in, sign-out, invitation or reset redemption, password change |
 | `GET, POST /api/platform/admin/users`; `PATCH, DELETE /api/platform/admin/users/{id}`; `POST …/{id}/link` | Platform administrator | Team list and activity, invite, role/status/tool levels, delete, one-time links |
 | `POST /api/platform/owner` | Site owner (SIWC) | First administrator; administrator recovery link |
@@ -74,7 +77,7 @@ The owner signs in at `/admin` using the owning ChatGPT account. Candidate recor
 
 ## Data model
 
-The immutable migrations are `drizzle/0000_job_point_recruitment.sql`, `drizzle/0001_recruitment_operations.sql`, `drizzle/0002_working_platform.sql`, `drizzle/0003_platform_operations.sql` and `drizzle/0004_ats_screening.sql` (CV screening: `ats_job_profiles`, `ats_screenings`). D1 tables: `jobs`, `applications`, `employer_enquiries`, `privacy_requests`, `audit_events` (now with `detail`), `rate_limits`, plus Working Platform `platform_users`, `platform_tool_access`, `platform_sessions`, `platform_tokens`, and Email Kit `email_kit_records`, `email_kit_state`, `email_kit_files`, `email_kit_snapshots`. Resume bytes stay in R2; D1 stores only a private object key and file metadata. The public role API excludes unpublished roles and all candidate/employer personal information.
+The immutable migrations are `drizzle/0000_job_point_recruitment.sql`, `drizzle/0001_recruitment_operations.sql`, `drizzle/0002_working_platform.sql`, `drizzle/0003_platform_operations.sql`, `drizzle/0004_ats_screening.sql` (CV screening: `ats_job_profiles`, `ats_screenings`) and `drizzle/0005_portal.sql` (job portal: accounts, candidates, consents, CVs, companies, parameters, JDs, matches, releases, unlocks, plans, quota ledger, assessments, future services, access log). D1 tables: `jobs`, `applications`, `employer_enquiries`, `privacy_requests`, `audit_events` (now with `detail`), `rate_limits`, plus Working Platform `platform_users`, `platform_tool_access`, `platform_sessions`, `platform_tokens`, and Email Kit `email_kit_records`, `email_kit_state`, `email_kit_files`, `email_kit_snapshots`. Resume bytes stay in R2; D1 stores only a private object key and file metadata. The public role API excludes unpublished roles and all candidate/employer personal information.
 
 ## Build and preview
 

@@ -332,7 +332,9 @@ function explain(S: number, SD: number, mustAll: Check[], nice: Check[], compone
   const why = weakest && weakest.mean! < 0.9
     ? lead && lead.key !== weakest.key
       ? `Ranks here on ${lead.label.toLowerCase()}; held back by ${weakest.label.toLowerCase()} (${weakest.detail.replace(/\.$/, "")}).`
-      : `Ranks here mainly on ${weakest.label.toLowerCase()}, which is only partly met (${weakest.detail.replace(/\.$/, "")}).`
+      : /requirements with evidence|found\./.test(weakest.detail) && weakest.detail.match(/^(\d+) of \1\b/)
+        ? `Ranks here on ${weakest.label.toLowerCase()}; some of the evidence comes from a summary or skills list rather than work history, and no skill test has confirmed it yet.`
+        : `Ranks here mainly on ${weakest.label.toLowerCase()}, which is only partly met (${weakest.detail.replace(/\.$/, "")}).`
     : `Ranks here because it meets the role's requirements across the board${verified.length ? ", with tested skills" : ""}.`;
   return { summary, meets, misses, why };
 }

@@ -14,7 +14,9 @@
     "db:generate": "drizzle-kit generate",
     "db:local": "node scripts/local-db.mjs",
     "check:platform": "node scripts/check-platform.mjs",
-    "check:ats": "node scripts/check-ats.mjs"
+    "check:ats": "node scripts/check-ats.mjs",
+    "check:portal": "node scripts/check-portal.mjs && node scripts/check-portal-ranking.mjs",
+    "check:portal-e2e": "node scripts/check-portal-e2e.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.4.0",

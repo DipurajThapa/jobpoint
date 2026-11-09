@@ -99,7 +99,7 @@ export async function unlockedCandidate(db: Db, companyId: string, ref: string) 
 
 export async function adminOverview(db: Db) {
   const q = (sql: string) => db.prepare(sql).all().then(r => r.results);
-  const [companies, paramRequests, pendingJds, reviews, duplicates, flags, log, queue] = await Promise.all([
+  const [companies, paramRequests, pendingJds, reviews, duplicates, flags, log, queue, heldAttempts] = await Promise.all([
     q("SELECT c.id, c.display_name, c.legal_name, c.city, c.status, c.created_at, (SELECT email FROM company_users cu JOIN portal_accounts a ON a.id = cu.account_id WHERE cu.company_id = c.id AND cu.role = 'owner' LIMIT 1) AS owner_email FROM companies c ORDER BY CASE c.status WHEN 'applied' THEN 0 ELSE 1 END, c.created_at DESC LIMIT 200"),
     q("SELECT p.id, p.company_id, c.display_name, p.version, p.params, p.created_at, (SELECT params FROM company_parameters x WHERE x.company_id = p.company_id AND x.status = 'approved') AS current FROM company_parameters p JOIN companies c ON c.id = p.company_id WHERE p.status = 'requested' ORDER BY p.created_at"),
     q("SELECT j.id, j.title, j.company_id, c.display_name, j.requirements, j.raw_text, j.updated_at FROM jds j JOIN companies c ON c.id = j.company_id WHERE j.status = 'pending' ORDER BY j.updated_at"),
@@ -111,7 +111,8 @@ export async function adminOverview(db: Db) {
        UNION ALL SELECT 'unlock', u.unlocked_at, c.display_name, j.title, u.candidate_ref, (SELECT score FROM matches m WHERE m.jd_id = u.first_jd_id AND m.candidate_id = u.candidate_id), u.access_revoked_at FROM unlocks u JOIN companies c ON c.id = u.company_id JOIN jds j ON j.id = u.first_jd_id
        ORDER BY at DESC LIMIT 300`),
     db.prepare("SELECT COUNT(*) AS n FROM score_queue").first<{ n: number }>(),
+    q("SELECT a.id, a.candidate_id, k.display_name, s.title, a.score, a.integrity, a.submitted_at FROM assessment_attempts a JOIN assessments s ON s.id = a.assessment_id JOIN candidates k ON k.id = a.candidate_id WHERE a.integrity_status = 'review' AND a.status = 'submitted' ORDER BY a.submitted_at LIMIT 100"),
   ]);
   const { results: plans } = await db.prepare("SELECT code, name, unlock_quota, validity_days, price_inr, is_free FROM plans WHERE active = 1 ORDER BY unlock_quota").all();
-  return { companies, paramRequests, pendingJds, reviews, duplicates, flags, log, queue: queue?.n ?? 0, plans };
+  return { companies, paramRequests, pendingJds, reviews, duplicates, flags, log, queue: queue?.n ?? 0, plans, heldAttempts };
 }

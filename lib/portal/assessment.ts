@@ -216,3 +216,16 @@ export async function recomputeItemStats(db: Db, assessmentId: string, minAttemp
   if (statements.length) await db.batch(statements);
   return { items: k, attempts: attempts.length, reliability: kr20 };
 }
+
+/**
+ * Admin decision on an attempt held for integrity review. Clearing it lets the
+ * score count; voiding it removes it from the score of record. Neither applies
+ * a penalty. The caller re-scores the candidate afterwards.
+ */
+export async function decideHeldAttempt(db: Db, attemptId: string, accept: boolean, actor: string) {
+  const row = await db.prepare("SELECT candidate_id FROM assessment_attempts WHERE id = ? AND integrity_status = 'review'").bind(attemptId).first<{ candidate_id: string }>();
+  if (!row) throw new PortalError("NOT_FOUND", "No attempt on hold with that ID.", 404);
+  await db.prepare("UPDATE assessment_attempts SET integrity_status = ? WHERE id = ? AND integrity_status = 'review'").bind(accept ? "ok" : "voided", attemptId).run();
+  await audit(db, actor, accept ? "attempt.cleared" : "attempt.voided", "candidate", row.candidate_id, attemptId);
+  return row.candidate_id;
+}
