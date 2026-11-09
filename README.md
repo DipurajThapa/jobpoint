@@ -90,13 +90,15 @@ The immutable migrations are `drizzle/0000_job_point_recruitment.sql`, `drizzle/
 
 Use the Sites-managed starter workflow. The package lock is unchanged. After installing dependencies, generate or verify migration metadata with `npm run db:generate`, then run the Sites build command. Local D1 preview and hosted D1 are separate databases. Do not expose the admin routes or resume objects publicly.
 
+**Live intake is on** (`DEMO_MODE = false` in `lib/demo.ts` since 9 November 2026): the public application, employer enquiry and privacy request forms accept submissions and the site may be indexed. Set it back to `true` to return to a read-only demo. Portal self-registration is separate and stays closed until `PORTAL_OPEN=true`.
+
 The operating recommendation and decisions are in [docs/DIGITAL_RECRUITMENT_BLUEPRINT.md](docs/DIGITAL_RECRUITMENT_BLUEPRINT.md). Before public intake, Jobboard300 must confirm its legal identity and privacy contact, processor and storage arrangements, retention and deletion policy, backup restore process, CV malware-scanning approach, breach response, and any domestic/overseas recruiting obligations. The public privacy notice names these release dependencies. Sites published version 5 as a public read-only demo on 13 October 2026. Browser/API/security verification remains incomplete; do not accept live PII until these gates are verified.
 
 ## Demo verification
 
 Working Platform: with `npm run dev` running, `npm run db:local` applies the migrations to the local D1 (`-- --reset` starts empty). Then run `USHA_STANDALONE=/path/to/Usha-3.0.html npm run check:platform`. It is a browser and API test of the whole journey with fictional data, and blocks every external request.
 
-Run `node --experimental-vm-modules scripts/check-demo.mjs` for the read-only intake and anonymous admin boundary checks. Run `node --experimental-vm-modules scripts/check-local-dummy-jobs.mjs` for local-only sample vacancy behavior. Native Sites remote build validates the complete TSX bundle. Public URL access must be confirmed using Sites access settings; local tests do not prove the platform authentication boundary.
+Run `node --experimental-vm-modules scripts/check-demo.mjs` for the intake boundary (read-only in demo mode; cross-site submissions refused when live) and anonymous admin checks. Run `node --experimental-vm-modules scripts/check-local-dummy-jobs.mjs` for local-only sample vacancy behavior. Native Sites remote build validates the complete TSX bundle. Public URL access must be confirmed using Sites access settings; local tests do not prove the platform authentication boundary.
 
 ## Website audit
 
