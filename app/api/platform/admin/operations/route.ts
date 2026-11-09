@@ -108,7 +108,7 @@ export async function POST(request: Request) {
         const token = await decryptToken(row.encrypted_token);
         const headers:Record<string,string> = {accept:"application/json",...(token ? {authorization:`Bearer ${token}`} : {})};
         const response = await fetch(row.endpoint, {method:row.kind === "mcp" ? "POST" : "GET",redirect:"error",signal:AbortSignal.timeout(5000),headers:row.kind === "mcp" ? {...headers,"content-type":"application/json"} : headers,
-          ...(row.kind === "mcp" ? {body:JSON.stringify({jsonrpc:"2.0",id:1,method:"initialize",params:{protocolVersion:"2025-03-26",capabilities:{},clientInfo:{name:"Job Point Working Platform",version:"1.0"}}})} : {})});
+          ...(row.kind === "mcp" ? {body:JSON.stringify({jsonrpc:"2.0",id:1,method:"initialize",params:{protocolVersion:"2025-03-26",capabilities:{},clientInfo:{name:"Jobboard300 Working Platform",version:"1.0"}}})} : {})});
         httpStatus = response.status;
         if (response.ok && row.kind === "mcp") {
           const payload = await response.json() as {result?:{capabilities?:{tools?:unknown}}};

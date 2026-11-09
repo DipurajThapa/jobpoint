@@ -107,7 +107,7 @@ export default function PortalPanel() {
     </section>
 
     <section className="admin-records"><h2>Managed searches <span>{o.clientWork?.managed.length ?? 0}</span></h2>
-      <p className="admin-help">Jobs where the client asked Job Point to recruit. Submitting a candidate needs their consent to share. It uses no unlock quota; the fee is on placement.</p>
+      <p className="admin-help">Jobs where the client asked Jobboard300 to recruit. Submitting a candidate needs their consent to share. It uses no unlock quota; the fee is on placement.</p>
       {(o.clientWork?.managed ?? []).length === 0 ? <p>None.</p> : o.clientWork!.managed.map(j => <ManagedSearch key={String(j.id)} jd={j} act={act} />)}
     </section>
 
@@ -130,7 +130,7 @@ export default function PortalPanel() {
           <select defaultValue="" onChange={e => e.target.value && act("plan-assign", { companyId: c.id, plan: e.target.value }, `Assign the ${e.target.value} plan? Record the invoice separately (payments are a stub).`)}><option value="">Assign plan…</option>{o.plans.filter(p => !p.is_free).map(p => <option key={String(p.code)} value={String(p.code)}>{p.name}</option>)}</select>
           <button className="text-link" onClick={() => { const d = window.prompt("Adjust unlock quota by (e.g. 10 or -5):"); const n = d && window.prompt("Reason:"); if (d && n) act("quota-adjust", { companyId: c.id, delta: Number(d), note: n }); }}>Adjust quota</button>
           <button className="text-link" onClick={() => setOpen(open === `p${c.id}` ? null : `p${c.id}`)}>Change parameters</button>
-          <button className="text-link" onClick={() => { const g = window.prompt("Replacement guarantee (days):", String(c.guarantee_days ?? 90)); if (g === null) return; const n = window.prompt("Months Job Point will not approach people placed here about other jobs:", String(c.non_solicit_months ?? 12)); if (n === null) return; const t = window.prompt("Fee terms:", String(c.fee_terms ?? "")); if (t !== null) act("client-terms", { companyId: c.id, guaranteeDays: Number(g), nonSolicitMonths: Number(n), feeTerms: t }); }}>Client terms</button>
+          <button className="text-link" onClick={() => { const g = window.prompt("Replacement guarantee (days):", String(c.guarantee_days ?? 90)); if (g === null) return; const n = window.prompt("Months Jobboard300 will not approach people placed here about other jobs:", String(c.non_solicit_months ?? 12)); if (n === null) return; const t = window.prompt("Fee terms:", String(c.fee_terms ?? "")); if (t !== null) act("client-terms", { companyId: c.id, guaranteeDays: Number(g), nonSolicitMonths: Number(n), feeTerms: t }); }}>Client terms</button>
           <button className="delete-link" onClick={() => act("company-status", { companyId: c.id, status: "suspended" }, "Suspend this company? Its users lose access to the portal.")}>Suspend</button>
           {open === `p${c.id}` && <form className="admin-form" onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); act("company-params", { companyId: c.id, params: paramsFrom(new FormData(e.currentTarget)) }).then(() => setOpen(null)); }}><ParamsFields /><button className="button button-small">Save parameters</button></form>}
         </div>}

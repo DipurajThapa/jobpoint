@@ -35,7 +35,7 @@ export async function GET(request: Request, context: Ctx) {
       const p = await primaryProfile(db, id);
       const consents = (await db.prepare("SELECT purpose, action, notice_version, at FROM candidate_consents WHERE candidate_id = ? ORDER BY at").bind(id).all()).results;
       return new Response(JSON.stringify({ exportedAt: nowIso(), profile: p?.profile ?? null, consents, applications: await candidateApplications(db, id), sharedWith: await candidateSharing(db, id) }, null, 2),
-        { headers: { "content-type": "application/json", "content-disposition": 'attachment; filename="job-point-my-data.json"', "cache-control": "no-store" } });
+        { headers: { "content-type": "application/json", "content-disposition": 'attachment; filename="jobboard300-my-data.json"', "cache-control": "no-store" } });
     }
     if (action === "attempt") return json(await attemptQuestions(db, url.searchParams.get("id") ?? "", id));
     if (action === "companies") {
@@ -76,7 +76,7 @@ export async function POST(request: Request, context: Ctx) {
       try { result = await ingestCv(db, env.BUCKET ?? null, id, { bytes: new Uint8Array(await file.arrayBuffer()), fileName: file.name.replace(/[\\/\r\n\0]/g, "_").slice(0, 140), knownName: cand?.display_name, knownLocation: cand?.current_city }); }
       catch (error) { if (error instanceof CvReadError) return fail(error.message, 422, "UNREADABLE"); throw error; }
       await drainQueue(db, portalSecret(), 300);
-      return json({ status: result.status, profile: result.profile, message: result.status === "parsed" ? "Your CV has been read. Check the details below and correct anything we got wrong." : "We could not read your CV automatically (it may be a scanned image). A Job Point reviewer will check it; nothing has been lost." }, 201);
+      return json({ status: result.status, profile: result.profile, message: result.status === "parsed" ? "Your CV has been read. Check the details below and correct anything we got wrong." : "We could not read your CV automatically (it may be a scanned image). A Jobboard300 reviewer will check it; nothing has been lost." }, 201);
     }
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     if (action === "profile") {
@@ -119,7 +119,7 @@ export async function POST(request: Request, context: Ctx) {
       await enqueue(db, "candidate", id, "assessment").run();
       await drainQueue(db, portalSecret(), 300);
       await audit(db, account.id, "assessment.submitted", "candidate", id, out.onHold ? "on hold" : "ok");
-      return json({ ...out, message: out.onHold ? "Submitted. This attempt is on hold for a quick review by Job Point before it counts. Your CV-based matching is not affected." : "Submitted. Your result now counts towards matching jobs." });
+      return json({ ...out, message: out.onHold ? "Submitted. This attempt is on hold for a quick review by Jobboard300 before it counts. Your CV-based matching is not affected." : "Submitted. Your result now counts towards matching jobs." });
     }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }
@@ -129,6 +129,6 @@ export async function POST(request: Request, context: Ctx) {
 async function notifyCompanies(db: ReturnType<typeof portalDb>, companyIds: string[]) {
   for (const companyId of companyIds) {
     const { results } = await db.prepare("SELECT a.email FROM company_users cu JOIN portal_accounts a ON a.id = cu.account_id WHERE cu.company_id = ? AND a.status = 'active'").bind(companyId).all<{ email: string }>();
-    for (const r of results) await sendMail({ to: r.email, subject: "Job Point: delete a candidate's CV", text: "A candidate whose CV your company unlocked on Job Point has withdrawn consent. Their profile is no longer available to you. Under your Job Point terms, delete any copy you downloaded within 15 days." });
+    for (const r of results) await sendMail({ to: r.email, subject: "Jobboard300: delete a candidate's CV", text: "A candidate whose CV your company unlocked on Jobboard300 has withdrawn consent. Their profile is no longer available to you. Under your Jobboard300 terms, delete any copy you downloaded within 15 days." });
   }
 }

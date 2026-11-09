@@ -1,6 +1,6 @@
 # Email Kit
 
-Email Kit is the Job Point team's employer-outreach workspace inside
+Email Kit is the Jobboard300 team's employer-outreach workspace inside
 [Working Platform](../../docs/WORKING_PLATFORM_ADMIN_GUIDE.md). It prepares
 first emails, replies and follow-ups, keeps each employer conversation's
 history, and enforces Do not contact restrictions. It never sends anything.
@@ -14,7 +14,7 @@ rules, templates, lifecycle engine and safeguards. What changed:
 
 | | Usha 3.0 (standalone) | Email Kit 3.1 (Working Platform) |
 |---|---|---|
-| Where records live | IndexedDB in one browser profile | Job Point D1 database (records) and private R2 (attachments, daily recovery copies) |
+| Where records live | IndexedDB in one browser profile | Jobboard300 D1 database (records) and private R2 (attachments, daily recovery copies) |
 | Who can open it | Anyone with the device | Signed-in team members with Email Kit access (View, Edit or Manage) |
 | Do not contact list | Per device | One shared list. The server refuses deleting, narrowing or moving a restriction; lifting needs a stated reason and is audited |
 | History "recorded by" | Typed sender name | The signed-in person |

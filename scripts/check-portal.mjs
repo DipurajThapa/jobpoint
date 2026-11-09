@@ -626,21 +626,21 @@ await check("Another company cannot read or change this company's pipeline, inte
   assert.equal((await client.clientOverview(db, other.id)).upcoming.length, 0);
 });
 
-await check("Job Point submissions: managed live job, candidate consent and hidden list respected; no unlock quota used", async () => {
+await check("Jobboard300 submissions: managed live job, candidate consent and hidden list respected; no unlock quota used", async () => {
   const { db, comp, jd } = await releasedSetup(0);
   const before = (await quota.quotaStatus(db, comp.id)).remaining;
   const cand = await makeCandidate(db, "Managed Candidate");
-  await rejects(client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "Fits" }, "admin"), "NOT_MANAGED");
+  await rejects(client.submitByRecruiter(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "Fits" }, "admin"), "NOT_MANAGED");
   await client.setJdService(db, comp.id, jd, "managed", 2, comp.userId);
-  await rejects(client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "" }, "admin"), "NOTE");
+  await rejects(client.submitByRecruiter(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "" }, "admin"), "NOTE");
   const noConsent = await makeCandidate(db, "No Consent", { consentShare: false });
-  await rejects(client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: noConsent, note: "Fits" }, "admin"), "NO_CONSENT");
+  await rejects(client.submitByRecruiter(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: noConsent, note: "Fits" }, "admin"), "NO_CONSENT");
   const hider = await makeCandidate(db, "Hider");
   await db.prepare("UPDATE candidates SET hidden_company_ids = ? WHERE id = ?").bind(JSON.stringify([comp.id]), hider).run();
-  await rejects(client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: hider, note: "Fits" }, "admin"), "HIDDEN");
-  const out = await client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "4 yrs Tally and GST; 30 days notice" }, "admin");
+  await rejects(client.submitByRecruiter(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: hider, note: "Fits" }, "admin"), "HIDDEN");
+  const out = await client.submitByRecruiter(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "4 yrs Tally and GST; 30 days notice" }, "admin");
   assert.equal(out.ref, await dbm.candidateRef(SECRET, comp.id, cand), "same reference the company would see");
-  await rejects(client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "again" }, "admin"), "ALREADY_SUBMITTED");
+  await rejects(client.submitByRecruiter(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "again" }, "admin"), "ALREADY_SUBMITTED");
   assert.equal((await quota.quotaStatus(db, comp.id)).remaining, before, "no unlock quota used");
   const view = (await client.pipelineView(db, comp.id))[0];
   assert.deepEqual([view.stage, view.source, view.recruiterNote, view.name], ["submitted", "job_point", "4 yrs Tally and GST; 30 days notice", "Managed Candidate"]);

@@ -22,7 +22,7 @@ export default function PrivacyRequestForm() {
     <input name="website" className="honeypot" tabIndex={-1} autoComplete="off" aria-hidden="true" />
     <label>Request type<select name="requestType" required><option value="access">Access my information</option><option value="correction">Correct my information</option><option value="deletion">Delete my information</option><option value="withdrawal">Withdraw consent</option><option value="grievance">Raise a privacy concern</option></select></label>
     <label>Your name<input name="requesterName" required maxLength={120} autoComplete="name" /></label>
-    <label>Email used with Job Point<input name="email" type="email" required maxLength={254} autoComplete="email" /></label>
+    <label>Email used with Jobboard300<input name="email" type="email" required maxLength={254} autoComplete="email" /></label>
     <label>Details (optional)<textarea name="details" rows={3} maxLength={1200} placeholder="Tell us what you would like corrected or reviewed." /></label>
     {!DEMO_MODE && <button className="button" disabled={busy}>{busy ? "Submitting…" : "Send privacy request"}</button>}</fieldset>
     {message && <p role="status" className="form-message">{message}</p>}

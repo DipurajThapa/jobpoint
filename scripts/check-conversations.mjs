@@ -6,7 +6,7 @@ const root = resolve(import.meta.dirname, "../tools/email-kit/src");
 const source = ["config.js","library.js","rules.js","engine.js","conversation.js"].map(f=>readFileSync(resolve(root,f),"utf8")).join("\n");
 const { CONFIG, Rules, Engine, Conversation, applyAgency } = new Function(`${source}\nreturn {CONFIG,Rules,Engine,Conversation,applyAgency};`)();
 applyAgency(null);
-assert.equal(CONFIG.firm.name,"Job Point Consultancy");
+assert.equal(CONFIG.firm.name,"Jobboard300");
 assert.equal(CONFIG.profileVersion,"platform-identity-v1");
 const today = "2026-11-03";
 const advice = (lastSpeaker,lastDate,rest={}) => Conversation.advise({lastSpeaker,lastDate,scenario:"after-reply",...rest},today);

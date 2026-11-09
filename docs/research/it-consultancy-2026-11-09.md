@@ -1,6 +1,6 @@
 > Research notes for the IT-hiring focus, 9 November 2026. Facts come from search-engine extracts of the cited pages; confidence is marked per finding. Recommendations are labelled as such. Not legal advice.
 
-# Research report for Job Point Consultancy: IT recruitment services, products and compliance
+# Research report for Jobboard300: IT recruitment services, products and compliance
 
 **Prepared:** 9 November 2026
 
@@ -41,7 +41,7 @@ Most of these figures come from vendor blogs, not audited benchmarks.
 - **Contractor licence:** the Occupational Safety, Health and Working Conditions (OSH) Code took effect on 21 Nov 2025 and absorbed the Contract Labour Act. A contractor needs a licence at **50 or more contract workers** (previously 20). The licence is valid for 5 years, and a single all-India licence is possible. **M–H** ([LKS](https://employmentlaw.lkslaw.com/labour-codes/osh), [Counselence PDF](https://counselence.com/wp-content/uploads/2025/11/CEC-Labour-Code-Overview-of-the-OSH-Code-November-28-2025.pdf))
 - **GST:** 18% applies to permanent placement (SAC 998512) and contract staffing or manpower supply (998513). Executive search is SAC 998511. **M** ([cleartax](https://cleartax.in/s/support-services-gst-rates-sac-code-9985))
 
-### Recommendation for Job Point
+### Recommendation for Jobboard300
 - **Now:**
   - Permanent placement of IT mid-level and junior roles. Charge 8.33% at entry level and 10–12.5% for niche or mid-level, with a 60–90 day replacement guarantee and invoicing on joining.
   - Fresher and campus hiring for local Durgapur and Kolkata colleges.
@@ -111,7 +111,7 @@ This split is my analysis, based on which features recur across these vendors.
 - **Moonlighting:** Wipro dismissed about 300 staff found working for rivals (Rishad Premji, Aug–Sep 2022). Infosys confirmed firing employees for dual employment, while allowing approved gig work (Oct 2022). **H** ([Outlook Business](https://www.outlookbusiness.com/news/wipro-found-300-staff-working-with-rivals-at-same-time-stand-by-my-comment-on-moonlighting-rishad-premji-news-224833), [ThePrint](https://theprint.in/economy/infosys-does-not-support-dual-employment-have-fired-violators-in-last-12-months-salil-parekh/1166823))
   - That overlapping PF contribution periods reveal dual employment is my inference, not a sourced method. I found no 2025–26 policy update from either company.
 
-### Recommendation: what Job Point's system should track
+### Recommendation: what Jobboard300's system should track
 - For each candidate:
   - Contractual notice period, negotiated LWD, buyout possibility or amount, and whether the employer will reimburse it.
   - Competing offers and their stage, plus a counter-offer risk flag.
@@ -146,7 +146,7 @@ This split is my analysis, based on which features recur across these vendors.
   - Indirect evidence fits, if you treat 18 months as when people *leave* rather than when they start looking. A 1.4-year median tenure (about 17 months) and a 60–90 day notice period imply that job searching typically starts around **12–15 months** after joining. That is my inference.
 - **Early-career versus mid-career:** early-career tenure is clearly shorter (Xpheno; Randstad 1.1 vs 1.8 years). Reports say GCCs draw talent with under 5 years' experience away from IT services firms (May 2025). I found no attrition breakdown by years of experience: **UNVERIFIED**.
 
-### Recommendation for Job Point
+### Recommendation for Jobboard300
 - Schedule consented career check-ins at about **9–12 months** after placement, and again around the April–June appraisal season. That appraisal timing is my assumption, not sourced.
 - Run a lighter check-in at 6 months for freshers and people with 0–3 years' experience.
 - Never time an approach to a placed candidate inside the client's non-solicit period (see Q6).
@@ -171,7 +171,7 @@ This split is my analysis, based on which features recur across these vendors.
 | **Oracle University** (yes) | All Foundations courses and certifications stay free. In 2026 Oracle also made the OCI Architect Associate course and certification free. | Other professional certifications | Not researched | No API found | M ([Oracle blog](https://blogs.oracle.com/oracleuniversity/post/oracles-race-to-certification-2025-empowering-a-new-era-of-tech-talent)). Race to Certification 2025 ended 31 Oct 2025. |
 | **freeCodeCamp** (yes) | Everything, including new exam-based certifications (Certified Full Stack Developer: exam plus capstone, valid 3 years). Legacy certifications expected to expire by end-2027. | — | None | Curriculum is on GitHub; licence UNVERIFIED | M ([freeCodeCamp](https://www.freecodecamp.org/news/freecodecamp-turns-10-major-curriculum-updates)) |
 
-### Recommendation for Job Point
+### Recommendation for Jobboard300
 - **Now:** build a hand-curated "learning path" list per role (QA, DevOps, data, support) linking to free courses. Use NPTEL, Oracle Foundations, AWS Educate and Skill Builder, Microsoft Learn, Cisco and freeCodeCamp. Present FutureSkills Prime as the route to *paid* certifications with a government incentive.
 - **Next:** approach FutureSkills Prime about becoming an ecosystem or training partner. This is the only programme found with a clear partner route that suits an Indian SME.
 - **Later:** automate Microsoft course recommendations through the authenticated Learn Platform API. For the other programmes, store curated links and re-check them every quarter, because no public APIs were found.
@@ -199,7 +199,7 @@ This split is my analysis, based on which features recur across these vendors.
 - **Email:** Gmail and Yahoo bulk-sender rules (about 5,000+ messages a day to Gmail) require SPF, DKIM and DMARC, one-click unsubscribe (RFC 8058) honoured within about 2 days, and a spam rate below 0.3%. **M**
 - **Calls and SMS:** TRAI's TCCCPR rules on commercial communications were amended on 12 Feb 2025. Promotional calls must use the 140 number series, service and transactional calls the 1600 series, and ordinary 10-digit numbers are barred for telemarketing. **H** ([TRAI press release 11/2025](https://cms.trai.gov.in/sites/default/files/2025-02/PR_No.11of2025.pdf))
 
-### Recommendation for Job Point
+### Recommendation for Jobboard300
 - Collect three separate tick-boxes:
   - (a) processing for the current application
   - (b) talent pool or future roles
@@ -222,7 +222,7 @@ This split is my analysis, based on which features recur across these vendors.
 | **Stack Overflow Developer Survey 2025** (49,009 responses; covers 314 technologies) | ODbL 1.0, which requires share-alike for public derived databases. CSV available on GitHub. | M ([survey.stackoverflow.co](https://survey.stackoverflow.co/)) |
 | **IT-ITeS Sector Skill Council (NASSCOM) qualification packs** | Published on the government's National Qualifications Register (nqr.gov.in), e.g. Software Test Engineer, IT Technical Support Executive, Junior Software Developer. Reuse licence not found. | UNVERIFIED |
 
-### Recommendation for Job Point
+### Recommendation for Jobboard300
 - Seed the skills taxonomy from **ESCO** for skills and occupations, with **O\*NET** "Hot Technologies" for tool names. Both are safe for commercial use with attribution.
 - Use the SSC NASSCOM role titles from NQR for *Indian role names only*, typed in by hand, until reuse terms are confirmed.
 - Use Stack Overflow tech names as a cross-check only. Do not ship a derived database, because of ODbL share-alike.

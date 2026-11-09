@@ -1,7 +1,7 @@
 "use client";
 // Client workspace: overview (pipeline funnel, interviews, offers awaiting
 // joining, placements and their replacement guarantee, hiring speed), jobs
-// (self-service or managed by Job Point), ranked anonymised matches per job,
+// (self-service or managed by Jobboard300), ranked anonymised matches per job,
 // unlock, full CV after unlock, the hiring pipeline with interviews and
 // feedback, the team, and matching rules.
 import { useCallback, useEffect, useState, type FormEvent } from "react";
@@ -44,7 +44,7 @@ export default function CompanyApp({ owner }: { owner: boolean }) {
   const active = dash?.company.status === "active";
   return <>
     <header className="pj-top">
-      <a className="pj-brand" href="/company">Job Point · {dash?.company.display_name ?? "Hiring"}</a>
+      <a className="pj-brand" href="/company">Jobboard300 · {dash?.company.display_name ?? "Hiring"}</a>
       <nav aria-label="Company">
         <button aria-current={view.name === "home" ? "page" : undefined} onClick={() => go({ name: "home" })}>Overview</button>
         <button aria-current={view.name === "jobs" || view.name === "new" ? "page" : undefined} onClick={() => go({ name: "jobs" })}>Jobs</button>
@@ -55,8 +55,8 @@ export default function CompanyApp({ owner }: { owner: boolean }) {
       <form onSubmit={e => { e.preventDefault(); signOut(); }}><button>Sign out</button></form>
     </header>
     <main className="pj-main">
-      {notice && <p className={`pj-notice ${notice.bad ? "bad" : "good"}`} role="status">{notice.text}{notice.upgrade && <> <b>Upgrade:</b> contact Job Point to move to Starter (100 unlocks), Growth (250) or Pro (500).</>}</p>}
-      {dash && !active && <section className="pj-card"><h2>Your account is being reviewed</h2><p>Job Point checks every hiring company and sets the rules for which CVs you receive. You can post jobs once your account is approved.</p></section>}
+      {notice && <p className={`pj-notice ${notice.bad ? "bad" : "good"}`} role="status">{notice.text}{notice.upgrade && <> <b>Upgrade:</b> contact Jobboard300 to move to Starter (100 unlocks), Growth (250) or Pro (500).</>}</p>}
+      {dash && !active && <section className="pj-card"><h2>Your account is being reviewed</h2><p>Jobboard300 checks every hiring company and sets the rules for which CVs you receive. You can post jobs once your account is approved.</p></section>}
       {dash && view.name === "home" && <OverviewView dash={dash} say={say} reload={load} go={(name, jd) => setView(name === "pipeline" ? { name: "pipeline", jd } : { name: "jobs" })} />}
       {dash && view.name === "jobs" && <Home dash={dash} active={active} post={() => setView({ name: "new" })} open={(id, title) => setView({ name: "matches", id, title })} edit={id => setView({ name: "jd", id })} pipeline={jd => setView({ name: "pipeline", jd })} />}
       {view.name === "pipeline" && <Pipeline jd={view.jd} jobs={dash?.overview.jobs ?? []} say={say} reload={load} profile={ref => setView({ name: "candidate", ref })} />}
@@ -85,7 +85,7 @@ function OverviewView({ dash, say, reload, go }: { dash: Dashboard; say: (t: str
   const steps: [string, string][] = [["submitted", "To review"], ["shortlisted", "Shortlisted"], ["interview", "Interviewing"], ["offered", "Offer made"], ["offer_accepted", "Offer accepted"], ["joined", "Joined"]];
   return <>
     <div className="pj-stats">
-      <div><span className="pj-muted">Candidates in process</span><b>{inProcess}</b><span className="pj-muted">{f.submitted ? `${f.submitted} from Job Point waiting for your review` : "Across your open jobs"}</span></div>
+      <div><span className="pj-muted">Candidates in process</span><b>{inProcess}</b><span className="pj-muted">{f.submitted ? `${f.submitted} from Jobboard300 waiting for your review` : "Across your open jobs"}</span></div>
       <div><span className="pj-muted">Interviews in the next 14 days</span><b>{o.upcoming.length}</b><span className="pj-muted">{o.needsFeedback.length ? `${o.needsFeedback.length} past interview(s) need feedback` : "All feedback recorded"}</span></div>
       <div><span className="pj-muted">Offers awaiting joining</span><b>{o.joining.length}</b><span className="pj-muted">Offer acceptance {o.metrics.offerAcceptance === null ? "—" : `${o.metrics.offerAcceptance}%`}</span></div>
       <div><span className="pj-muted">Hires</span><b>{o.placements.length}</b><span className="pj-muted">{o.placements.filter(p => p.inGuarantee).length} inside the replacement guarantee</span></div>
@@ -103,7 +103,7 @@ function OverviewView({ dash, say, reload, go }: { dash: Dashboard; say: (t: str
     </section>
     {o.joining.length > 0 && <section className="pj-card"><h2>Offers accepted, waiting to join</h2>
       <table className="pj-table"><thead><tr><th>Candidate</th><th>Job</th><th>Expected joining</th><th>Last day at current job</th><th>Offered CTC</th><th>Follow-up</th></tr></thead><tbody>{o.joining.map(j => <tr key={j.id}><td>{j.name}{j.competing_offers ? <span className="pj-muted"> · other offers: {j.competing_offers}</span> : ""}</td><td>{j.jd_title}</td><td>{fmtDate(j.joining_date)}</td><td>{fmtDate(j.last_working_day) || "—"}</td><td>{lpa(j.offer_ctc_inr)}</td><td>{j.checkpoint?.label}</td></tr>)}</tbody></table>
-      <p className="pj-muted">In Indian IT hiring, a large share of accepted offers never turn into a joining, often because of counter-offers during long notice periods. Call the candidate 30, 14, 7 and 1 day(s) before joining. Job Point can do this for you.</p></section>}
+      <p className="pj-muted">In Indian IT hiring, a large share of accepted offers never turn into a joining, often because of counter-offers during long notice periods. Call the candidate 30, 14, 7 and 1 day(s) before joining. Jobboard300 can do this for you.</p></section>}
     <section className="pj-card"><h2>Hires and replacement guarantee</h2>
       {o.placements.length === 0 ? <p className="pj-muted">No hires recorded yet. Mark a candidate as “Joined” in the pipeline to start the guarantee period.</p> :
         <table className="pj-table"><thead><tr><th>Candidate</th><th>Role</th><th>Joined</th><th>Guarantee until</th><th>Status</th><th></th></tr></thead><tbody>{o.placements.map(p => <tr key={p.id}><td>{p.name}</td><td>{p.title}</td><td>{fmtDate(p.joined_on)}</td><td>{fmtDate(p.guarantee_ends_on)}</td>
@@ -114,7 +114,7 @@ function OverviewView({ dash, say, reload, go }: { dash: Dashboard; say: (t: str
 }
 
 function Home({ dash, active, post: postJob, open, edit, pipeline }: { dash: Dashboard; active: boolean; post: () => void; open: (id: string, title: string) => void; edit: (id: string) => void; pipeline: (jd: string) => void }) {
-  const STATUS: Record<string, string> = { draft: "Draft", pending: "Waiting for Job Point approval", live: "Live", paused: "Paused", rejected: "Changes needed" };
+  const STATUS: Record<string, string> = { draft: "Draft", pending: "Waiting for Jobboard300 approval", live: "Live", paused: "Paused", rejected: "Changes needed" };
   const stats = new Map(dash.overview.jobs.map(j => [j.id, j]));
   return <>
     <div className="pj-stats">
@@ -123,9 +123,9 @@ function Home({ dash, active, post: postJob, open, edit, pipeline }: { dash: Das
       <div><span className="pj-muted">Live jobs</span><b>{dash.jds.filter(j => j.status === "live").length}</b><span className="pj-muted">of {dash.params?.params.maxLiveJds ?? 0} allowed</span></div>
     </div>
     <section className="pj-card"><div className="pj-row" style={{ justifyContent: "space-between" }}><h2>Your jobs</h2>{active && <button className="pj-btn" onClick={postJob}>Post a job</button>}</div>
-      {dash.jds.length === 0 ? <p>No jobs yet. Post a job description and Job Point will approve it against your matching rules.</p> :
+      {dash.jds.length === 0 ? <p>No jobs yet. Post a job description and Jobboard300 will approve it against your matching rules.</p> :
         <div className="pj-list">{dash.jds.map(j => { const s = stats.get(j.id); const managed = s?.service === "managed"; return <article className="pj-item" key={j.id}>
-          <div><b>{j.title}</b> <span className="pj-pill">{managed ? "Managed by Job Point" : "Self-service"}</span>
+          <div><b>{j.title}</b> <span className="pj-pill">{managed ? "Managed by Jobboard300" : "Self-service"}</span>
             <p className="pj-muted">{STATUS[j.status] ?? j.status} · {s?.openings ?? 1} opening(s){j.status === "live" ? ` · ${managed ? "" : `${j.released} strong match(es) · `}${s?.in_process ?? 0} in process${s?.to_review ? ` · ${s.to_review} to review` : ""} · ${s?.joined ?? 0} joined` : ""}</p>{j.decision_note && j.status !== "live" && <p className="pj-muted">{j.decision_note}</p>}</div>
           <div className="pj-row">{j.status === "live" && !managed && <button className="pj-btn" onClick={() => open(j.id, j.title)}>View matches</button>}{j.status === "live" && <button className="pj-btn quiet" onClick={() => pipeline(j.id)}>Pipeline</button>}<button className="pj-btn quiet" onClick={() => edit(j.id)}>{j.status === "live" ? "Edit" : "Open"}</button></div>
         </article>; })}</div>}
@@ -177,7 +177,7 @@ function FeedbackForm({ interview, done, say }: { interview: Interview; done: ()
     <label>What happened<select name="status"><option value="completed">Interview completed</option><option value="no_show">Candidate did not attend</option><option value="cancelled">Cancelled</option></select></label>
     <label>Outcome<select name="outcome"><option value="advance">Move forward</option><option value="hold">On hold</option><option value="reject">Do not proceed</option><option value="pending">Decision pending</option></select></label>
     <label>Rating (1–5)<select name="rating" defaultValue=""><option value="">No rating</option>{[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
-    <label className="full">Feedback <span className="pj-muted">Shared with Job Point to improve the next shortlist. Judge job-related skills only.</span><textarea name="feedback" rows={3} maxLength={2000} /></label>
+    <label className="full">Feedback <span className="pj-muted">Shared with Jobboard300 to improve the next shortlist. Judge job-related skills only.</span><textarea name="feedback" rows={3} maxLength={2000} /></label>
     <div className="full pj-row"><button className="pj-btn">Save feedback</button><button type="button" className="pj-link" onClick={done}>Cancel</button></div>
   </form>;
 }
@@ -195,12 +195,12 @@ function Pipeline({ jd, jobs, say, reload, profile }: { jd?: string; jobs: Overv
       <label>Job <select value={filter} onChange={e => setFilter(e.target.value)}><option value="">All jobs</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}</select></label>
       <label>Show <select value={show} onChange={e => setShow(e.target.value)}><option value="open">In process</option><option value="closed">Closed</option><option value="all">All</option></select></label>
     </div>
-    {!data ? <p className="pj-muted">Loading…</p> : rows.length === 0 ? <p className="pj-muted">Nobody here yet. Unlock a profile from a job&apos;s matches and add it to the pipeline, or wait for Job Point&apos;s submissions on managed jobs.</p> :
+    {!data ? <p className="pj-muted">Loading…</p> : rows.length === 0 ? <p className="pj-muted">Nobody here yet. Unlock a profile from a job&apos;s matches and add it to the pipeline, or wait for Jobboard300&apos;s submissions on managed jobs.</p> :
       <div className="pj-list">{rows.map(e => <article className="pj-item" key={e.id}>
         <div>
-          <b>{e.name}</b> <span className="pj-pill">{e.stageLabel}</span>{e.source === "job_point" && <span className="pj-pill">Submitted by Job Point</span>}
+          <b>{e.name}</b> <span className="pj-pill">{e.stageLabel}</span>{e.source === "job_point" && <span className="pj-pill">Submitted by Jobboard300</span>}
           <p className="pj-muted">{e.jdTitle} · updated {fmtDate(e.updatedAt)}{e.offerCtcInr ? ` · offer ${lpa(e.offerCtcInr)}` : ""}{e.joiningDate ? ` · joining ${fmtDate(e.joiningDate)}` : ""}{e.lastWorkingDay ? ` · last day at current job ${fmtDate(e.lastWorkingDay)}` : ""}{e.competingOffers ? ` · other offers: ${e.competingOffers}` : ""}{e.stageReason ? ` · ${e.stageReason.replace(/_/g, " ")}` : ""}</p>
-          {e.recruiterNote && <p className="pj-note"><b>Job Point&apos;s note:</b> {e.recruiterNote}</p>}
+          {e.recruiterNote && <p className="pj-note"><b>Jobboard300&apos;s note:</b> {e.recruiterNote}</p>}
           {e.interviews.length > 0 && <ul>{e.interviews.map(i => <li key={i.id}>{i.round} · {fmtTime(i.scheduled_at)} · {MODE[i.mode]} · {i.status === "scheduled" ? <>scheduled <button className="pj-link" onClick={() => setForm({ id: i.id, kind: "feedback" })}>Record feedback</button></> : `${i.status.replace("_", " ")}${i.status === "completed" ? `: ${i.outcome}${i.rating ? `, ${i.rating}/5` : ""}` : ""}`}{i.feedback ? ` — ${i.feedback}` : ""}
             {form?.kind === "feedback" && form.id === i.id && <FeedbackForm interview={i} done={done} say={say} />}</li>)}</ul>}
           {form?.id === e.id && form.kind === "interview" && <InterviewForm entry={e} done={done} say={say} />}
@@ -255,7 +255,7 @@ function NewJd({ created, say }: { created: (id: string) => void; say: (t: strin
       <label>Location<input name="location" required placeholder="e.g. Durgapur" /></label>
       <label>Work mode<select name="workMode"><option>On-site</option><option>Hybrid</option><option>Remote</option></select></label>
       <label>Openings<input name="openings" type="number" min={1} max={500} defaultValue={1} /></label>
-      <label>Who finds the candidates?<select name="service"><option value="self">We review matches and unlock profiles</option><option value="managed">Job Point recruits and submits a shortlist</option></select></label>
+      <label>Who finds the candidates?<select name="service"><option value="self">We review matches and unlock profiles</option><option value="managed">Jobboard300 recruits and submits a shortlist</option></select></label>
       <label className="full">Job description <span className="pj-muted">Include responsibilities, must-have skills (&ldquo;Must have &hellip;&rdquo;), years of experience, education, CTC range and notice period.</span><textarea name="text" required minLength={80} rows={12} /></label>
       <div className="full"><button className="pj-btn" disabled={busy}>{busy ? "Reading…" : "Create draft"}</button></div>
     </form>
@@ -279,7 +279,7 @@ function JdEditor({ id, say, done }: { id: string; say: (t: string, bad?: boolea
   async function submit() { try { say((await post<{ message: string; conflicts: string[] }>("/api/portal/company/jd-submit", { jdId: id })).message); done(); } catch (err) { say((err as Error).message, true); } }
   async function close() { if (!window.confirm("Close this job? Unlocked profiles stay available.")) return; try { say((await post<{ message: string }>("/api/portal/company/jd-close", { jdId: id })).message); done(); } catch (err) { say((err as Error).message, true); } }
   return <section className="pj-card"><h2>{data.jd.title}</h2>
-    <p className="pj-muted">Status: {data.jd.status}{data.jd.decision_note ? ` · ${data.jd.decision_note}` : ""}. Editing a live job sends it back to Job Point for approval.</p>
+    <p className="pj-muted">Status: {data.jd.status}{data.jd.decision_note ? ` · ${data.jd.decision_note}` : ""}. Editing a live job sends it back to Jobboard300 for approval.</p>
     <form className="pj-form" key={data.jd.requirements} onSubmit={save}>
       <label className="full">Job title<input name="title" defaultValue={r.title} /></label>
       <label className="full">Must-have skills<textarea name="mustHave" defaultValue={names([...r.mustHave])} rows={2} /></label>
@@ -362,12 +362,12 @@ function ParamsView({ dash, owner, say, reload }: { dash: Dashboard; owner: bool
     try { say((await post<{ message: string }>("/api/portal/company/params-request", { params })).message); reload(); } catch (err) { say((err as Error).message, true); }
   }
   return <section className="pj-card"><h2>Matching rules</h2>
-    <p className="pj-muted">Job Point sets these rules for your account. You only receive CVs that meet them. A change applies only after Job Point approves it.</p>
+    <p className="pj-muted">Jobboard300 sets these rules for your account. You only receive CVs that meet them. A change applies only after Jobboard300 approves it.</p>
     {!p ? <p>Not set yet.</p> : <table className="pj-table"><tbody>
       <tr><th>Minimum match score</th><td>{p.minScore}</td></tr><tr><th>Role families</th><td>{p.roleFamilies.join(", ")}</td></tr><tr><th>Seniority</th><td>{p.seniority.join(", ")}</td></tr>
       <tr><th>Cities</th><td>{p.cities.join(", ") || "Any"}{p.allowRemote ? " + remote" : ""}</td></tr><tr><th>CTC bands</th><td>{p.ctcBands.map(b => `${lpa(b.minInr)}–${lpa(b.maxInr)}`).join("; ") || "Any"}</td></tr>
       <tr><th>Maximum notice</th><td>{p.maxNoticeDays ?? "Any"} days</td></tr><tr><th>Maximum CVs per job</th><td>{p.maxReleasePerJd}</td></tr><tr><th>Version</th><td>{dash.params?.version}</td></tr></tbody></table>}
-    {dash.pendingRequest ? <p className="pj-notice">A change request (version {dash.pendingRequest.version}) is waiting for Job Point&apos;s approval.</p> : owner && p && <form className="pj-form" onSubmit={request}>
+    {dash.pendingRequest ? <p className="pj-notice">A change request (version {dash.pendingRequest.version}) is waiting for Jobboard300&apos;s approval.</p> : owner && p && <form className="pj-form" onSubmit={request}>
       <h3 className="full">Request a change</h3>
       <label>Minimum match score<input name="minScore" type="number" min={40} max={95} defaultValue={p.minScore} /></label>
       <label>Role families<input name="roleFamilies" defaultValue={p.roleFamilies.join(", ")} /></label>

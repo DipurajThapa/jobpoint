@@ -1,8 +1,8 @@
-// Client workspace: what a hiring company (Job Point's client) does after it
+// Client workspace: what a hiring company (Jobboard300's client) does after it
 // has candidates in front of it.
-// - Client accounts and team members are invited by Job Point (registration
+// - Client accounts and team members are invited by Jobboard300 (registration
 //   can stay closed): an account without a password plus a one-time link.
-// - Managed searches: Job Point's recruiters submit candidates to a client's
+// - Managed searches: Jobboard300's recruiters submit candidates to a client's
 //   JD with a note. No unlock quota is used; the fee is on placement.
 // - The hiring pipeline per candidate and JD: submitted → shortlisted →
 //   interview → offered → offer accepted → joined, or a closed outcome with a
@@ -20,7 +20,7 @@ export const STAGES = ["submitted", "shortlisted", "interview", "offered", "offe
 export type Stage = typeof STAGES[number];
 export const OPEN_STAGES: Stage[] = ["submitted", "shortlisted", "interview", "offered", "offer_accepted"];
 export const STAGE_LABEL: Record<Stage, string> = {
-  submitted: "Submitted by Job Point", shortlisted: "Shortlisted", interview: "Interviewing", offered: "Offer made", offer_accepted: "Offer accepted",
+  submitted: "Submitted by Jobboard300", shortlisted: "Shortlisted", interview: "Interviewing", offered: "Offer made", offer_accepted: "Offer accepted",
   joined: "Joined", rejected: "Not selected", offer_declined: "Offer declined", no_show: "Did not join", withdrawn: "Withdrawn",
 };
 const NEXT: Record<Stage, Stage[]> = {
@@ -76,7 +76,7 @@ async function createInvitedAccount(db: Db, email: string) {
 export type ClientInvite = { displayName: string; legalName: string; city: string; website?: string; gstin?: string; ownerEmail: string; ownerName?: string; guaranteeDays?: number; nonSolicitMonths?: number; feeTerms?: string; params: unknown; plan?: string };
 
 /**
- * Job Point onboards a client directly: an active company with approved
+ * Jobboard300 onboards a client directly: an active company with approved
  * matching parameters, a starting plan, and an owner who sets a password from
  * a one-time link (valid 7 days). Works while public registration is closed.
  */
@@ -140,7 +140,7 @@ export async function removeMember(db: Db, companyId: string, actorId: string, m
   if (memberId === actorId) throw new PortalError("SELF", "You cannot remove yourself.");
   const row = await db.prepare("SELECT cu.role FROM company_users cu WHERE cu.company_id = ? AND cu.account_id = ?").bind(companyId, memberId).first<{ role: string }>();
   if (!row) throw new PortalError("NOT_FOUND", "Team member not found.", 404);
-  if (row.role === "owner") throw new PortalError("OWNER", "The company owner cannot be removed. Ask Job Point to transfer ownership.");
+  if (row.role === "owner") throw new PortalError("OWNER", "The company owner cannot be removed. Ask Jobboard300 to transfer ownership.");
   await db.batch([
     db.prepare("DELETE FROM portal_sessions WHERE account_id = ?").bind(memberId),
     db.prepare("DELETE FROM company_users WHERE company_id = ? AND account_id = ?").bind(companyId, memberId),
@@ -196,12 +196,12 @@ export async function addToPipeline(db: Db, companyId: string, actorId: string, 
 }
 
 /**
- * Job Point submits a candidate to a client's managed search. Requires the
+ * Jobboard300 submits a candidate to a client's managed search. Requires the
  * candidate's active consent to share, the company not being hidden by the
  * candidate, and a live managed JD. Grants the client access without using
  * unlock quota (subscription "managed"); the fee is on placement.
  */
-export async function submitByJobPoint(db: Db, secret: string, input: { companyId: string; jdId: string; candidateId: string; note: string }, adminId: string) {
+export async function submitByRecruiter(db: Db, secret: string, input: { companyId: string; jdId: string; candidateId: string; note: string }, adminId: string) {
   const { companyId, jdId, candidateId } = input;
   const company = await db.prepare("SELECT status FROM companies WHERE id = ?").bind(companyId).first<{ status: string }>();
   if (company?.status !== "active") throw new PortalError("COMPANY_NOT_ACTIVE", "The client account is not active.");
@@ -228,7 +228,7 @@ export async function submitByJobPoint(db: Db, secret: string, input: { companyI
       .bind(newId(), companyId, candidateId, ref, jdId, `admin:${adminId}`, trace, at),
     db.prepare("INSERT INTO pipeline (id, company_id, jd_id, candidate_id, candidate_ref, source, stage, recruiter_note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'job_point', 'submitted', ?, ?, ?, ?)")
       .bind(id, companyId, jdId, candidateId, ref, input.note.trim().slice(0, 2000), `admin:${adminId}`, at, at),
-    db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, note, at) VALUES (?, ?, 'submitted', ?, 'Submitted by Job Point', ?)").bind(newId(), id, `admin:${adminId}`, at),
+    db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, note, at) VALUES (?, ?, 'submitted', ?, 'Submitted by Jobboard300', ?)").bind(newId(), id, `admin:${adminId}`, at),
     db.prepare("INSERT INTO access_log (id, actor_kind, actor_id, company_id, action, jd_id, candidate_ref, ip_hash, at) VALUES (?, 'admin', ?, ?, 'submit', ?, ?, '', ?)").bind(newId(), adminId, companyId, jdId, ref, at),
   ]);
   await audit(db, adminId, "candidate.submitted", "company", companyId, `jd ${jdId}, ref ${ref}`);
@@ -246,7 +246,7 @@ export async function moveStage(db: Db, companyId: string, actorId: string, pipe
   if (!STAGES.includes(stage)) throw new PortalError("STAGE", "Choose a valid stage.");
   if (!NEXT[row.stage].includes(stage)) throw new PortalError("STAGE_ORDER", `A candidate at “${STAGE_LABEL[row.stage]}” cannot move to “${STAGE_LABEL[stage]}”.`);
   const reasons = REASONS[stage];
-  if (reasons && !reasons.includes(input.reason ?? "")) throw new PortalError("REASON", "Choose a reason. It helps Job Point send better candidates.");
+  if (reasons && !reasons.includes(input.reason ?? "")) throw new PortalError("REASON", "Choose a reason. It helps Jobboard300 send better candidates.");
   const note = (input.note ?? "").trim().slice(0, 1000);
   const at = nowIso(), sets: string[] = ["stage = ?", "updated_at = ?"], values: unknown[] = [stage, at];
   if (reasons) { sets.push("stage_reason = ?"); values.push(`${input.reason}${note ? `: ${note}` : ""}`); }
@@ -405,7 +405,7 @@ export async function clientOverview(db: Db, companyId: string) {
   };
 }
 
-/** Job Point's view across clients: managed searches and placements in their guarantee window. */
+/** Jobboard300's view across clients: managed searches and placements in their guarantee window. */
 export async function adminClientWork(db: Db) {
   const { results: managed } = await db.prepare(`SELECT j.id, j.title, j.status, j.openings, j.company_id, c.display_name AS company,
       (SELECT COUNT(*) FROM pipeline p WHERE p.jd_id = j.id) AS submitted,
@@ -417,7 +417,7 @@ export async function adminClientWork(db: Db) {
   return { managed, placements };
 }
 
-/** Candidates Job Point could submit to a managed JD: best matches first, with names (admin only). */
+/** Candidates Jobboard300 could submit to a managed JD: best matches first, with names (admin only). */
 export async function submissionCandidates(db: Db, jdId: string) {
   const jd = await db.prepare("SELECT company_id FROM jds WHERE id = ?").bind(jdId).first<{ company_id: string }>();
   if (!jd) throw new PortalError("NOT_FOUND", "Job not found.", 404);

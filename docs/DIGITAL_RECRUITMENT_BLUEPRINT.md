@@ -1,4 +1,4 @@
-# Job Point Consultancy: digital recruitment blueprint
+# Jobboard300: digital recruitment blueprint
 
 ## Decision
 
@@ -24,7 +24,7 @@ The recruiter owns the decision at screening, shortlist, employer submission and
 
 | Capability | Decision | Current implementation |
 | --- | --- | --- |
-| Branded public website and service pages | Must have | Responsive Talentraa-inspired design, Job Point logo system, relevant original imagery |
+| Branded public website and service pages | Must have | Responsive Talentraa-inspired design, Jobboard300 logo system, relevant original imagery |
 | Jobs and individual job pages | Must have | Owner-managed draft/publish/close, public search, job detail and appropriate structured data |
 | Candidate intake and CV storage | Must have | Structured fields in existing application records, optional private R2 CV, separate consent choices |
 | Employer requirement intake | Must have | Existing enquiry flow and owner review |
@@ -52,7 +52,7 @@ Required contact and experience fields, adulthood confirmation, form honeypots, 
 
 ## Build, buy or integrate
 
-The custom site gives Job Point ownership of its branded public journey and simple internal workflow. Agency ATS products already provide parsing, client portals, candidate search and automation. Zoho Recruit documents staffing-specific plans, parsing and client collaboration; Manatal and Recruit CRM document agency pipelines and candidate databases. Evaluate a controlled ATS trial if weekly application volume, recruiter count or client coordination outgrows the present console. Do not build a second ATS and sync personal data between systems without a clear migration and processor assessment.
+The custom site gives Jobboard300 ownership of its branded public journey and simple internal workflow. Agency ATS products already provide parsing, client portals, candidate search and automation. Zoho Recruit documents staffing-specific plans, parsing and client collaboration; Manatal and Recruit CRM document agency pipelines and candidate databases. Evaluate a controlled ATS trial if weekly application volume, recruiter count or client coordination outgrows the present console. Do not build a second ATS and sync personal data between systems without a clear migration and processor assessment.
 
 Potential later integrations are transactional email acknowledgements, calendar invites and a verified WhatsApp Business provider. Each needs consent, sender identity, security/processor review and real operating demand. Avoid unsupported LinkedIn scraping and unreviewed bulk CV exports.
 
@@ -89,6 +89,6 @@ The following is a readiness assessment for the India recruitment scope currentl
 | Transfers and processors | Policy identifies Sites/Cloudflare hosting and Google font requests | Confirm processor contracts, region/subprocessor information and transfer safeguards. The 2011 rules address equivalent protection for transfers; do not claim India-only storage without evidence |
 | Recruitment services | Genuine-role review, no guarantee of placement, no public database access, separate employer agreement | Confirm agency registration and services offered. Overseas recruitment needs a review of MEA/eMigrate recruiting-agent requirements; no licence is claimed |
 | Retention/deletion | Twelve-month manual review indicator and selected live record/CV deletion | Approve purpose-based schedule, exceptions, recipient deletion and backup handling. Review is not an automatic purge and twelve months is not asserted to be a statutory period |
-| Access and communications | One existing console, submission references and manual follow-up | Provide an approved Job Point recruiter email for access. No automatic email or WhatsApp notification is configured; keep one recruitment workflow when adding a provider |
+| Access and communications | One existing console, submission references and manual follow-up | Provide an approved Jobboard300 recruiter email for access. No automatic email or WhatsApp notification is configured; keep one recruitment workflow when adding a provider |
 
 Additional primary sources: [2011 SPDI Rules (official Gazette text reproduced by WIPO)](https://www.wipo.int/wipolex/en/legislation/details/15063), [MeitY/PIB clarification](https://www.meity.gov.in/writereaddata/files/PressNote_25811.pdf), [CERT-In directions of 28 April 2022](https://www.cert-in.org.in/PDF/CERT-In_Directions_70B_28.04.2022.pdf).

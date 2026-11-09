@@ -9,7 +9,7 @@ import { adminOverview } from "@/lib/portal/views";
 import { decideAssessment, decideHeldAttempt } from "@/lib/portal/assessment";
 import { DEFAULT_PLANS, seedServices } from "@/lib/portal/plans";
 import { audit } from "@/lib/portal/db";
-import { adminClientWork, inviteClient, setJdService, submissionCandidates, submitByJobPoint, updateClientTerms } from "@/lib/portal/client";
+import { adminClientWork, inviteClient, setJdService, submissionCandidates, submitByRecruiter, updateClientTerms } from "@/lib/portal/client";
 import { sendMail } from "@/lib/portal/mailer";
 import { canonicalCity, seniorityFor } from "@/lib/portal/india";
 import { resolveSkill } from "@/lib/ats/taxonomy";
@@ -56,7 +56,7 @@ export async function POST(request: Request, context: Ctx) {
       case "client-invite": {
         const out = await inviteClient(db, { displayName: s(b.displayName, 120), legalName: s(b.legalName, 160), city: s(b.city, 80), website: s(b.website), gstin: s(b.gstin, 15), ownerEmail: s(b.ownerEmail, 254), ownerName: s(b.ownerName, 120), guaranteeDays: Number(b.guaranteeDays ?? 90), nonSolicitMonths: Number(b.nonSolicitMonths ?? 12), feeTerms: s(b.feeTerms, 300), params: b.params, plan: s(b.plan, 20) || "free" }, admin);
         const link = `${new URL(request.url).origin}/portal/accept?token=${out.token}`;
-        const mail = await sendMail({ to: s(b.ownerEmail, 254), subject: "Your Job Point hiring account is ready", text: `Job Point has set up a hiring account for ${s(b.displayName, 120)}. Open this link to set your password and sign in (valid for 7 days):\n${link}` }, link);
+        const mail = await sendMail({ to: s(b.ownerEmail, 254), subject: "Your Jobboard300 hiring account is ready", text: `Jobboard300 has set up a hiring account for ${s(b.displayName, 120)}. Open this link to set your password and sign in (valid for 7 days):\n${link}` }, link);
         return done(mail.sent ? "Client created and the owner has been emailed a one-time link. Copy of the link:" : "Client created. Send the owner this one-time link (valid for 7 days):", { link });
       }
       case "client-terms": await updateClientTerms(db, s(b.companyId, 60), Number(b.guaranteeDays), s(b.feeTerms, 300), admin, Number(b.nonSolicitMonths ?? 12)); return json({ message: "Client terms saved." });
@@ -67,7 +67,7 @@ export async function POST(request: Request, context: Ctx) {
         return json({ message: "Job service updated." });
       }
       case "submit-candidate": {
-        const out = await submitByJobPoint(db, portalSecret(), { companyId: s(b.companyId, 60), jdId: s(b.jdId, 60), candidateId: s(b.candidateId, 60), note: s(b.note, 2000) }, admin);
+        const out = await submitByRecruiter(db, portalSecret(), { companyId: s(b.companyId, 60), jdId: s(b.jdId, 60), candidateId: s(b.candidateId, 60), note: s(b.note, 2000) }, admin);
         return json({ ...out, message: "Submitted to the client. It appears in their pipeline for review." });
       }
       case "placement-status": {
@@ -102,7 +102,7 @@ export async function POST(request: Request, context: Ctx) {
         const id = s(b.candidateId, 60), p = await primaryProfile(db, id);
         if (!p) return fail("Candidate not found.", 404);
         const years = Math.max(0, Math.min(45, Number(b.years ?? 0)));
-        const skills = String(b.skills ?? "").split(",").map(x => resolveSkill(x.trim())).filter(Boolean).map(r => ({ ...r!, evidence: "work" as const, months: Math.round(years * 12), lastUsedYear: new Date().getFullYear(), snippet: "Transcribed by a Job Point reviewer from the original CV." }));
+        const skills = String(b.skills ?? "").split(",").map(x => resolveSkill(x.trim())).filter(Boolean).map(r => ({ ...r!, evidence: "work" as const, months: Math.round(years * 12), lastUsedYear: new Date().getFullYear(), snippet: "Transcribed by a Jobboard300 reviewer from the original CV." }));
         const profile = { ...p.profile, headline: s(b.title, 120), skills, totalExperienceMonths: Math.round(years * 12), statedExperienceYears: years,
           work: s(b.title) ? [{ title: s(b.title, 120), employer: "", location: "", start: null, end: null, current: true, months: Math.round(years * 12), highlights: [] }] : [],
           parse: { ...p.profile.parse, confidence: 0.7, warnings: [...p.profile.parse.warnings, "Transcribed manually by a reviewer."] },

@@ -75,7 +75,7 @@ export async function POST(request: Request, context: Ctx) {
       await setJdService(db, companyId, out.id, s(body.service, 10) || "self", Number(body.openings ?? 1) || 1, account.id);
       return json(out, 201);
     }
-    if (action === "jd-service") { await setJdService(db, companyId, s(body.jdId, 60), s(body.service, 10), Number(body.openings ?? 1), account.id); return json({ message: body.service === "managed" ? "Job Point will recruit for this job and submit candidates here." : "Saved." }); }
+    if (action === "jd-service") { await setJdService(db, companyId, s(body.jdId, 60), s(body.service, 10), Number(body.openings ?? 1), account.id); return json({ message: body.service === "managed" ? "Jobboard300 will recruit for this job and submit candidates here." : "Saved." }); }
     if (action === "pipeline-add") { const out = await addToPipeline(db, companyId, account.id, s(body.ref, 40), s(body.jdId, 60)); return json({ ...out, message: out.created ? "Added to your pipeline as shortlisted." : "Already in your pipeline for this job." }, out.created ? 201 : 200); }
     if (action === "pipeline-stage") {
       const out = await moveStage(db, companyId, account.id, s(body.pipelineId, 60), { stage: s(body.stage, 20), reason: s(body.reason, 40), note: s(body.note, 1000), offerCtcInr: body.offerCtcInr == null || body.offerCtcInr === "" ? null : Number(body.offerCtcInr), offerDate: s(body.offerDate, 10), joiningDate: s(body.joiningDate, 10), lastWorkingDay: s(body.lastWorkingDay, 10), competingOffers: s(body.competingOffers, 300) });
@@ -83,17 +83,17 @@ export async function POST(request: Request, context: Ctx) {
     }
     if (action === "interview-schedule") { const out = await scheduleInterview(db, companyId, account.id, s(body.pipelineId, 60), { round: s(body.round, 80), scheduledAt: s(body.scheduledAt, 40), mode: s(body.mode, 20), location: s(body.location, 300), interviewer: s(body.interviewer, 120) }); return json({ ...out, message: "Interview scheduled." }, 201); }
     if (action === "interview-record") { await recordInterview(db, companyId, account.id, s(body.interviewId, 60), { status: s(body.status, 20), outcome: s(body.outcome, 20), rating: body.rating == null || body.rating === "" ? null : Number(body.rating), feedback: s(body.feedback, 2000) }); return json({ message: "Interview updated." }); }
-    if (action === "placement-exit") { const out = await reportPlacementExit(db, companyId, account.id, s(body.placementId, 60), s(body.leftOn, 10), s(body.note, 500)); return json({ ...out, message: out.inGuarantee ? "Recorded. This is inside the replacement guarantee: Job Point will contact you about a replacement." : "Recorded." }); }
+    if (action === "placement-exit") { const out = await reportPlacementExit(db, companyId, account.id, s(body.placementId, 60), s(body.leftOn, 10), s(body.note, 500)); return json({ ...out, message: out.inGuarantee ? "Recorded. This is inside the replacement guarantee: Jobboard300 will contact you about a replacement." : "Recorded." }); }
     if (action === "team-invite") {
       const email = s(body.email, 254), out = await inviteMember(db, companyId, account.id, email, s(body.name, 120));
       const link = `${new URL(request.url).origin}/portal/accept?token=${out.token}`;
-      const mail = await sendMail({ to: email, subject: "You have been added to a Job Point hiring account", text: `Open this link to set your password and sign in (valid for 7 days):\n${link}` }, link);
+      const mail = await sendMail({ to: email, subject: "You have been added to a Jobboard300 hiring account", text: `Open this link to set your password and sign in (valid for 7 days):\n${link}` }, link);
       return json({ message: mail.sent ? "Invitation sent by email." : "Person added. Send them this one-time link (valid for 7 days):", link: mail.sent ? undefined : link }, 201);
     }
     if (action === "team-reinvite") { const token = await reissueInvite(db, companyId, account.id, s(body.memberId, 60)); return json({ message: "New one-time link (valid for 7 days; the old one no longer works):", link: `${new URL(request.url).origin}/portal/accept?token=${token}` }); }
     if (action === "team-remove") { await removeMember(db, companyId, account.id, s(body.memberId, 60)); return json({ message: "Removed. They can no longer sign in." }); }
     if (action === "jd-update") return json({ requirements: await updateJdRequirements(db, companyId, s(body.jdId, 60), body.requirements, account.id), message: "Saved. Submit the JD for approval when ready." });
-    if (action === "jd-submit") { const out = await submitJd(db, companyId, s(body.jdId, 60), account.id); return json({ ...out, message: out.conflicts.length ? "Submitted. Job Point will review the points below against your approved parameters." : "Submitted for approval." }); }
+    if (action === "jd-submit") { const out = await submitJd(db, companyId, s(body.jdId, 60), account.id); return json({ ...out, message: out.conflicts.length ? "Submitted. Jobboard300 will review the points below against your approved parameters." : "Submitted for approval." }); }
     if (action === "jd-close") {
       const jdId = s(body.jdId, 60);
       const r = await db.prepare("UPDATE jds SET status = 'closed', updated_at = ? WHERE id = ? AND company_id = ?").bind(nowIso(), jdId, companyId).run();
@@ -101,7 +101,7 @@ export async function POST(request: Request, context: Ctx) {
       await revokeJdReleases(db, jdId, "jd_closed");
       return json({ message: "JD closed. Unlocked profiles stay available to you." });
     }
-    if (action === "params-request") return json({ id: await requestParamChange(db, companyId, body.params, account.id), message: "Request sent. Your current parameters stay in force until Job Point approves the change." }, 201);
+    if (action === "params-request") return json({ id: await requestParamChange(db, companyId, body.params, account.id), message: "Request sent. Your current parameters stay in force until Jobboard300 approves the change." }, 201);
     if (action === "unlock") {
       if (!await guard(db, { userId: account.id, companyId, action: "unlock", jdId: s(body.jdId, 60), candidateRef: s(body.ref, 40), ipHash: ip })) return fail("Too many unlocks in a short time. Wait a while.", 429, "RATE_LIMIT");
       const out = await unlockCandidate(db, { companyId, userId: account.id, candidateRef: s(body.ref, 40), jdId: s(body.jdId, 60), ipHash: ip });
@@ -125,7 +125,7 @@ export async function POST(request: Request, context: Ctx) {
       const jd = await db.prepare("SELECT requirements FROM jds WHERE id = ? AND company_id = ?").bind(jdId, companyId).first();
       if (!jd) return fail("JD not found.", 404);
       const id = await createAssessment(db, { ownerKind: "company", companyId, jdId, skillId: s(body.skillId, 60), title: s(body.title, 160), description: s(body.description, 1000), itemsPerForm: Number(body.itemsPerForm ?? 10), timeLimitSec: Number(body.timeLimitSec ?? 900), items: Array.isArray(body.items) ? body.items as never : [] }, account.id);
-      return json({ id, message: "Assessment sent to Job Point for review. It applies once approved." }, 201);
+      return json({ id, message: "Assessment sent to Jobboard300 for review. It applies once approved." }, 201);
     }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }

@@ -10,8 +10,8 @@ Built 9 November 2026 on branch `claude/relaxed-planck-7ozou6`. The original pro
 
 | Who | Can | Cannot |
 |---|---|---|
-| **Candidate** (free) | Sign up, upload a CV (PDF/DOCX), correct the parsed profile, see matching live jobs with a band (Strong/Good/Partial/Weak), apply, take skill tests, hide their profile from named companies, give or withdraw each consent separately, export their data, delete their account. | See their exact score or other candidates. |
-| **Company user** (invited by Job Point, or by their company owner) | Overview dashboard, hiring pipeline with interviews, offers, joining and placements, team. Post JDs (go live only after admin approval), see anonymised previews of CVs the system released to them, unlock a CV (uses one unit of quota), download a watermarked PDF of an unlocked CV, move applicants through stages, request parameter changes, propose a company assessment. | See any CV, contact or file outside its approved parameters and unlocked set; set its own parameters; see a CV file before unlock; see the original DOCX. |
+| **Candidate** (free) | One page, "My CV and privacy": sign up, upload a CV (PDF/DOCX), correct the parsed profile, give or withdraw each consent separately, hide their profile from named companies, export their data, delete their account. Job browsing, applying and skill tests are hidden in the interface (owner decision, 9 Nov 2026); their API endpoints remain. | See their exact score or other candidates. |
+| **Company user** (invited by Jobboard300, or by their company owner) | Overview dashboard, hiring pipeline with interviews, offers, joining and placements, team. Post JDs (go live only after admin approval), see anonymised previews of CVs the system released to them, unlock a CV (uses one unit of quota), download a watermarked PDF of an unlocked CV, move applicants through stages, request parameter changes, propose a company assessment. | See any CV, contact or file outside its approved parameters and unlocked set; set its own parameters; see a CV file before unlock; see the original DOCX. |
 | **Admin** (site owner only, existing sign-in) | Approve companies, set each company's matching parameters, approve JDs and parameter change requests, assign plans and adjust quota, approve company assessments, resolve parse reviews and duplicates, merge candidates, resolve abuse flags, run the queue. | — |
 
 Working Platform staff have no access to the portal admin.
@@ -20,8 +20,8 @@ Working Platform staff have no access to the portal admin.
 
 - **Sign-in by invitation.** The admin console's **Invite a client** creates an active client, with its matching rules, plan, replacement-guarantee days, non-solicitation months and fee terms. It produces a one-time link (`/portal/accept`, valid 7 days) for the owner to set a password. This works while public registration is closed.
 - **Team.** The owner adds colleagues (one-time links) and removes them.
-- **Overview, pipeline, interviews, offers and joining, and hires.** The pipeline stages are Submitted by Job Point → Shortlisted → Interviewing → Offer made → Offer accepted → Joined. Closed outcomes need a reason code. Joining creates a placement carrying the end of the replacement guarantee and the date until which Job Point will not approach the person about other jobs.
-- **Managed searches.** The client asks Job Point to recruit. The admin submits matching candidates with a note. This needs the candidate's consent to share, uses no unlock quota, and the fee is on placement.
+- **Overview, pipeline, interviews, offers and joining, and hires.** The pipeline stages are Submitted by Jobboard300 → Shortlisted → Interviewing → Offer made → Offer accepted → Joined. Closed outcomes need a reason code. Joining creates a placement carrying the end of the replacement guarantee and the date until which Jobboard300 will not approach the person about other jobs.
+- **Managed searches.** The client asks Jobboard300 to recruit. The admin submits matching candidates with a note. This needs the candidate's consent to share, uses no unlock quota, and the fee is on placement.
 - Code: `lib/portal/client.ts`; migration `drizzle/0006_client_workspace.sql`.
 - Review and roadmap: [REVIEW_AND_ROADMAP_2026-11.md](REVIEW_AND_ROADMAP_2026-11.md).
 
@@ -141,7 +141,7 @@ Status from the research (secondary sources, **counsel must confirm**):
 
 What the build does:
 
-1. **Itemised, standalone consent** at sign-up (`lib/portal/notice.ts`, version `portal-2026-11-09`). There are three separate purposes: profile and matching, sharing with companies, and optional service offers. Each grant or withdrawal is a new row in an append-only ledger, with the notice version.
+1. **Itemised, standalone consent** at sign-up (`lib/portal/notice.ts`, version `portal-2026-11-09b`, reworded when the candidate area was reduced to "My CV and privacy"). There are three separate purposes: profile and matching, sharing with companies, and optional service offers. Each grant or withdrawal is a new row in an append-only ledger, with the notice version.
 2. **Withdrawal takes effect immediately**:
    - matches are deleted;
    - unreleased and released-not-unlocked previews are revoked;

@@ -981,7 +981,7 @@ const Rules = (function () {
     const end = next.toISOString().slice(0, 10).replace(/-/g, '');
     const who = [entry.recipientName, entry.company].filter(Boolean).join(' at ');
     const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
-    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Job Point Consultancy//Email Kit//EN', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Jobboard300//Email Kit//EN', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
       'UID:usha-followup-' + encodeURIComponent(entry.id || [entry.company, entry.recipientName].join('-')) + '-' + date + '@usha.local', 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + date, 'DTEND;VALUE=DATE:' + end,
       'SUMMARY:' + icsText('Follow up with ' + who), 'DESCRIPTION:' + icsText('Open Email Kit and choose Continue in the tracker.'), 'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT9H', 'DESCRIPTION:Review the follow-up in Email Kit', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'];
     return lines.map(icsFold).join('\r\n') + '\r\n';
@@ -1233,7 +1233,7 @@ const Rules = (function () {
   function meetingFile(m, who, topic, cancelled, minutes) {
     const start = zonedUtc(m.date, m.time, m.zone);
     const end = start + (minutes || 30) * 60000;
-    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Job Point Consultancy//Email Kit//EN', 'CALSCALE:GREGORIAN', 'METHOD:' + (cancelled ? 'CANCEL' : 'PUBLISH'), 'BEGIN:VEVENT',
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Jobboard300//Email Kit//EN', 'CALSCALE:GREGORIAN', 'METHOD:' + (cancelled ? 'CANCEL' : 'PUBLISH'), 'BEGIN:VEVENT',
       'UID:usha-' + m.id + '@usha.local', 'SEQUENCE:' + (m.sequence || 0), 'DTSTAMP:' + icsStamp(Date.now()), 'DTSTART:' + icsStamp(start), 'DTEND:' + icsStamp(end),
       'STATUS:' + (cancelled ? 'CANCELLED' : 'CONFIRMED'), 'SUMMARY:' + icsText('Meeting with ' + who), 'DESCRIPTION:' + icsText(topic ? 'Topic: ' + topic : 'Open Email Kit for the conversation history.')];
     if (!cancelled) lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:-PT30M', 'DESCRIPTION:' + icsText('Meeting with ' + who), 'END:VALARM');

@@ -20,10 +20,10 @@ export async function POST(request: Request, context: { params: Promise<{ action
     const origin = new URL(request.url).origin;
     if (action === "register") {
       // Registration stays closed in production until the owner sets PORTAL_OPEN=true after legal sign-off.
-      if (process.env.NODE_ENV === "production" && env.PORTAL_OPEN !== "true") return fail("Job Point's job portal opens soon. Registration is not available yet.", 503, "NOT_OPEN");
+      if (process.env.NODE_ENV === "production" && env.PORTAL_OPEN !== "true") return fail("Jobboard300's job portal opens soon. Registration is not available yet.", 503, "NOT_OPEN");
       if (!(await withinLimits(db, ip, "register")).ok) return fail("Too many sign-ups from this connection. Try again later.", 429, "RATE_LIMIT");
       const kind = body.kind === "company" ? "company_user" : "candidate";
-      if (body.adult !== true && kind === "candidate") return fail("Job Point is for adults aged 18 or over.", 400, "AGE");
+      if (body.adult !== true && kind === "candidate") return fail("Jobboard300 is for adults aged 18 or over.", 400, "AGE");
       if (body.terms !== true) return fail("Accept the terms to continue.", 400, "TERMS");
       const accountId = await createAccount(db, kind, str(body.email, 254), String(body.password ?? ""), str(body.phone, 20));
       if (kind === "candidate") await createCandidate(db, { accountId, displayName: str(body.name, 120), email: str(body.email, 254), phone: str(body.phone, 20), currentCity: str(body.city, 80) });
@@ -33,7 +33,7 @@ export async function POST(request: Request, context: { params: Promise<{ action
       }
       const token = await issuePortalToken(db, accountId, "verify", 48);
       const link = `${origin}/portal/verify?token=${token}`;
-      const mail = await sendMail({ to: str(body.email, 254), subject: "Verify your Job Point account", text: `Open this link to verify your email address (valid for 48 hours):\n${link}\n\nIf you did not create this account, ignore this email.` }, link);
+      const mail = await sendMail({ to: str(body.email, 254), subject: "Verify your Jobboard300 account", text: `Open this link to verify your email address (valid for 48 hours):\n${link}\n\nIf you did not create this account, ignore this email.` }, link);
       await audit(db, accountId, "portal.registered", kind, accountId);
       return json({ message: mail.sent ? "Check your email for a verification link." : mail.reason, devLink: mail.devLink }, 201);
     }
@@ -56,7 +56,7 @@ export async function POST(request: Request, context: { params: Promise<{ action
       if (row) {
         const token = await issuePortalToken(db, row.id, "reset", 2);
         const link = `${origin}/portal/reset?token=${token}`;
-        devLink = (await sendMail({ to: str(body.email, 254), subject: "Reset your Job Point password", text: `Open this link to choose a new password (valid for 2 hours):\n${link}` }, link)).devLink;
+        devLink = (await sendMail({ to: str(body.email, 254), subject: "Reset your Jobboard300 password", text: `Open this link to choose a new password (valid for 2 hours):\n${link}` }, link)).devLink;
       }
       return json({ message: "If an account exists for that email, a reset link has been sent.", devLink });
     }

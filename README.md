@@ -1,6 +1,6 @@
-# Job Point Consultancy
+# Jobboard300
 
-Full-stack recruitment website for Job Point Consultancy, based in Durgapur, West Bengal. The public interface follows the Talentraa recruitment-template flow, adapted to Job Point's logo colors and selected typefaces.
+Full-stack recruitment website for Jobboard300, based in Durgapur, West Bengal. The public interface follows the Talentraa recruitment-template flow, adapted to Jobboard300's logo colors and selected typefaces.
 
 Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Google typeface `Plus Jakarta Sans` throughout (body 400–500; headings 700–800), with Google Material Symbols Rounded icons.
 
@@ -12,12 +12,12 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 - Structured candidate fields, recruiter search, possible-duplicate flags and human-controlled application stages.
 - Mandatory PDF/DOCX CV upload (5 MB maximum), stored in private R2 and delivered only through an owner-protected admin endpoint.
 - Owner-only **CV screening (ATS)** in the admin console. It reads each CV into structured JSON, compares it with the client's job description and gives an explainable fit score with evidence. Recruiters make every decision; personal characteristics are removed before screening. See [docs/ATS_SCREENING.md](docs/ATS_SCREENING.md).
-- **Job portal (Phase 1)**, closed to registration until legal sign-off. Candidates upload CVs free; hiring companies post JDs that go live after admin approval. CVs are released automatically only within each company's admin-set parameters, as anonymised previews. Companies unlock full CVs from a quota plan, with watermarked downloads, rate limits and DPDP-style itemised consent. Optional skill tests feed the score. Clients are invited by Job Point and get the following:
+- **Job portal (Phase 1)**, closed to registration until legal sign-off. Candidates upload CVs free and manage them on one page, "My CV and privacy"; hiring companies post JDs that go live after admin approval. CVs are released automatically only within each company's admin-set parameters, as anonymised previews. Companies unlock full CVs from a quota plan, with watermarked downloads, rate limits and DPDP-style itemised consent. Optional skill tests feed the score. Clients are invited by Jobboard300 and get the following:
   - an overview dashboard;
   - a hiring pipeline with interviews, offers and joining;
   - placements with replacement-guarantee and non-solicitation dates;
   - team accounts;
-  - managed searches, where Job Point submits candidates.
+  - managed searches, where Jobboard300 submits candidates.
 
   See [docs/PORTAL.md](docs/PORTAL.md) and the [review and roadmap](docs/REVIEW_AND_ROADMAP_2026-11.md).
 - Owner-only administration using Sites sign-in: create and publish roles, review applications and hiring enquiries, update statuses and notes, and delete records.
@@ -29,7 +29,7 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 
 ## Working Platform (internal team area)
 
-`/platform` is the internal, sign-in-only area for Job Point team members. After signing in, people see a dashboard of the tools an administrator has granted them. The first tool is **Email Kit**, the employer-outreach workspace formerly released as Usha. Tools are listed in `lib/platform/tools.ts`, so a future tool is one registry entry plus its route.
+`/platform` is the internal, sign-in-only area for Jobboard300 team members. After signing in, people see a dashboard of the tools an administrator has granted them. The first tool is **Email Kit**, the employer-outreach workspace formerly released as Usha. Tools are listed in `lib/platform/tools.ts`, so a future tool is one registry entry plus its route.
 
 - Accounts belong to the platform: email and password, PBKDF2-SHA256 hashing, and hashed session tokens in an HttpOnly cookie. Sessions expire after 12 hours idle or 7 days. Administrators invite people and send password resets as one-time links; no email service is configured. The site owner, verified by Sign in with ChatGPT, creates the first administrator and can recover administrators at `/platform/owner`.
 - Every `/platform` page and `/api/platform` endpoint checks the session and the per-tool level (View, Edit or Manage) on the server. Mutations also require a same-origin request. Without access, a page redirects to sign-in or returns 403, and an API returns 401 or 403 with no data.
@@ -80,7 +80,7 @@ Candidate multipart fields: `fullName`, `email`, `phone`, `location`, `experienc
 
 A successful candidate submission creates an application record; its CV, which is required, is private in R2. A successful employer submission creates an employer enquiry. Both confirmations show a reference derived from the saved record ID, also shown in the admin console. Recent duplicate candidate submissions return an explicit 409 response and do not overwrite an existing CV. Verified profile correction/withdrawal/deletion is handled through the existing privacy request and admin workflow; candidate self-service CV replacement is not implemented. No acknowledgement email, recruiter email notification or messaging integration is configured.
 
-The owner signs in at `/admin` using the owning ChatGPT account. Candidate records are under **Candidate pipeline**; employer forms are under **Employer enquiries**; privacy requests are under **Privacy requests**. CV downloads are owner-authorised and audited. The owner account is currently `dipuraj.thapa@gmail.com`. A confirmed Job Point recruiter account and access policy must be configured before the company handover. The site is shared publicly as a read-only demo. `lib/demo.ts` sets `DEMO_MODE = true` for both the UI and API. Candidate, employer and privacy request forms are visibly disabled; their POST routes reject every request with HTTP 503 / `DEMO_READ_ONLY` before reading the body, rate limiting, database operations or CV storage. Owner admin access remains authenticated. Demo pages use noindex and an empty sitemap; robots.txt disallows `/admin` and `/api/` while letting crawlers read the public noindex tag. Public demo access does not authorise live recruitment intake. Changing the flag requires a reviewed source deployment after the launch checks below are satisfied.
+The owner signs in at `/admin` using the owning ChatGPT account. Candidate records are under **Candidate pipeline**; employer forms are under **Employer enquiries**; privacy requests are under **Privacy requests**. CV downloads are owner-authorised and audited. The owner account is currently `dipuraj.thapa@gmail.com`. A confirmed Jobboard300 recruiter account and access policy must be configured before the company handover. The site is shared publicly as a read-only demo. `lib/demo.ts` sets `DEMO_MODE = true` for both the UI and API. Candidate, employer and privacy request forms are visibly disabled; their POST routes reject every request with HTTP 503 / `DEMO_READ_ONLY` before reading the body, rate limiting, database operations or CV storage. Owner admin access remains authenticated. Demo pages use noindex and an empty sitemap; robots.txt disallows `/admin` and `/api/` while letting crawlers read the public noindex tag. Public demo access does not authorise live recruitment intake. Changing the flag requires a reviewed source deployment after the launch checks below are satisfied.
 
 ## Data model
 
@@ -90,7 +90,7 @@ The immutable migrations are `drizzle/0000_job_point_recruitment.sql`, `drizzle/
 
 Use the Sites-managed starter workflow. The package lock is unchanged. After installing dependencies, generate or verify migration metadata with `npm run db:generate`, then run the Sites build command. Local D1 preview and hosted D1 are separate databases. Do not expose the admin routes or resume objects publicly.
 
-The operating recommendation and decisions are in [docs/DIGITAL_RECRUITMENT_BLUEPRINT.md](docs/DIGITAL_RECRUITMENT_BLUEPRINT.md). Before public intake, Job Point Consultancy must confirm its legal identity and privacy contact, processor and storage arrangements, retention and deletion policy, backup restore process, CV malware-scanning approach, breach response, and any domestic/overseas recruiting obligations. The public privacy notice names these release dependencies. Sites published version 5 as a public read-only demo on 13 October 2026. Browser/API/security verification remains incomplete; do not accept live PII until these gates are verified.
+The operating recommendation and decisions are in [docs/DIGITAL_RECRUITMENT_BLUEPRINT.md](docs/DIGITAL_RECRUITMENT_BLUEPRINT.md). Before public intake, Jobboard300 must confirm its legal identity and privacy contact, processor and storage arrangements, retention and deletion policy, backup restore process, CV malware-scanning approach, breach response, and any domestic/overseas recruiting obligations. The public privacy notice names these release dependencies. Sites published version 5 as a public read-only demo on 13 October 2026. Browser/API/security verification remains incomplete; do not accept live PII until these gates are verified.
 
 ## Demo verification
 

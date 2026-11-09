@@ -63,7 +63,7 @@ When the role does not specify a component, that component is dropped and its we
 
 ## Optional Claude-assisted extraction
 
-By default, CVs are read on the server by the built-in parser. No CV leaves Job Point's hosting.
+By default, CVs are read on the server by the built-in parser. No CV leaves Jobboard300's hosting.
 
 If an `ANTHROPIC_API_KEY` secret is configured, the console offers **Use Claude** for each screening. It sends a redacted copy of the CV text to `claude-opus-5-5` for extraction, using structured JSON output and low effort.
 
@@ -105,7 +105,7 @@ Data: migration `drizzle/0004_ats_screening.sql` adds `ats_job_profiles` (edited
 - **Scanned PDFs have no text layer** and go to manual review. There is no OCR.
 - **Unusual layouts can lose role boundaries:** tables of dates, roles without dates, or text in images. The parse-confidence figure and warnings show when to read the CV yourself.
 - **Hidden text is not detected:** white or tiny text in a PDF is read like any other text. The "listed only" rule limits its effect, but it does not remove it.
-- **The skills taxonomy needs extending:** `lib/ats/taxonomy.ts` has about 160 skills focused on Job Point's sectors. Unknown skills from a CV's skills list are kept as free terms and can still match a requirement worded the same way.
+- **The skills taxonomy needs extending:** `lib/ats/taxonomy.ts` has about 160 skills focused on Jobboard300's sectors. Unknown skills from a CV's skills list are kept as free terms and can still match a requirement worded the same way.
 - **Weights are a starting point.** Calibrate them against 30–50 past placements before relying on the bands.
 - **CPU time on the host is unconfirmed.** In a local workerd run, reading a two-page PDF took about 0.3 s. Confirm the hosting plan's per-request CPU limit before screening large batches.
 

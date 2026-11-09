@@ -30,3 +30,4 @@
 .pj-funnel{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px}.pj-funnel button{display:grid;gap:2px;padding:12px;border:1px solid #dfe5f1;border-radius:12px;background:#fff;text-align:left;cursor:pointer;font:500 14px var(--font);color:var(--navy)}.pj-funnel b{font-size:24px}
 .pj-actions{align-content:start;justify-content:flex-end}.pj-actions select{padding:9px;border:1px solid #cfd8ea;border-radius:10px;font:600 14px var(--font)}
 .pj-item .pj-form{margin-top:10px}
+.pj-list>label.pj-row{flex-wrap:nowrap;align-items:flex-start}.pj-list>label.pj-row input[type=checkbox]{margin-top:4px;flex:none}

@@ -4,7 +4,7 @@ Email Kit was released as Usha up to version 3.0.0. Newest first.
 
 ## 3.1.0 (2026-11-03)
 
-- Email Kit now runs inside the Job Point Working Platform with team sign-in
+- Email Kit now runs inside the Jobboard300 Working Platform with team sign-in
 - Client records, restrictions and history are shared and saved on the server
 - Restores show a per-record check, and follow-ups are drafted by the person who continues them
 

@@ -1,7 +1,7 @@
 -- Client workspace: admin-invited client accounts and team members, managed
--- searches run by Job Point, the hiring pipeline (submissions, interviews,
+-- searches run by Jobboard300, the hiring pipeline (submissions, interviews,
 -- offers, joining) and placements with their replacement-guarantee window and
--- the period in which Job Point must not approach the placed person with jobs.
+-- the period in which Jobboard300 must not approach the placed person with jobs.
 ALTER TABLE companies ADD COLUMN guarantee_days INTEGER NOT NULL DEFAULT 90;
 --> statement-breakpoint
 ALTER TABLE companies ADD COLUMN fee_terms TEXT NOT NULL DEFAULT '';

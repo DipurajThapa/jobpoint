@@ -31,7 +31,7 @@ Conclusion: the portal is mostly new work. It reuses the PR #7 engine, the sessi
 | D2 | **Email (and optionally SMS) provider** for verification, password reset and consent receipts. None is configured. | A transactional email provider: Amazon SES (Mumbai region), Resend or Zoho ZeptoMail. Add SMS OTP (for example MSG91) later. Without a provider, candidates cannot self-register safely; only admin-issued one-time links would work, as the Working Platform does today. |
 | D3 | **Semantic similarity method.** The current hosting gives only D1 and R2: no vector index and no embedding model. | Phase 1: a skill-relatedness graph plus TF-IDF cosine similarity over normalised skills and titles. It is deterministic, explainable, cheap and runs on Workers. The design allows an embedding provider to be plugged in later (Workers AI if the hosting exposes it, otherwise an external API under a processor agreement). |
 | D4 | **Watermarking DOCX.** PDFs can be stamped on every page. DOCX files cannot be stamped reliably. | Companies receive **one watermarked PDF**: the original PDF stamped on every page, or for a DOCX, a clean PDF rendering of the parsed CV plus its text. The original DOCX is never handed out. Each copy carries a visible company stamp and a unique trace ID. |
-| D5 | **Same site and brand as Job Point Consultancy?** | Yes: same app and domain, with new `/candidate`, `/company` and `/admin/portal` areas behind a `PORTAL_LIVE` switch. Public intake stays off until legal sign-off. |
+| D5 | **Same site and brand as Jobboard300?** | Yes: same app and domain, with new `/candidate`, `/company` and `/admin/portal` areas behind a `PORTAL_LIVE` switch. Public intake stays off until legal sign-off. |
 | D6 | **Who is "admin"?** | Only you, through the existing owner sign-in. Working Platform staff cannot see the portal admin in Phase 1. |
 | D7 | **Release cap per JD.** | The admin sets an optional maximum number of released CVs per JD (default 50, highest scores first). Small numbers are the point. |
 | D8 | **Does a company see the candidate's current employer after unlock?** | Yes. The full CV is visible after unlock, never before. |
@@ -205,7 +205,7 @@ What changes the design:
 3. **Already-unlocked copies.** This is my proposal, for legal to confirm.
    - Platform access to the full CV and contacts is **revoked** for every company. They see "The candidate withdrew consent on ‹date›".
    - Companies get an email asking them to delete downloaded copies within 7 days, as their contract requires.
-   - Job Point remains responsible for what it controls. Copies already downloaded are subject to the company's own obligations.
+   - Jobboard300 remains responsible for what it controls. Copies already downloaded are subject to the company's own obligations.
    - The unlock row and quota unit stay; they are not refunded, because this is an audit record.
 
    This differs from downgrade or expiry, where unlocked CVs **stay visible**.
@@ -253,7 +253,7 @@ What changes the design:
 6. JD matches: ranked anonymised previews, or "No strong matches yet".
 7. Unlock confirmation, showing the quota cost (or "already unlocked, no charge").
 8. Unlocked candidate: full CV, contacts, watermarked PDF download, application status.
-9. Upgrade prompt (stub: "Contact Job Point to change plan").
+9. Upgrade prompt (stub: "Contact Jobboard300 to change plan").
 10. Team users (owner invites recruiters).
 
 **Admin** (inside the existing `/admin`)

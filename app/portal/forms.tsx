@@ -56,9 +56,9 @@ export function Register({ kind }: { kind: "candidate" | "company" }) {
     <label>Mobile number<input name="phone" type="tel" required maxLength={16} autoComplete="tel" /></label>
     <label>Password <span className="pj-muted">at least 12 characters</span><input name="password" type="password" required minLength={12} autoComplete="new-password" /></label>
     {kind === "candidate" && <label className="pj-row"><input type="checkbox" name="adult" value="yes" required /> I am 18 or older.</label>}
-    <label className="pj-row"><input type="checkbox" name="terms" value="yes" required /> I accept the <a href="/terms" target="_blank">terms</a>{kind === "company" ? ", including using candidate data only for hiring, never contacting candidates outside Job Point before unlocking, and deleting CVs on request." : " and have read the "}{kind === "candidate" && <a href="/privacy" target="_blank">privacy notice</a>}.</label>
+    <label className="pj-row"><input type="checkbox" name="terms" value="yes" required /> I accept the <a href="/terms" target="_blank">terms</a>{kind === "company" ? ", including using candidate data only for hiring, never contacting candidates outside Jobboard300 before unlocking, and deleting CVs on request." : " and have read the "}{kind === "candidate" && <a href="/privacy" target="_blank">privacy notice</a>}.</label>
     <button className="wp-btn" disabled={f.busy}>{f.busy ? "Creating…" : "Create account"}</button>
-    {kind === "company" && <p className="pj-muted">Job Point reviews every company and sets its matching rules before any candidate is shared.</p>}
+    {kind === "company" && <p className="pj-muted">Jobboard300 reviews every company and sets its matching rules before any candidate is shared.</p>}
   </form>;
 }
 
@@ -102,7 +102,7 @@ export function Reset({ token }: { token: string }) {
 
 export const NOTICE = CONSENT_NOTICE;
 
-/** Invited client users (added by Job Point or their company owner) set their first password. */
+/** Invited client users (added by Jobboard300 or their company owner) set their first password. */
 export function Accept({ token }: { token: string }) {
   const f = useForm();
   async function submit(e: FormEvent<HTMLFormElement>) {
