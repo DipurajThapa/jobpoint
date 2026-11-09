@@ -29,7 +29,7 @@ function paramsFrom(f: FormData) {
 function ParamsFields() {
   return <div className="form-grid">
     <label>Minimum match score<input name="minScore" type="number" min={40} max={95} defaultValue={70} required /></label>
-    <label>Cities (comma-separated, empty = any)<input name="cities" placeholder="Durgapur, Asansol" /></label>
+    <label>Cities (comma-separated, empty = any)<input name="cities" placeholder="Kolkata, Howrah" /></label>
     <fieldset className="full-field"><legend>Permitted role families</legend>{ROLE_FAMILIES.map(r => <label key={r} className="consent"><input type="checkbox" name="roleFamilies" value={r} /> {r}</label>)}</fieldset>
     <fieldset className="full-field"><legend>Permitted seniority</legend>{SENIORITY.map(s => <label key={s} className="consent"><input type="checkbox" name="seniority" value={s} defaultChecked={s === "junior" || s === "mid"} /> {s}</label>)}</fieldset>
     <label>CTC band from (LPA)<input name="ctcMin" type="number" step={0.5} min={0} /></label>

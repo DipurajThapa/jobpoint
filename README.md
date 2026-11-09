@@ -1,6 +1,6 @@
 # Jobboard300
 
-Full-stack recruitment website for Jobboard300, based in Durgapur, West Bengal. The public interface follows the Talentraa recruitment-template flow, adapted to Jobboard300's logo colors and selected typefaces.
+Full-stack recruitment website for Jobboard300, based in Kolkata, West Bengal. The public interface follows the Talentraa recruitment-template flow, adapted to Jobboard300's logo colors and selected typefaces.
 
 Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Google typeface `Plus Jakarta Sans` throughout (body 400–500; headings 700–800), with Google Material Symbols Rounded icons.
 

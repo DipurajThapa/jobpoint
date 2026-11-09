@@ -200,7 +200,7 @@ function SingleCheck({ roles, useAi, onResult, setNotice }: { roles: Role[]; use
       </fieldset>
       {source === "role" ? <label className="full-field">Role<select name="jobId" required>{roles.map(r => <option key={r.id} value={r.id}>{r.title} · {r.location}</option>)}</select></label> : <>
         <label>Job title<input name="title" required maxLength={160} placeholder="e.g. Accounts Executive" /></label>
-        <label>Job location<input name="location" maxLength={120} placeholder="e.g. Durgapur" /></label>
+        <label>Job location<input name="location" maxLength={120} placeholder="e.g. Kolkata" /></label>
         <label className="full-field">Job description and requirements<textarea name="description" required minLength={30} maxLength={8000} rows={7} placeholder="Paste the client's job description, including requirements such as skills, years of experience and qualifications." /></label>
       </>}
     </div>

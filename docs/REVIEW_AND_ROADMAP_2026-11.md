@@ -59,7 +59,7 @@ From the research (section 1 there). Fees are indicative and mostly from vendor 
 | Service | Typical terms in India | For Jobboard300 |
 |---|---|---|
 | Permanent IT placement | 8.33% (entry) to 8.33–12.5% (mid) of annual CTC, invoiced on joining. 60–90 day replacement guarantee. | **Now.** The core service. The pipeline, placements and guarantee tracking built this round support it. |
-| Fresher and campus hiring | Per-hire or per-drive fees | **Now.** Local colleges in Durgapur and Kolkata. Needs bulk CV intake and an online test round. |
+| Fresher and campus hiring | Per-hire or per-drive fees | **Now.** Local colleges in and around Kolkata. Needs bulk CV intake and an online test round. |
 | Background verification (resold) | About ₹1,200–3,000 per candidate for a standard package | **Now/next.** Partner with a BGV vendor. Record consent and results, not raw EPFO data. |
 | Interview-as-a-service | About ₹2,000–2,500 per technical interview | **Next.** Freelance senior engineers, using the interview records built this round. |
 | Contract-to-hire (C2H) | Conversion terms vary (for example 1–2 months' CTC, or free after 6–12 months). Fix them in the contract. | **Next, small scale.** |
