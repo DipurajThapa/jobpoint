@@ -12,5 +12,7 @@ declare namespace Cloudflare {
     MAIL_FROM?: string;
     /** Optional override of the ZeptoMail endpoint (for example the India data-centre host). */
     MAIL_API_URL?: string;
+    /** "true" opens portal registration in production (after legal sign-off). */
+    PORTAL_OPEN?: string;
   }
 }

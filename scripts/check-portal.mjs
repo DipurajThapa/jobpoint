@@ -300,7 +300,9 @@ await check("Duplicate accounts and CVs are flagged; merging never double-charge
   assert.ok((await db.prepare("SELECT 1 FROM duplicate_flags WHERE kind = 'cv' AND signal = 'same_file'").first()));
   await candidate.mergeCandidates(db, a, b, "admin");
   assert.equal((await db.prepare("SELECT status FROM candidates WHERE id = ?").bind(b).first()).status, "merged");
-  assert.ok(candidate.hamming(candidate.simhash(text), candidate.simhash(text + " small edit")) <= 3);
+  const cvText = "Senior Sales Executive at Example Foods Asansol since March 2020. Manage forty retailers and three distributors across the Asansol territory and plan weekly beat routes. Achieved one hundred and twelve percent of monthly sales targets through lead generation and cold calling. Report daily secondary sales in Excel and the company CRM. Earlier worked as Sales Executive with Sample Consumer Goods handling general trade dealers and collections. Education BBA from Example University in 2018. Languages English Hindi Bengali. Notice period thirty days and expected CTC four lakh per annum.";
+  assert.ok(candidate.similarity(candidate.minhash(cvText), candidate.minhash(cvText.replace("four lakh", "four point two lakh"))) >= 0.8);
+  assert.ok(candidate.similarity(candidate.minhash(text), candidate.minhash("Asha Paul accounts executive tally gst durgapur five years bank reconciliation vendor payments ".repeat(8))) < 0.2);
 });
 await check("Unparseable CV goes to manual review and is never released", async () => {
   const db = await setup();

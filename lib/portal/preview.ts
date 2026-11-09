@@ -60,7 +60,7 @@ export function buildPreview(p: PortalProfile, ref: string, score: number, expla
     roleFamily: roleFamilyById(p.india.roleFamily)?.label ?? "Other",
     seniority: SENIORITY_LABEL[p.india.seniority],
     yearsExperience: p.india.yearsExperience,
-    keySkills: p.skills.filter(s => !s.id.startsWith("term:") && s.family !== "language").sort((a, b) => (b.evidence === "work" ? 1 : 0) - (a.evidence === "work" ? 1 : 0) || b.months - a.months).slice(0, 8).map(s => s.name),
+    keySkills: p.skills.filter(s => !s.id.startsWith("term:") && s.family !== "language" && s.family !== "soft").sort((a, b) => (b.evidence === "work" ? 1 : 0) - (a.evidence === "work" ? 1 : 0) || b.months - a.months).slice(0, 8).map(s => s.name),
     city: p.india.currentCity || "not stated",
     relocate: p.india.willingToRelocate === null ? "not stated" : p.india.willingToRelocate ? "yes" : "no",
     education: EDUCATION[best] || "not stated",

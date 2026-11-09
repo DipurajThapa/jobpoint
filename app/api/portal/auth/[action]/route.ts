@@ -5,6 +5,7 @@ import { applyCompany } from "@/lib/portal/company";
 import { withinLimits } from "@/lib/portal/access";
 import { sendMail } from "@/lib/portal/mailer";
 import { audit } from "@/lib/portal/db";
+import { env } from "cloudflare:workers";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ export async function POST(request: Request, context: { params: Promise<{ action
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const origin = new URL(request.url).origin;
     if (action === "register") {
+      // Registration stays closed in production until the owner sets PORTAL_OPEN=true after legal sign-off.
+      if (process.env.NODE_ENV === "production" && env.PORTAL_OPEN !== "true") return fail("Job Point's job portal opens soon. Registration is not available yet.", 503, "NOT_OPEN");
       if (!(await withinLimits(db, ip, "register")).ok) return fail("Too many sign-ups from this connection. Try again later.", 429, "RATE_LIMIT");
       const kind = body.kind === "company" ? "company_user" : "candidate";
       if (body.adult !== true && kind === "candidate") return fail("Job Point is for adults aged 18 or over.", 400, "AGE");

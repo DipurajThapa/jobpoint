@@ -8,24 +8,28 @@ import { consentActive } from "./consent";
 export const normEmail = (email: string) => email.trim().toLowerCase().replace(/\+[^@]*@/, "@").replace(/\.(?=[^@]*@gmail\.com$)/g, "");
 export const normPhone = (phone: string) => phone.replace(/\D/g, "").slice(-10);
 
-/** 64-bit SimHash of word 3-shingles; near-identical CVs differ in only a few bits. */
-export function simhash(text: string): string {
+// Near-duplicate CVs: MinHash over 5-word shingles (Broder). The estimated Jaccard
+// similarity of two signatures approximates the share of shingles they have in
+// common; on the seed set a re-uploaded CV scores 0.92 and different people at
+// most 0.04, so 0.8 is the duplicate threshold.
+const MINHASH_K = 64;
+const fmix = (h: number) => { h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16; return h >>> 0; };
+export function minhash(text: string): string {
   const words = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 1);
-  const v = new Array(64).fill(0);
-  for (let i = 0; i + 2 < words.length; i++) {
-    const shingle = `${words[i]} ${words[i + 1]} ${words[i + 2]}`;
-    let h1 = 0x811c9dc5, h2 = 0x01000193;
-    for (let c = 0; c < shingle.length; c++) { h1 = Math.imul(h1 ^ shingle.charCodeAt(c), 16777619) >>> 0; h2 = Math.imul(h2 ^ shingle.charCodeAt(c), 2246822519) >>> 0; }
-    for (let b = 0; b < 32; b++) { v[b] += (h1 >>> b) & 1 ? 1 : -1; v[b + 32] += (h2 >>> b) & 1 ? 1 : -1; }
+  const mins = new Array<number>(MINHASH_K).fill(0xffffffff);
+  for (let i = 0; i + 4 < words.length; i++) {
+    let h = 0x811c9dc5;
+    const shingle = words.slice(i, i + 5).join(" ");
+    for (let c = 0; c < shingle.length; c++) h = Math.imul(h ^ shingle.charCodeAt(c), 16777619) >>> 0;
+    for (let k = 0; k < MINHASH_K; k++) { const v = fmix(h ^ Math.imul(k + 1, 0x9e3779b1)); if (v < mins[k]) mins[k] = v; }
   }
-  let out = "";
-  for (let n = 0; n < 16; n++) { let nib = 0; for (let b = 0; b < 4; b++) if (v[n * 4 + b] > 0) nib |= 1 << b; out += nib.toString(16); }
-  return out;
+  return words.length < 5 ? "" : mins.map(m => m.toString(16).padStart(8, "0")).join("");
 }
-export function hamming(a: string, b: string) {
-  let d = 0;
-  for (let i = 0; i < Math.min(a.length, b.length); i++) { let x = parseInt(a[i], 16) ^ parseInt(b[i], 16); while (x) { d += x & 1; x >>= 1; } }
-  return d;
+export function similarity(a: string, b: string): number {
+  if (!a || !b || a.length !== b.length) return 0;
+  let same = 0;
+  for (let k = 0; k < a.length; k += 8) if (a.slice(k, k + 8) === b.slice(k, k + 8)) same++;
+  return same / (a.length / 8);
 }
 
 export async function createCandidate(db: Db, input: { accountId: string | null; displayName: string; email: string; phone: string; currentCity?: string }) {
@@ -51,7 +55,7 @@ export type NewCv = { r2Key: string; fileName: string; fileType: "pdf" | "docx";
 /** Store a new primary CV and its parsed profile. Unreadable CVs go to manual review, never dropped. */
 export async function addCv(db: Db, candidateId: string, cv: NewCv) {
   const id = newId(), at = nowIso();
-  const fingerprint = simhash(cv.text);
+  const fingerprint = minhash(cv.text);
   const status = cv.parseOk ? "parsed" : "needs_review";
   await db.batch([
     db.prepare("UPDATE cvs SET is_primary = 0, superseded_at = ? WHERE candidate_id = ? AND is_primary = 1").bind(at, candidateId),
@@ -66,7 +70,7 @@ export async function addCv(db: Db, candidateId: string, cv: NewCv) {
     .bind(candidateId).all<{ cv_id: string; candidate_id: string; sha256: string; text_fingerprint: string }>();
   for (const r of results) {
     if (r.sha256 === cv.sha256) await flagDuplicate(db, "cv", r.candidate_id, candidateId, "same_file");
-    else if (cv.text.length > 400 && r.text_fingerprint && hamming(r.text_fingerprint, fingerprint) <= 3) await flagDuplicate(db, "cv", r.candidate_id, candidateId, "near_identical_text");
+    else if (r.text_fingerprint && similarity(r.text_fingerprint, fingerprint) >= 0.8) await flagDuplicate(db, "cv", r.candidate_id, candidateId, "near_identical_text");
   }
   return { cvId: id, status };
 }

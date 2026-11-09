@@ -47,7 +47,7 @@ const ENTRIES: Entry[] = [
   ["data-analysis", "Data analysis", "analytics", "data analytics", "analysing data", "analyzing data", "data analyst"],
 
   // Sales and business development
-  ["sales", "Sales", "sales", "selling", "sales executive", "sales experience"],
+  ["sales", "Sales", "sales", "selling", "sales executive", "sales officer", "sales manager", "sales representative", "sales experience", "sales role", "sales team", "sales and marketing", "salesman"],
   ["b2b-sales", "B2B sales", "sales", "b2b", "corporate sales", "enterprise sales", "institutional sales", "business to business"],
   ["b2c-sales", "B2C sales", "sales", "b2c", "retail sales", "direct sales", "counter sales", "showroom sales"],
   ["field-sales", "Field sales", "sales", "field sales", "outdoor sales", "on field sales", "territory sales", "market visits"],
@@ -93,13 +93,13 @@ const ENTRIES: Entry[] = [
   ["inventory-management", "Inventory management", "supply-chain", "inventory", "inventory control", "cycle count", "cycle counts", "physical verification", "stock transfers", "sku", "skus", "stock management", "stock maintenance", "stock control", "store management", "store keeping", "storekeeping", "stores management", "stores in charge", "stores incharge", "store in charge", "store incharge", "stores executive", "stock register", "grn", "goods receipt"],
   ["warehouse-management", "Warehouse management", "supply-chain", "warehouse", "warehouse operations", "godown", "godown management", "warehousing", "wms", "dispatch", "receiving and dispatch"],
   ["logistics", "Logistics", "supply-chain", "logistics coordination", "transportation", "fleet management", "shipment", "shipping"],
-  ["procurement", "Procurement", "supply-chain", "purchase", "purchasing", "vendor management", "purchase orders", "vendor development"],
+  ["procurement", "Procurement", "supply-chain", "purchasing", "purchase department", "purchase executive", "purchase officer", "purchase management", "vendor management", "purchase orders", "vendor development"],
   ["supply-chain-management", "Supply chain management", "supply-chain", "scm", "supply chain"],
   ["export-import", "Export and import", "supply-chain", "exim", "export import", "customs clearance", "export documentation"],
   ["quality-control", "Quality control", "quality", "qc", "quality checks", "quality inspection", "quality assurance", "qa qc"],
   ["iso", "ISO standards", "quality", "iso 9001", "iso documentation", "iso audits"],
   ["production-planning", "Production planning", "manufacturing", "ppc", "production planning and control", "production scheduling"],
-  ["production", "Production", "manufacturing", "production supervision", "shop floor", "manufacturing operations", "plant operations"],
+  ["production", "Production", "manufacturing", "production supervision", "production supervisor", "production line", "production planning and execution", "shop floor", "manufacturing operations", "plant operations"],
   ["maintenance", "Maintenance", "manufacturing", "preventive maintenance", "breakdown maintenance", "plant maintenance"],
   ["lean", "Lean / 5S / Kaizen", "manufacturing", "5s", "kaizen", "six sigma", "lean manufacturing", "tpm"],
   ["safety", "Health and safety", "manufacturing", "ehs", "hse", "industrial safety", "safety compliance"],
@@ -210,8 +210,13 @@ export function normalise(text: string): string {
     .trim()} `;
 }
 
+// Skills whose bare label is everyday vocabulary in other roles ("sales vouchers",
+// "production report"): they match only on their specific phrases.
+const LABEL_NOT_ALIAS = new Set(["sales", "production"]);
+
 export const SKILLS: TaxonomySkill[] = ENTRIES.map(([id, label, family, ...aliases]) => {
-  const all = new Set([label, ...aliases].map(a => normalise(a).trim()).filter(a => a.length > 1 || a === "c"));
+  const all = new Set([...(LABEL_NOT_ALIAS.has(id) ? [] : [label]), ...aliases].map(a => normalise(a).trim()).filter(a => a.length > 1 || a === "c"));
+  if (LABEL_NOT_ALIAS.has(id)) all.delete(normalise(label).trim());
   return { id, label, family, aliases: [...all] };
 });
 

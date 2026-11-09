@@ -28,6 +28,9 @@ export async function runReleases(db: Db, jdId: string, secret: string): Promise
       WHERE m.jd_id = ? AND m.hard_pass = 1 AND m.lower_bound >= ? AND c.status = 'active' AND c.open_to_work = 1
         AND ${ACTIVE_CONSENT_SQL("m.candidate_id", "share_with_companies")}
         AND NOT EXISTS (SELECT 1 FROM json_each(c.hidden_company_ids) h WHERE h.value = ?)
+        -- An unresolved duplicate CV is withheld while its earlier twin is eligible, so a company never sees (or pays for) one person twice.
+        AND NOT EXISTS (SELECT 1 FROM duplicate_flags d JOIN candidates o ON o.id = CASE WHEN d.a_id = c.id THEN d.b_id ELSE d.a_id END
+          WHERE d.kind = 'cv' AND d.status = 'open' AND (d.a_id = c.id OR d.b_id = c.id) AND o.status = 'active' AND (o.created_at < c.created_at OR (o.created_at = c.created_at AND o.id < c.id)))
       ORDER BY m.lower_bound DESC, m.score DESC, m.candidate_id LIMIT ?`)
     .bind(jdId, minScore, jd.company_id, cap).all<{ candidate_id: string; score: number; lower_bound: number }>();
   const eligibleIds = new Set(eligible.map(e => e.candidate_id));
