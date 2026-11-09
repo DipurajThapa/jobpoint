@@ -15,9 +15,9 @@ async function actual(path) {
   const id = resolve(root, path);
   if (modules.has(id)) return modules.get(id);
   const source = await readFile(id, 'utf8');
-  const module = new SourceTextModule(stripTypeScriptTypes(source, { mode: 'transform' }), { context, identifier: id });
-  modules.set(id, module);
-  await module.link(async (specifier, parent) => {
+  const compiled = new SourceTextModule(stripTypeScriptTypes(source, { mode: 'transform' }), { context, identifier: id });
+  modules.set(id, compiled);
+  await compiled.link(async (specifier, parent) => {
     if (specifier === '@/lib/demo') return actual('lib/demo.ts');
     if (specifier === '@/lib/admin') return actual('lib/admin.ts');
     // Preserve the actual auth logic; only next/headers is mocked for APIs, which use Request headers.
@@ -48,8 +48,8 @@ async function actual(path) {
     assert.ok(match, `Unexpected import ${specifier}`);
     return synthetic(specifier, Object.fromEntries(match[1].split(',').map(name => [name.trim(), forbidden])));
   });
-  await module.evaluate();
-  return module;
+  await compiled.evaluate();
+  return compiled;
 }
 function synthetic(id, exports) {
   const key = 'mock:' + id + ':' + Object.keys(exports).sort().join(',');

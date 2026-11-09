@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
-import { resolve, relative } from 'node:path';
+import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 async function files(dir) {

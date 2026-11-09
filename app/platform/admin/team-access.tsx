@@ -11,6 +11,7 @@ const LEVELS: { value: Level | "none"; label: string }[] = [{ value: "none", lab
 async function call(url: string, method: string, body?: unknown) {
   const response = await fetch(url, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined, credentials: "same-origin" });
   const data = await response.json().catch(() => ({})) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load on purpose: it clears client state and re-runs the server session check
   if (response.status === 401) { window.location.assign("/platform/sign-in?next=/platform/admin"); throw new Error("Sign in again."); }
   if (!response.ok) throw new Error(data.error || "That did not work. Try again.");
   return data;

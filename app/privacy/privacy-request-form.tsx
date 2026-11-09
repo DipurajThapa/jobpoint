@@ -12,7 +12,7 @@ export default function PrivacyRequestForm() {
     const form = event.currentTarget;
     try {
       const response = await fetch("/api/privacy-requests", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form).entries())) });
-      const result = await response.json();
+      const result = await response.json() as { error?: string; message: string };
       if (!response.ok) throw new Error(result.error);
       setMessage(result.message); form.reset();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Please try again later."); }

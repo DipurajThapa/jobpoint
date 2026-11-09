@@ -11,17 +11,17 @@ function synthetic(names, values) {
 async function actual(path) {
   if (modules.has(path)) return modules.get(path);
   const source = await readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-  const module = new SourceTextModule(stripTypeScriptTypes(source, { mode: 'transform' }), { context, identifier: path });
-  modules.set(path, module);
-  await module.link(specifier => {
+  const compiled = new SourceTextModule(stripTypeScriptTypes(source, { mode: 'transform' }), { context, identifier: path });
+  modules.set(path, compiled);
+  await compiled.link(specifier => {
     if (specifier === '@/lib/local-dummy-jobs') return actual('lib/local-dummy-jobs.ts');
     if (specifier === '@/db') return synthetic(['getDb'], { getDb: () => { throw Error('Local D1 unavailable'); } });
     if (specifier === '@/db/schema') return synthetic(['jobs'], { jobs: {} });
     if (specifier === 'drizzle-orm') return synthetic(['and', 'desc', 'eq', 'like', 'or'], Object.fromEntries(['and', 'desc', 'eq', 'like', 'or'].map(name => [name, () => {}])));
     throw Error(`Unexpected dependency ${specifier}`);
   });
-  await module.evaluate();
-  return module;
+  await compiled.evaluate();
+  return compiled;
 }
 const fixture = (await actual('lib/local-dummy-jobs.ts')).namespace;
 const listing = (await actual('lib/public-jobs.ts')).namespace;
