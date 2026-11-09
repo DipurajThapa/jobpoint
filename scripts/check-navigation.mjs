@@ -16,6 +16,17 @@ const sources = new Map();
 for (const path of [...await files('app'), ...await files('components')]) sources.set(path, await readFile(resolve(root, path), 'utf8'));
 const routes = new Set([...sources.keys()].filter(path => path.endsWith('/page.tsx')).map(path => '/' + path.slice(4, -9).replace(/^\/$/, '')));
 routes.add('/');
+// API route handlers (route.ts), including dynamic segments such as [action], for links to downloads.
+const handlers = [];
+async function routeFiles(dir) {
+  for (const entry of await readdir(resolve(root, dir), { withFileTypes: true })) {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) await routeFiles(path);
+    else if (entry.name === 'route.ts') handlers.push(new RegExp('^/' + path.slice(4, -9).replace(/\[[^\]]+\]/g, '[^/]+') + '$'));
+  }
+}
+await routeFiles('app/api');
+const known = route => { const path = route.split('?')[0]; return routes.has(path) || handlers.some(re => re.test(path)); };
 const ids = new Map();
 for (const [path, source] of sources) {
   for (const [, id] of source.matchAll(/\bid="([\w-]+)"/g)) ids.set(id, path);
@@ -26,7 +37,7 @@ for (const [path, source] of sources) {
     assert.ok(href && href !== '#' && !href.startsWith('javascript:'), `Empty or unsafe link in ${path}`);
     if (!href.startsWith('/')) continue;
     const [route, anchor] = href.split('#');
-    assert.ok(routes.has(route), `Unknown route ${href} in ${path}`);
+    assert.ok(known(route), `Unknown route ${href} in ${path}`);
     if (anchor) {
       assert.ok(ids.has(anchor), `Unknown anchor ${href} in ${path}`);
       const target = ids.get(anchor);

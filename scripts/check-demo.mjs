@@ -28,6 +28,18 @@ async function actual(path) {
       sameOrigin: request => request.headers.get('origin') === new URL(request.url).origin,
       clean: forbidden, validEmail: forbidden, limitSubmission: forbidden, isJobOpen: forbidden,
     });
+    // Portal routes answer unauthenticated requests through these response helpers; everything else in the
+    // module (database, secrets, sessions) stays forbidden.
+    if (specifier === '@/lib/portal/session') {
+      const parentSource = await readFile(parent.identifier, 'utf8');
+      const names = [...parentSource.matchAll(/import\s*\{([^}]+)\}\s*from\s*["']@\/lib\/portal\/session["']/g)].flatMap(m => m[1].split(',').map(n => n.trim()));
+      const safe = {
+        json: (data, status = 200) => Response.json(data, { status }),
+        fail: (error, status = 400, code) => Response.json({ error, code }, { status }),
+        sameOrigin: request => request.headers.get('origin') === new URL(request.url).origin,
+      };
+      return synthetic(specifier, Object.fromEntries(names.map(n => [n, safe[n] ?? forbidden])));
+    }
     if (specifier === 'cloudflare:workers') return synthetic(specifier, { env: new Proxy({}, { get: forbidden }) });
     if (specifier === '@/db') return synthetic(specifier, { getDb: forbidden });
     // Obtain the imported names so mocks cover all unused drizzle/schema bindings.
