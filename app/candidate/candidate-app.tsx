@@ -25,6 +25,7 @@ export default function CandidateApp() {
   const loadProfile = useCallback(() => get<{ profile: Profile | null; status: string; sharing: boolean }>("/api/portal/candidate/profile").then(setProfile).catch(e => setNotice({ text: e.message, bad: true })), []);
   useEffect(() => { loadProfile(); }, [loadProfile]);
   const say = (text: string, bad = false) => setNotice({ text, bad });
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load on purpose: it clears client state and re-runs the server session check
   async function signOut() { await post("/api/portal/auth/sign-out", {}); window.location.assign("/portal/sign-in"); }
   return <>
     <header className="pj-top">
@@ -110,8 +111,9 @@ function Privacy({ data, reload, say }: { data: { sharing: boolean } | null; rel
       {info && <div className="pj-list">{info.companies.map(c => <label key={c.id} className="pj-row"><input type="checkbox" checked={info.blocked.includes(c.id)} onChange={e => act("/api/portal/candidate/block", { companyId: c.id, block: e.target.checked })} /> {c.display_name} <span className="pj-muted">{c.city}</span></label>)}</div>}
     </section>
     <section className="pj-card"><h2>Your data</h2>
-      <div className="pj-row">{/* eslint-disable-next-line @next/next/no-html-link-for-pages -- file download from an API route, not a page */}
+      <div className="pj-row">
         <a className="pj-btn quiet" href="/api/portal/candidate/export" download>Download my data</a>
+        {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load on purpose after deletion: it clears client state */}
         <button className="pj-btn danger" onClick={() => { const c = window.prompt("This deletes your account and CV permanently. Type DELETE to confirm."); if (c) act("/api/portal/candidate/delete", { confirm: c }).then(() => window.location.assign("/portal/sign-in")); }}>Delete my account</button></div>
       <p className="pj-muted">To withdraw consent, complain or ask a question about your data, write to Jobboard300. You can also complain to the Data Protection Board of India.</p>
     </section>

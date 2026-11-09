@@ -48,6 +48,7 @@ export function SetPasswordForm({ token, invite, email, initialError }: { token:
     setBusy(true); setError("");
     try {
       await post("/api/platform/auth/accept", { token, name: form.get("name"), password: form.get("password") });
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load on purpose: it clears client state and re-runs the server session check
       window.location.assign("/platform");
     } catch (e) { setError(e instanceof Error ? e.message : "The password was not saved."); setBusy(false); }
   }

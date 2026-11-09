@@ -16,11 +16,10 @@ export default function Operations() {
   const [busy,setBusy] = useState(false), [message,setMessage] = useState(""), [error,setError] = useState(false);
   const [editing,setEditing] = useState("");
   const connectionForm = useRef<HTMLFormElement>(null);
-  const load = useCallback(async()=>{
-    const [ops,team] = await Promise.all([call("/api/platform/admin/operations","GET"),call("/api/platform/admin/users","GET")]);
-    setData(ops as Data); setUsers(team.users);
-  },[]);
-  useEffect(()=>{load().catch(e=>{setError(true);setMessage(e.message);});},[load]);
+  // State is set in promise callbacks, never synchronously in the effect body.
+  const fetchAll = useCallback(()=>Promise.all([call("/api/platform/admin/operations","GET"),call("/api/platform/admin/users","GET")]),[]);
+  const load = useCallback(async()=>{const [ops,team]=await fetchAll();setData(ops as Data);setUsers(team.users);},[fetchAll]);
+  useEffect(()=>{fetchAll().then(([ops,team])=>{setData(ops as Data);setUsers(team.users);}).catch(e=>{setError(true);setMessage(e.message);});},[fetchAll]);
   async function run(body:Row, success:string) {
     setBusy(true);setMessage("");
     try {const result=await call("/api/platform/admin/operations","POST",body);await load();setError(false);setMessage(body.action==="integration.test" ? result.message : success);return true;}

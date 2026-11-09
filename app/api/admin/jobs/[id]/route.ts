@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { jobs } from "@/db/schema";
 import { isOwnerRequest } from "@/lib/admin";
-import { clean, errorJson, json, sameOrigin } from "@/lib/http";
+import { errorJson, json, sameOrigin } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 

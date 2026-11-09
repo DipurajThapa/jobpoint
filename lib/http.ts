@@ -1,5 +1,4 @@
 import { env } from "cloudflare:workers";
-import { getDb } from "@/db";
 
 export const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" } });
 export const errorJson = (message: string, status = 400) => json({ error: message }, status);
@@ -23,6 +22,5 @@ export async function limitSubmission(request: Request, category: string) {
 }
 
 export async function isJobOpen(id: string) {
-  const db = getDb();
   return await env.DB!.prepare("SELECT id FROM jobs WHERE id = ? AND status = 'published' LIMIT 1").bind(id).first() !== null;
 }

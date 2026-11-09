@@ -40,6 +40,7 @@ export default function CompanyApp({ owner }: { owner: boolean }) {
   useEffect(() => { load(); }, [load, view]);
   const say = (text: string, bad = false, upgrade = false) => setNotice({ text, bad, upgrade });
   const go = (v: typeof view) => { setNotice(null); setView(v); };
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load on purpose: it clears client state and re-runs the server session check
   async function signOut() { await post("/api/portal/auth/sign-out", {}); window.location.assign("/portal/sign-in"); }
   const active = dash?.company.status === "active";
   return <>

@@ -37,7 +37,7 @@ export default function HomeClient({ initialJobs, initialLocations, initialLoade
       if (location) params.set("location", location);
       setLoading(true); setJobError(false);
       fetch(`/api/jobs?${params}`, { signal: controller.signal })
-        .then(response => { if (!response.ok) throw new Error("Job search is unavailable."); return response.json(); })
+        .then(response => { if (!response.ok) throw new Error("Job search is unavailable."); return response.json() as Promise<{ jobs?: Job[]; locations?: string[] }>; })
         .then(result => { setJobs(result.jobs ?? []); setLocations(result.locations ?? []); })
         .catch(error => { if (error.name !== "AbortError") setJobError(true); })
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });

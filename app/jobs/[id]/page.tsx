@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DEMO_MODE } from "@/lib/demo";
 import { findLocalDummyJob } from "@/lib/local-dummy-jobs";
 import type { Metadata } from "next";
@@ -48,7 +49,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     <PublicHeader />
     <main className="job-detail-page"><div className="container detail-layout">
       <article className="job-detail">
-        <a className="back-link" href="/#jobs"><Icon name="arrow_back" /> All roles</a>
+        <Link className="back-link" href="/#jobs"><Icon name="arrow_back" /> All roles</Link>
         <span className="eyebrow">{sample ? "DUMMY · REFERENCE ONLY" : "CURRENT OPPORTUNITY"}</span>
         <h1>{job.title}</h1>
         <p className="detail-company">{job.company} · {job.sector}</p>
@@ -58,7 +59,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         {job.requirements && <><h2>What we’re looking for</h2><p className="requirements-text">{job.requirements}</p></>}
         <div className="job-note"><b>{sample ? "Fictional example" : "About Jobboard300"}</b><p>{sample ? "Dummy reference data for local review. This role does not exist and applications are not accepted." : DEMO_MODE ? "This is a preview of a job listing. Applications will open after the company completes its launch checks." : "Our team will review your application and contact you if your experience matches this opportunity. Your details are shared for this role only with your consent."}</p></div>
       </article>
-      <aside className="apply-card"><h2>{sample ? "Reference listing" : "Interested in this role?"}</h2><p>{sample ? "This dummy listing is for design and search testing only. Browse other roles for a confirmed vacancy." : DEMO_MODE ? "Review the application fields in this demo. No details can be sent." : "Send your details and our team will be in touch."}</p>{sample ? <a className="button" href="/#jobs">Browse roles <Icon name="north_east" /></a> : <ApplicationForm jobId={job.id} />}</aside>
+      <aside className="apply-card"><h2>{sample ? "Reference listing" : "Interested in this role?"}</h2><p>{sample ? "This dummy listing is for design and search testing only. Browse other roles for a confirmed vacancy." : DEMO_MODE ? "Review the application fields in this demo. No details can be sent." : "Send your details and our team will be in touch."}</p>{sample ? <Link className="button" href="/#jobs">Browse roles <Icon name="north_east" /></Link> : <ApplicationForm jobId={job.id} />}</aside>
     </div>{posting && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(posting).replace(/</g, "\\u003c") }} />}</main>
     <PublicFooter />
   </>;

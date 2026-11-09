@@ -44,7 +44,7 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
         body: candidate ? new FormData(form) : JSON.stringify(Object.fromEntries(new FormData(form).entries())),
         headers: candidate ? undefined : { "content-type": "application/json" },
       });
-      const data = await response.json();
+      const data = await response.json() as { error?: string; message: string };
       if (!response.ok) throw new Error(data.error || "We couldn't send your request. Please try again.");
       setMessage(data.message); form.reset();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Something went wrong. Please try again."); }
