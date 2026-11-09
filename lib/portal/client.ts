@@ -153,13 +153,19 @@ export async function removeMember(db: Db, companyId: string, actorId: string, m
 
 type PipelineRow = { id: string; company_id: string; jd_id: string; candidate_id: string; candidate_ref: string; stage: Stage; source: string };
 
-async function syncApplication(db: Db, candidateId: string, jdId: string, stage: Stage, actor: string) {
+/**
+ * Keep the candidate's application (if any) in step with the pipeline. Both
+ * statements apply only if the pipeline entry is at `stage` with updated_at
+ * `at`, i.e. only if this request's stage change won; a concurrent change
+ * that loses leaves the application untouched.
+ */
+async function syncApplication(db: Db, candidateId: string, jdId: string, stage: Stage, actor: string, guard: { pipelineId: string; at: string }) {
   const app = await db.prepare("SELECT id FROM portal_applications WHERE candidate_id = ? AND jd_id = ?").bind(candidateId, jdId).first<{ id: string }>();
   if (!app) return [];
-  const status = APPLICATION_STATUS[stage], at = nowIso();
+  const status = APPLICATION_STATUS[stage], won = "EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = ? AND updated_at = ?)";
   return [
-    db.prepare("UPDATE portal_applications SET status = ?, updated_at = ? WHERE id = ? AND status != ?").bind(status, at, app.id, status),
-    db.prepare("INSERT INTO portal_application_events (id, application_id, status, actor, at) VALUES (?, ?, ?, ?, ?)").bind(newId(), app.id, status, actor, at),
+    db.prepare(`UPDATE portal_applications SET status = ?, updated_at = ? WHERE id = ? AND status != ? AND ${won}`).bind(status, guard.at, app.id, status, guard.pipelineId, stage, guard.at),
+    db.prepare(`INSERT INTO portal_application_events (id, application_id, status, actor, at) SELECT ?, ?, ?, ?, ? WHERE ${won}`).bind(newId(), app.id, status, actor, guard.at, guard.pipelineId, stage, guard.at),
   ];
 }
 
@@ -190,7 +196,7 @@ export async function addToPipeline(db: Db, companyId: string, actorId: string, 
     db.prepare("INSERT INTO pipeline (id, company_id, jd_id, candidate_id, candidate_ref, source, stage, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'shortlisted', ?, ?, ?)")
       .bind(id, companyId, jdId, u.candidate_id, ref, applied ? "application" : "release", actorId, at, at),
     db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, at) VALUES (?, ?, 'shortlisted', ?, ?)").bind(newId(), id, `company:${actorId}`, at),
-    ...await syncApplication(db, u.candidate_id, jdId, "shortlisted", `company:${actorId}`),
+    ...await syncApplication(db, u.candidate_id, jdId, "shortlisted", `company:${actorId}`, { pipelineId: id, at }),
   ]);
   return { id, created: true };
 }
@@ -270,9 +276,9 @@ export async function moveStage(db: Db, companyId: string, actorId: string, pipe
     // Later statements apply only if this request made the change (guards against a concurrent update).
     db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, note, at) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = ? AND updated_at = ?)")
       .bind(newId(), row.id, stage, `company:${actorId}`, note, at, row.id, stage, at),
-    ...await syncApplication(db, row.candidate_id, row.jd_id, stage, `company:${actorId}`),
+    ...await syncApplication(db, row.candidate_id, row.jd_id, stage, `company:${actorId}`, { pipelineId: row.id, at }),
   ];
-  if (["rejected", "offer_declined", "no_show", "withdrawn"].includes(stage)) statements.push(db.prepare("UPDATE interviews SET status = 'cancelled', updated_at = ? WHERE pipeline_id = ? AND status = 'scheduled'").bind(at, row.id));
+  if (["rejected", "offer_declined", "no_show", "withdrawn"].includes(stage)) statements.push(db.prepare("UPDATE interviews SET status = 'cancelled', updated_at = ? WHERE pipeline_id = ? AND status = 'scheduled' AND EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = ? AND updated_at = ?)").bind(at, row.id, row.id, stage, at));
   if (stage === "joined") {
     const c = await db.prepare("SELECT guarantee_days, non_solicit_months FROM companies WHERE id = ?").bind(companyId).first<{ guarantee_days: number; non_solicit_months: number }>();
     const jd = await db.prepare("SELECT title FROM jds WHERE id = ?").bind(row.jd_id).first<{ title: string }>();
@@ -305,7 +311,7 @@ export async function scheduleInterview(db: Db, companyId: string, actorId: stri
     ...(row.stage === "shortlisted" ? [
       db.prepare("UPDATE pipeline SET stage = 'interview', updated_at = ? WHERE id = ?").bind(at, row.id),
       db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, note, at) VALUES (?, ?, 'interview', ?, ?, ?)").bind(newId(), row.id, `company:${actorId}`, `${round} scheduled`, at),
-      ...await syncApplication(db, row.candidate_id, row.jd_id, "interview", `company:${actorId}`),
+      ...await syncApplication(db, row.candidate_id, row.jd_id, "interview", `company:${actorId}`, { pipelineId: row.id, at }),
     ] : []),
   ]);
   return { id };
@@ -384,8 +390,11 @@ export async function clientOverview(db: Db, companyId: string) {
   const { results: joining } = await db.prepare(`SELECT p.id, p.joining_date, p.offer_ctc_inr, p.last_working_day, p.competing_offers, COALESCE(NULLIF(k.display_name, ''), p.candidate_ref) AS name, j.title AS jd_title
     FROM pipeline p JOIN jds j ON j.id = p.jd_id LEFT JOIN candidates k ON k.id = p.candidate_id JOIN unlocks u ON u.company_id = p.company_id AND u.candidate_id = p.candidate_id AND u.access_revoked_at IS NULL
     WHERE p.company_id = ? AND p.stage = 'offer_accepted' ORDER BY p.joining_date LIMIT 50`).bind(companyId).all<{ joining_date: string }>();
+  // The placement stays as a business record; the person's name shows only while the company still has access.
   const { results: placements } = await db.prepare(`SELECT pl.id, pl.title, pl.joined_on, pl.guarantee_ends_on, pl.status, pl.left_on, COALESCE(NULLIF(k.display_name, ''), 'Candidate') AS name
-    FROM placements pl LEFT JOIN candidates k ON k.id = pl.candidate_id AND k.status = 'active' WHERE pl.company_id = ? ORDER BY pl.joined_on DESC LIMIT 50`).bind(companyId).all<{ guarantee_ends_on: string; status: string }>();
+    FROM placements pl LEFT JOIN unlocks u ON u.company_id = pl.company_id AND u.candidate_id = pl.candidate_id AND u.access_revoked_at IS NULL
+    LEFT JOIN candidates k ON k.id = pl.candidate_id AND k.status = 'active' AND u.id IS NOT NULL
+    WHERE pl.company_id = ? ORDER BY pl.joined_on DESC LIMIT 50`).bind(companyId).all<{ guarantee_ends_on: string; status: string }>();
   // Hiring speed over the last 180 days, from pipeline events.
   const since = new Date(at.getTime() - 180 * 86_400_000).toISOString();
   const { results: speed } = await db.prepare(`SELECT p.created_at, (SELECT MIN(e.at) FROM pipeline_events e WHERE e.pipeline_id = p.id AND e.stage = 'offered') AS offered_at,
