@@ -35,7 +35,7 @@ Quality checks:
 
 Ordered by impact on an IT recruitment business.
 
-1. **Two separate candidate databases.** People who apply on the public website go into the console and the ATS. People who sign up on the portal are a separate set. A recruiter cannot put a website applicant in front of a client without asking them to register on the portal. *Fix next:* when someone applies on the website with consent, also create their portal profile, so one candidate record drives screening, matching and submission.
+1. ~~**Two separate candidate databases.**~~ **Done (9 November 2026):** website applications now join the same candidate list as portal sign-ups. Matching and sharing follow exactly what each person ticked. See PORTAL.md, "One candidate list".
 2. **Live intake and email are off.**
    - `DEMO_MODE` disables the public forms.
    - Portal registration is closed until `PORTAL_OPEN=true`.
@@ -173,7 +173,7 @@ FutureSkills Prime is the one programme with a clear training-partner route for 
 | When | Product | Business |
 |---|---|---|
 | **Done (this branch)** | Client sign-in by invitation, team, overview, pipeline, interviews, offers and joining, placements with guarantee and non-solicitation dates, managed searches, IT skills | — |
-| **Next 2–4 weeks** | One candidate record for website and portal. Email provider (ZeptoMail). Calendar invitations for interviews. Client report export. IT-focused public site copy. "Invite as client" from an employer enquiry. | Legal review; switch `PORTAL_OPEN`. Set fee and guarantee terms per client. First clients invited. |
+| **Next 2–4 weeks** | ~~One candidate record for website and portal~~ (done). Email provider (ZeptoMail). Calendar invitations for interviews. Client report export. IT-focused public site copy. "Invite as client" from an employer enquiry. | Legal review; switch `PORTAL_OPEN`. Set fee and guarantee terms per client. First clients invited. |
 | **1–3 months** | Career Care: consents, learning paths, check-in queue, digests. Coding tests (partner or simple in-house). BGV consent and status tracking. GST invoices for placements. | BGV partner. FutureSkills Prime enquiry. Campus drives. Interview-as-a-service pilot. |
 | **3–12 months** | WhatsApp utility messages (interview and joining reminders). Microsoft Learn API recommendations. Client analytics (time to fill by stage, drop reasons). White-label client portal. | C2H pilot; contract staffing only with PF/ESI, working capital and the licence in place. |
 

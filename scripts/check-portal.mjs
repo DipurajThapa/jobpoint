@@ -30,6 +30,7 @@ const assess = await mod("assessment.ts");
 const jdMod = await mod("jd.ts");
 const queue = await mod("queue.ts");
 const client = await mod("client.ts");
+const website = await mod("website.ts");
 
 const SECRET = "test-secret-test-secret-test-secret-123";
 let clock = new Date("2026-11-09T06:00:00Z");
@@ -699,6 +700,84 @@ await check("Concurrent stage changes: the losing request changes nothing (appli
   const iv = (await db.prepare("SELECT status FROM interviews WHERE pipeline_id = ?").bind(id).first()).status;
   const events = (await db.prepare("SELECT COUNT(*) AS n FROM pipeline_events WHERE pipeline_id = ? AND stage IN ('offered','rejected')").bind(id).first()).n;
   assert.deepEqual([app, iv, events], stage === "offered" ? ["offer", "scheduled", 1] : ["rejected", "cancelled", 1], `application, interview and history follow the winner (${stage})`);
+});
+
+// ---------- one candidate list (website + portal) ----------
+const { buildFixtures } = await import("./ats-fixtures.mjs");
+const { accountantPdf } = await buildFixtures();
+const WEB = (over = {}) => ({ id: `app-${Math.random().toString(36).slice(2, 9)}`, jobId: null, fullName: "Riya Sen", email: "riya.sen@example.com", phone: "+91 98300 12345", location: "Durgapur", shareConsent: true, futureConsent: true, privacyVersion: "2026-11-09", resumeName: "riya-sen.pdf", ...over });
+const consentRows = (db, id) => db.prepare("SELECT purpose, action, channel, notice_version FROM candidate_consents WHERE candidate_id = ? ORDER BY rowid").bind(id).all().then(r => r.results);
+
+await check("Website registration with both ticks joins the candidate list: CV read, matched, submittable by a recruiter, never auto-released", async () => {
+  const db = await setup();
+  const comp = await makeCompany(db); const jd = await liveJd(db, comp);
+  await client.setJdService(db, comp.id, jd, "managed", 1, comp.userId);
+  const out = await website.linkWebsiteApplication(db, null, WEB(), accountantPdf);
+  assert.deepEqual([out.created, out.cv, out.matching, out.recruiterSharing], [true, "parsed", true, true]);
+  const rows = await consentRows(db, out.candidateId);
+  assert.deepEqual(rows.map(r => [r.purpose, r.action, r.channel, r.notice_version]), [["profile_processing", "granted", "website", "website-2026-11-09"], ["recruiter_sharing", "granted", "website", "website-2026-11-09"]], "recorded against the website wording");
+  await queue.drainQueue(db, SECRET);
+  const m = await db.prepare("SELECT score, hard_pass FROM matches WHERE jd_id = ? AND candidate_id = ?").bind(jd, out.candidateId).first();
+  assert.ok(m && m.score > 50, `website applicant matched (${m?.score})`);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM releases WHERE candidate_id = ?").bind(out.candidateId).first()).n, 0, "no automatic anonymous release without portal sharing consent");
+  const sub = await client.submitByRecruiter(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: out.candidateId, note: "Website applicant; Tally and GST" }, "admin");
+  assert.ok(sub.ref.startsWith("c_"));
+  const list = await client.submissionCandidates(db, jd);
+  assert.deepEqual([list[0].source, Number(list[0].can_share)], ["website", 1]);
+});
+
+await check("Job-specific website application: in the list, but not matched or shared beyond that role", async () => {
+  const db = await setup();
+  const comp = await makeCompany(db); const jd = await liveJd(db, comp);
+  await client.setJdService(db, comp.id, jd, "managed", 1, comp.userId);
+  const out = await website.linkWebsiteApplication(db, null, WEB({ jobId: "legacy-role-1", futureConsent: false, shareConsent: true }), accountantPdf);
+  assert.deepEqual([out.cv, out.matching, out.recruiterSharing], ["parsed", false, false], "the role-specific sharing tick is not general sharing");
+  await queue.drainQueue(db, SECRET);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM matches WHERE candidate_id = ?").bind(out.candidateId).first()).n, 0, "not matched to other jobs");
+  await rejects(client.submitByRecruiter(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: out.candidateId, note: "x" }, "admin"), "NO_CONSENT");
+  assert.equal((await db.prepare("SELECT status FROM candidates WHERE id = ?").bind(out.candidateId).first()).status, "active", "still one record in the list");
+});
+
+await check("The same person applying twice is one record; a portal account with that email is never taken over", async () => {
+  const db = await setup();
+  const a = await website.linkWebsiteApplication(db, null, WEB({ email: "same.person@example.com" }), null);
+  const b = await website.linkWebsiteApplication(db, null, WEB({ email: "Same.Person@example.com", futureConsent: false }), null);
+  assert.deepEqual([b.candidateId, b.created], [a.candidateId, false]);
+  assert.equal(b.matching, true, "an unticked box later is not a withdrawal");
+  assert.equal((await website.linkWebsiteApplication(db, null, WEB({ id: "fixed-id", email: "same.person@example.com" }), null)).candidateId, a.candidateId);
+  assert.equal((await website.linkWebsiteApplication(db, null, WEB({ id: "fixed-id", email: "same.person@example.com" }), null)).created, false, "linking the same application again is a no-op");
+  const acc = await accounts.createAccount(db, "candidate", "owner.of.account@example.com", "harbour lantern 4471 quiet");
+  const portalId = await candidate.createCandidate(db, { accountId: acc, displayName: "Account Holder", email: "owner.of.account@example.com", phone: "" });
+  const w = await website.linkWebsiteApplication(db, null, WEB({ email: "owner.of.account@example.com" }), null);
+  assert.notEqual(w.candidateId, portalId, "website data never lands in someone's portal account");
+  const flag = await db.prepare("SELECT signal FROM duplicate_flags WHERE (a_id = ? AND b_id = ?) OR (a_id = ? AND b_id = ?)").bind(portalId, w.candidateId, w.candidateId, portalId).first();
+  assert.equal(flag?.signal, "same_email", "flagged for the admin to merge");
+});
+
+await check("Console withdrawal and deletion of a website application reach the candidate list", async () => {
+  const db = await setup();
+  const app = WEB({ email: "withdraw.me@example.com" });
+  const out = await website.linkWebsiteApplication(db, null, app, accountantPdf);
+  await website.withdrawWebsiteConsents(db, app.id, "admin");
+  assert.deepEqual([await consent.consentActive(db, out.candidateId, "profile_processing"), await consent.consentActive(db, out.candidateId, "recruiter_sharing")], [false, false]);
+  const second = WEB({ email: "withdraw.me@example.com" });
+  await website.linkWebsiteApplication(db, null, second, null);
+  assert.deepEqual((await website.unlinkWebsiteApplication(db, app.id, "admin")).r2Keys, [], "another application still links the person");
+  assert.equal((await db.prepare("SELECT status FROM candidates WHERE id = ?").bind(out.candidateId).first()).status, "active");
+  const gone = await website.unlinkWebsiteApplication(db, second.id, "admin");
+  assert.equal(gone.r2Keys.length, 1, "the CV copy is returned for deletion");
+  const stub = await db.prepare("SELECT status, display_name FROM candidates WHERE id = ?").bind(out.candidateId).first();
+  assert.deepEqual([stub.status, stub.display_name], ["deleted", ""], "last link gone: candidate record erased");
+});
+
+await check("Earlier website applications can be added to the list in batches", async () => {
+  const db = await setup();
+  for (const [i, future] of [[1, 1], [2, 0]]) await db.prepare("INSERT INTO applications (id, job_id, full_name, email, phone, location, experience, consent, share_consent, future_consent, privacy_version) VALUES (?, NULL, ?, ?, '+91 90000 0000' || ?, 'Kolkata', '3 years', 1, 1, ?, '2026-11-09')")
+    .bind(`old-${i}`, `Old Applicant ${i}`, `old${i}@example.com`, i, future).run();
+  assert.equal(await website.countUnlinkedWebsiteApplications(db), 2);
+  for (const { app } of await website.unlinkedWebsiteApplications(db)) await website.linkWebsiteApplication(db, null, app, null, "admin");
+  assert.equal(await website.countUnlinkedWebsiteApplications(db), 0);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM candidate_sources").first()).n, 2);
 });
 
 console.log(`\n${passed} portal checks passed.`);

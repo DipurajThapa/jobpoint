@@ -25,6 +25,23 @@ Working Platform staff have no access to the portal admin.
 - Code: `lib/portal/client.ts`; migration `drizzle/0006_client_workspace.sql`.
 - Review and roadmap: [REVIEW_AND_ROADMAP_2026-11.md](REVIEW_AND_ROADMAP_2026-11.md).
 
+### One candidate list (added 9 November 2026)
+
+Every application made on the public website joins the same candidate records as portal sign-ups, with its CV read the same way (`lib/portal/website.ts`, migration `0007_one_candidate_list.sql`). What Jobboard300 may do follows exactly what the person ticked on the website form. The ticks are recorded in the consent ledger against the website form's wording, with channel `website`.
+
+| Website tick | Ledger entry | Effect |
+|---|---|---|
+| "Contact me about other suitable roles later" | `profile_processing` granted | Matched to clients' jobs (visible to Jobboard300 only) |
+| "You may share my CV with an employer for a suitable role after reviewing the fit" (general registration) | `recruiter_sharing` granted | A recruiter may submit them to a client's managed search |
+| The same tick on a role-specific application | nothing | Covers that one role only, so it is not general sharing |
+
+- Automatic anonymous release to companies still needs the portal's own `share_with_companies` consent, so website-only candidates are never released automatically.
+- A website applicant is never attached to a portal account by email alone, because the website does not verify email. A separate record is created and flagged as a possible duplicate for the admin to merge.
+- The same person applying again on the website joins their existing website record.
+- If the admin withdraws a website applicant's optional consents in the console, matching and sharing stop in the candidate list as well.
+- If the admin deletes the person's last website application, and they have no portal account, their candidate record is erased.
+- Applications made before this change can be added from the admin's **Job portal** tab, 25 at a time.
+
 ## 2. Architecture
 
 - Same app and Worker as the consultancy site. New areas: `/candidate`, `/company`, `/portal/*` (sign-in, register, verify, forgot, reset) and the **Job portal** tab in `/admin`.

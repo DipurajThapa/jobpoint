@@ -11,6 +11,7 @@ import { DEFAULT_PLANS, seedServices } from "@/lib/portal/plans";
 import { audit } from "@/lib/portal/db";
 import { adminClientWork, inviteClient, setJdService, submissionCandidates, submitByRecruiter, updateClientTerms } from "@/lib/portal/client";
 import { sendMail } from "@/lib/portal/mailer";
+import { countUnlinkedWebsiteApplications, linkWebsiteApplication, unlinkedWebsiteApplications } from "@/lib/portal/website";
 import { canonicalCity, seniorityFor } from "@/lib/portal/india";
 import { resolveSkill } from "@/lib/ats/taxonomy";
 import { roleFamilyFor } from "@/lib/portal/roles";
@@ -27,7 +28,7 @@ export async function GET(request: Request, context: Ctx) {
     if (action === "overview") {
       const plans = await db.prepare("SELECT COUNT(*) AS n FROM plans").first<{ n: number }>();
       if (!plans?.n) { await upsertPlans(db, DEFAULT_PLANS); await seedServices(db); }
-      return json({ ...await adminOverview(db), clientWork: await adminClientWork(db) });
+      return json({ ...await adminOverview(db), clientWork: await adminClientWork(db), websiteUnlinked: await countUnlinkedWebsiteApplications(db) });
     }
     if (action === "submission-candidates") return json({ candidates: await submissionCandidates(db, new URL(request.url).searchParams.get("jd") ?? "") });
     if (action === "review-cv") {
@@ -53,6 +54,15 @@ export async function POST(request: Request, context: Ctx) {
     const s = (v: unknown, max = 200) => typeof v === "string" ? v.slice(0, max) : "";
     const done = async (message: string, extra: object = {}) => { const queue = await drainQueue(db, portalSecret(), 400); return json({ message, queue, ...extra }); };
     switch (action) {
+      case "link-website-applications": {
+        let linked = 0, unreadable = 0;
+        for (const { app, resumeKey } of await unlinkedWebsiteApplications(db, 25)) {
+          const object = resumeKey && env.BUCKET ? await env.BUCKET.get(resumeKey) : null;
+          const out = await linkWebsiteApplication(db, env.BUCKET ?? null, app, object ? new Uint8Array(await object.arrayBuffer()) : null, admin);
+          linked++; if (out.cv === "unreadable" || out.cv === "needs_review") unreadable++;
+        }
+        return done(`${linked} website application(s) added to the candidate list${unreadable ? `; ${unreadable} CV(s) need manual review` : ""}.`);
+      }
       case "client-invite": {
         const out = await inviteClient(db, { displayName: s(b.displayName, 120), legalName: s(b.legalName, 160), city: s(b.city, 80), website: s(b.website), gstin: s(b.gstin, 15), ownerEmail: s(b.ownerEmail, 254), ownerName: s(b.ownerName, 120), guaranteeDays: Number(b.guaranteeDays ?? 90), nonSolicitMonths: Number(b.nonSolicitMonths ?? 12), feeTerms: s(b.feeTerms, 300), params: b.params, plan: s(b.plan, 20) || "free" }, admin);
         const link = `${new URL(request.url).origin}/portal/accept?token=${out.token}`;

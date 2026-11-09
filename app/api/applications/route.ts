@@ -4,6 +4,8 @@ import { getDb } from "@/db";
 import { applications } from "@/db/schema";
 import { clean, errorJson, isJobOpen, json, limitSubmission, sameOrigin, validEmail } from "@/lib/http";
 import { and, eq, gt, isNull } from "drizzle-orm";
+import { portalDb } from "@/lib/portal/session";
+import { linkWebsiteApplication } from "@/lib/portal/website";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -35,6 +37,7 @@ export async function POST(request: Request) {
     // A CV is mandatory: recruiters screen every application against the role from the CV itself.
     const file = form.get("resume");
     if (!(file instanceof File) || !file.size) return errorJson("Please attach your CV as a PDF or DOCX file.");
+    let cvBytes: Uint8Array | null = null;
     let resumeKey: string | null = null, resumeName: string | null = null, resumeType: string | null = null, resumeSize: number | null = null;
     {
       if (file.size > maxResumeBytes) return errorJson("The upload exceeds the 5 MB limit.", 413);
@@ -46,10 +49,15 @@ export async function POST(request: Request) {
       if (!env.BUCKET) return errorJson("CV storage is not ready. Please try again later.", 503);
       resumeKey = `resumes/${crypto.randomUUID()}`; resumeName = file.name.replace(/[\\/\r\n\0]/g, "_").slice(0, 140); resumeType = type; resumeSize = file.size;
       await env.BUCKET.put(resumeKey, bytes, { httpMetadata: { contentType: type, cacheControl: "private, no-store" } });
+      cvBytes = bytes;
     }
     const id = crypto.randomUUID();
     try { await db.insert(applications).values({ id, jobId, fullName, email, phone, location, experience, desiredRole, skills, education, availability, message, resumeKey, resumeName, resumeType, resumeSize, consent: true, shareConsent, futureConsent, privacyVersion: "2026-11-09", consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); }
     catch (e) { if (resumeKey && env.BUCKET) await env.BUCKET.delete(resumeKey); throw e; }
+    // One candidate list: the applicant also joins the shared candidate records, within what they ticked.
+    // A failure here never loses the application; the admin can add it later from the Job portal tab.
+    try { await linkWebsiteApplication(portalDb(), env.BUCKET ?? null, { id, jobId, fullName, email, phone, location, shareConsent, futureConsent, privacyVersion: "2026-11-09", resumeName }, cvBytes); }
+    catch (error) { console.error("candidate list link failed", id, error instanceof Error ? error.message : error); }
     const reference = `JP-${id.slice(0, 13).replaceAll("-", "").toUpperCase()}`;
     return json({ reference, message: `Your details have been saved. Reference: ${reference}. A recruiter will review them and contact you if there is a relevant next step. Keep this reference for follow-up.` }, 201);
   } catch { return errorJson("We couldn't submit your details. Please try again in a moment.", 503); }

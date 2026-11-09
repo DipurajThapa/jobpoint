@@ -4,18 +4,22 @@
 
 import { audit, newId, nowIso, sha256Hex, type Db } from "./db";
 
-export type Purpose = "profile_processing" | "share_with_companies" | "service_offers";
+export type Purpose = "profile_processing" | "share_with_companies" | "service_offers" | "recruiter_sharing";
+/** Wording the person actually agreed to, when it is not the portal notice (e.g. the website form). */
+export type NoticeOverride = { version: string; text: string };
 
 import { CONSENT_NOTICE, CONSENT_NOTICE_VERSION } from "./notice";
 export { CONSENT_NOTICE, CONSENT_NOTICE_VERSION };
 
-export async function noticeHash(purpose: Purpose) {
-  return (await sha256Hex(`${CONSENT_NOTICE_VERSION}:${CONSENT_NOTICE[purpose]}`)).slice(0, 32);
+const PORTAL_TEXT = CONSENT_NOTICE as Record<string, string>;
+
+export async function noticeHash(purpose: Purpose, notice?: NoticeOverride) {
+  return (await sha256Hex(`${notice?.version ?? CONSENT_NOTICE_VERSION}:${notice?.text ?? PORTAL_TEXT[purpose] ?? purpose}`)).slice(0, 32);
 }
 
-export async function recordConsent(db: Db, candidateId: string, purpose: Purpose, action: "granted" | "withdrawn", ipHash = "", channel = "web") {
+export async function recordConsent(db: Db, candidateId: string, purpose: Purpose, action: "granted" | "withdrawn", ipHash = "", channel = "web", notice?: NoticeOverride) {
   await db.prepare("INSERT INTO candidate_consents (id, candidate_id, purpose, action, notice_version, notice_hash, channel, ip_hash, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(newId(), candidateId, purpose, action, CONSENT_NOTICE_VERSION, await noticeHash(purpose), channel, ipHash, nowIso()).run();
+    .bind(newId(), candidateId, purpose, action, notice?.version ?? CONSENT_NOTICE_VERSION, await noticeHash(purpose, notice), channel, ipHash, nowIso()).run();
 }
 
 /** SQL fragment: true when the latest consent row for the purpose is a grant. */
@@ -43,6 +47,9 @@ export async function withdrawSharing(db: Db, candidateId: string, actor: string
   await db.batch([
     db.prepare("INSERT INTO candidate_consents (id, candidate_id, purpose, action, notice_version, notice_hash, channel, ip_hash, at) VALUES (?, ?, 'share_with_companies', 'withdrawn', ?, ?, 'web', ?, ?)")
       .bind(newId(), candidateId, CONSENT_NOTICE_VERSION, await noticeHash("share_with_companies"), ipHash, at),
+    // Recruiter-reviewed sharing (website consent) ends with any withdrawal of sharing.
+    db.prepare("INSERT INTO candidate_consents (id, candidate_id, purpose, action, notice_version, notice_hash, channel, ip_hash, at) SELECT ?, ?, 'recruiter_sharing', 'withdrawn', ?, ?, 'web', ?, ? WHERE " + ACTIVE_CONSENT_SQL("?", "recruiter_sharing"))
+      .bind(newId(), candidateId, CONSENT_NOTICE_VERSION, await noticeHash("recruiter_sharing"), ipHash, at, candidateId),
     db.prepare("DELETE FROM matches WHERE candidate_id = ?").bind(candidateId),
     db.prepare("DELETE FROM score_queue WHERE kind = 'candidate' AND ref_id = ?").bind(candidateId),
     db.prepare("UPDATE releases SET revoked_at = ?, revoke_reason = 'consent_withdrawn' WHERE candidate_id = ? AND revoked_at IS NULL").bind(at, candidateId),
