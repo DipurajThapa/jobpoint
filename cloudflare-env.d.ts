@@ -5,5 +5,12 @@ declare namespace Cloudflare {
     PLATFORM_SECRET_KEY?: string;
     /** Optional. Enables Claude-assisted CV extraction in the admin screening tool. */
     ANTHROPIC_API_KEY?: string;
+    /** Secret for per-company candidate references and CV watermark trace IDs (32+ characters). */
+    PORTAL_SECRET?: string;
+    /** Transactional email: provider API key and sender address for portal verification and notices. */
+    MAIL_API_KEY?: string;
+    MAIL_FROM?: string;
+    /** Optional override of the ZeptoMail endpoint (for example the India data-centre host). */
+    MAIL_API_URL?: string;
   }
 }
