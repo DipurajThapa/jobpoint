@@ -117,42 +117,99 @@ const ENTRIES: Entry[] = [
   ["statutory-compliance", "Statutory compliance", "hr", "labour law", "labour laws", "statutory compliances", "compliance management"],
   ["job-portals", "Job portals", "hr", "naukri", "naukri com", "linkedin recruiter", "monster", "indeed", "shine"],
 
-  // IT and software
-  ["javascript", "JavaScript", "programming", "js", "es6", "ecmascript"],
+  // IT and software. Frameworks are separate skills from their languages, so a
+  // job asking for Spring Boot is not met by "Java" alone; a CV that shows a
+  // framework also earns its language through IMPLIES below. Names follow ESCO
+  // and O*NET "hot technology" labels, adapted to Indian CV wording.
+  ["javascript", "JavaScript", "programming", "js", "es6", "ecmascript", "vanilla js"],
   ["typescript", "TypeScript", "programming"],
-  ["python", "Python", "programming", "python3"],
-  ["java", "Java", "programming", "core java", "j2ee", "spring boot"],
-  ["c-sharp", "C#", "programming", "c#", "c sharp", ".net", "dotnet", "asp.net", "asp net"],
+  ["python", "Python", "programming", "python3", "python 3"],
+  ["java", "Java", "programming", "core java", "java 8", "java 11", "java 17", "j2ee", "java ee", "jakarta ee"],
+  ["c-sharp", "C#", "programming", "c#", "c sharp"],
   ["c-cpp", "C / C++", "programming", "c++", "cpp", "c programming", "c language"],
-  ["php", "PHP", "programming", "laravel", "codeigniter"],
+  ["php", "PHP", "programming", "php7", "php8"],
   ["go", "Go (Golang)", "programming", "golang"],
-  ["sql", "SQL", "database", "mysql", "postgresql", "postgres", "sql server", "ms sql", "oracle sql", "pl sql", "sqlite", "t sql"],
-  ["mongodb", "MongoDB", "database", "mongo"],
-  ["react", "React", "frontend", "react.js", "reactjs", "react js", "next.js", "nextjs"],
-  ["angular", "Angular", "frontend", "angularjs", "angular js"],
-  ["vue", "Vue", "frontend", "vue.js", "vuejs"],
-  ["html-css", "HTML / CSS", "frontend", "html", "css", "html5", "css3", "bootstrap", "tailwind"],
-  ["nodejs", "Node.js", "backend", "node.js", "node js", "express.js", "expressjs"],
-  ["django", "Django", "backend", "flask", "fastapi"],
-  ["rest-api", "REST APIs", "backend", "restful", "rest api", "api development", "web services"],
+  ["kotlin", "Kotlin", "programming"],
+  ["ruby", "Ruby", "programming"],
+  ["scala", "Scala", "programming"],
+  ["rust", "Rust", "programming", "rust lang", "rustlang"],
+  ["shell-scripting", "Shell scripting", "programming", "shell scripting", "bash scripting", "shell script", "powershell"],
+  ["react", "React", "frontend", "react.js", "reactjs", "react js", "react hooks"],
+  ["nextjs", "Next.js", "frontend", "next.js", "nextjs", "next js"],
+  ["redux", "Redux", "frontend", "redux toolkit", "redux saga"],
+  ["angular", "Angular", "frontend", "angularjs", "angular js", "angular 2+"],
+  ["vue", "Vue", "frontend", "vue.js", "vuejs", "nuxt", "nuxt.js"],
+  ["html-css", "HTML / CSS", "frontend", "html", "css", "html5", "css3", "scss", "sass"],
+  ["css-frameworks", "CSS frameworks (Bootstrap, Tailwind)", "frontend", "bootstrap", "tailwind", "tailwind css", "material ui", "mui"],
+  ["jquery", "jQuery", "frontend", "jquery"],
+  ["nodejs", "Node.js", "backend", "node.js", "node js", "nodejs"],
+  ["express", "Express.js", "backend", "express.js", "expressjs", "express js", "nestjs", "nest.js"],
+  ["spring-boot", "Spring Boot", "backend", "spring boot", "springboot", "spring framework", "spring mvc", "spring security", "spring cloud"],
+  ["hibernate", "Hibernate / JPA", "backend", "hibernate", "jpa", "spring data jpa"],
+  ["dotnet", ".NET", "backend", ".net", "dotnet", "asp.net", "asp net", "asp.net core", ".net core", "asp.net mvc", "entity framework", "web api"],
+  ["django", "Django", "backend", "django rest framework", "drf"],
+  ["flask", "Flask", "backend"],
+  ["fastapi", "FastAPI", "backend", "fast api"],
+  ["laravel", "Laravel", "backend", "codeigniter", "symfony"],
+  ["rails", "Ruby on Rails", "backend", "ruby on rails", "rails", "ror"],
+  ["rest-api", "REST APIs", "backend", "restful", "rest api", "rest apis", "restful apis", "api development", "web services"],
+  ["graphql", "GraphQL", "backend", "apollo graphql"],
+  ["microservices", "Microservices", "backend", "microservice architecture", "micro services"],
+  ["system-design", "System design", "backend", "system design", "low level design", "high level design", "lld", "hld", "design patterns", "software architecture"],
+  ["sql", "SQL", "database", "sql queries", "pl sql", "plsql", "t sql", "tsql", "stored procedures", "rdbms"],
+  ["mysql", "MySQL", "database", "mariadb"],
+  ["postgresql", "PostgreSQL", "database", "postgres", "postgre sql"],
+  ["sql-server", "SQL Server", "database", "ms sql", "mssql", "ms sql server", "microsoft sql server"],
+  ["oracle-db", "Oracle Database", "database", "oracle db", "oracle sql", "oracle 19c", "oracle 12c"],
+  ["sqlite", "SQLite", "database"],
+  ["mongodb", "MongoDB", "database", "mongo", "mongoose"],
+  ["redis", "Redis", "database"],
+  ["elasticsearch", "Elasticsearch", "database", "elastic search", "opensearch", "elk stack"],
+  ["cassandra", "Cassandra", "database", "apache cassandra"],
+  ["dynamodb", "DynamoDB", "database", "dynamo db"],
   ["git", "Git", "devtools", "github", "gitlab", "bitbucket", "version control"],
-  ["aws", "AWS", "cloud", "amazon web services", "ec2", "s3", "lambda"],
-  ["azure", "Azure", "cloud", "microsoft azure"],
-  ["gcp", "Google Cloud", "cloud", "google cloud platform"],
-  ["docker", "Docker", "devops", "containers", "kubernetes", "k8s"],
-  ["linux", "Linux", "systems", "unix", "shell scripting", "bash"],
-  ["networking", "Networking", "systems", "lan", "wan", "tcp ip", "ccna", "routers", "firewall"],
-  ["windows-admin", "Windows administration", "systems", "active directory", "windows server", "system administration", "system admin"],
-  ["hardware", "Hardware troubleshooting", "it-support", "hardware", "hardware and networking", "computer hardware"],
-  ["software-testing", "Software testing", "qa", "manual testing", "automation testing", "selenium", "test cases", "qa testing"],
-  ["android", "Android development", "mobile", "android", "kotlin"],
-  ["flutter", "Flutter", "mobile", "dart", "react native"],
-  ["machine-learning", "Machine learning", "data-science", "ml", "deep learning", "nlp", "artificial intelligence"],
+  ["jira", "Jira", "devtools", "jira", "confluence"],
+  ["agile", "Agile / Scrum", "devtools", "agile", "scrum", "sprint planning", "kanban"],
+  ["aws", "AWS", "cloud", "amazon web services", "ec2", "aws lambda", "aws s3", "amazon s3", "cloudformation", "aws certified"],
+  ["azure", "Azure", "cloud", "microsoft azure", "azure functions", "az 900", "az 104", "az 204"],
+  ["gcp", "Google Cloud", "cloud", "google cloud platform", "gcp", "bigquery"],
+  ["docker", "Docker", "devops", "docker compose", "containers", "containerisation", "containerization"],
+  ["kubernetes", "Kubernetes", "devops", "k8s", "eks", "aks", "gke", "openshift", "helm charts"],
+  ["terraform", "Terraform", "devops", "infrastructure as code", "iac"],
+  ["ansible", "Ansible", "devops", "chef", "puppet"],
+  ["jenkins", "Jenkins", "devops"],
+  ["ci-cd", "CI/CD", "devops", "ci cd", "ci/cd", "continuous integration", "continuous delivery", "continuous deployment", "github actions", "gitlab ci", "azure devops", "devops pipelines"],
+  ["monitoring", "Monitoring (Prometheus, Grafana)", "devops", "prometheus", "grafana", "datadog", "new relic", "splunk", "nagios"],
+  ["linux", "Linux", "systems", "unix", "linux administration", "rhel", "red hat linux", "ubuntu", "centos"],
+  ["networking", "Networking", "systems", "lan", "wan", "tcp ip", "ccna", "routers", "firewall", "routing and switching", "vpn", "dns", "dhcp"],
+  ["windows-admin", "Windows administration", "systems", "active directory", "windows server", "system administration", "system admin", "group policy", "office 365 admin", "m365 admin"],
+  ["virtualisation", "Virtualisation (VMware, Hyper-V)", "systems", "vmware", "vsphere", "hyper v", "hyper-v", "virtualization", "virtualisation"],
+  ["hardware", "Hardware troubleshooting", "it-support", "hardware", "hardware and networking", "computer hardware", "laptop troubleshooting", "printer troubleshooting"],
+  ["itil", "ITIL / IT service management", "it-support", "itil", "itsm", "incident management", "service desk management"],
+  ["software-testing", "Software testing", "qa", "manual testing", "test cases", "qa testing", "functional testing", "regression testing", "test planning", "stlc", "sdlc testing", "defect tracking"],
+  ["selenium", "Selenium", "qa", "selenium webdriver", "selenium grid"],
+  ["test-automation", "Test automation", "qa", "automation testing", "cypress", "playwright", "appium", "testng", "junit", "pytest", "cucumber", "bdd"],
+  ["api-testing", "API testing", "qa", "api testing", "rest assured", "restassured", "postman collections", "soapui"],
+  ["performance-testing", "Performance testing", "qa", "jmeter", "loadrunner", "load testing", "gatling"],
+  ["android", "Android development", "mobile", "android", "android studio", "jetpack compose"],
+  ["ios", "iOS development", "mobile", "ios", "swiftui", "swift ui", "xcode", "objective c"],
+  ["flutter", "Flutter", "mobile", "dart"],
+  ["react-native", "React Native", "mobile", "react native"],
+  ["machine-learning", "Machine learning", "data-science", "ml", "machine learning", "scikit learn", "sklearn", "xgboost"],
+  ["deep-learning", "Deep learning", "data-science", "deep learning", "tensorflow", "pytorch", "keras", "computer vision", "cnn"],
+  ["nlp", "NLP", "data-science", "nlp", "natural language processing", "spacy", "hugging face", "transformers"],
+  ["genai", "Generative AI / LLMs", "data-science", "generative ai", "gen ai", "genai", "llm", "llms", "large language models", "prompt engineering", "langchain", "rag", "retrieval augmented generation", "openai api"],
+  ["pandas", "Pandas / NumPy", "data-science", "pandas", "numpy", "matplotlib", "seaborn", "jupyter"],
+  ["spark", "Apache Spark", "data-engineering", "apache spark", "pyspark", "spark sql", "databricks"],
+  ["kafka", "Kafka", "data-engineering", "apache kafka", "kafka streams"],
+  ["airflow", "Airflow", "data-engineering", "apache airflow"],
+  ["etl", "ETL / data pipelines", "data-engineering", "etl", "elt", "data pipelines", "informatica", "talend", "ssis", "azure data factory", "adf"],
+  ["data-warehouse", "Data warehousing", "data-engineering", "data warehousing", "data warehouse", "snowflake", "redshift", "hadoop", "hive"],
+  ["cybersecurity", "Cyber security", "security", "information security", "network security", "vapt", "soc", "siem", "penetration testing", "ethical hacking", "owasp", "iso 27001"],
   ["ui-ux", "UI / UX design", "design", "ui design", "ux design", "figma", "adobe xd", "wireframing"],
   ["graphic-design", "Graphic design", "design", "photoshop", "illustrator", "coreldraw", "corel draw", "canva", "indesign"],
   ["video-editing", "Video editing", "design", "premiere pro", "after effects", "final cut"],
   ["wordpress", "WordPress", "web", "wordpress development", "woocommerce"],
-  ["cybersecurity", "Cyber security", "security", "information security", "network security", "vapt", "soc"],
 
   // Healthcare, education, hospitality, retail
   ["nursing", "Nursing", "healthcare", "staff nurse", "gnm", "anm", "patient care"],
@@ -225,7 +282,19 @@ export const skillById = (id: string) => byId.get(id);
 
 // Generic two-letter aliases that are risky out of context. They only count
 // inside a skills or certification section, not in free text.
-const CONTEXT_ONLY = new Set(["ap", "ar", "bd", "ml", "qc", "js", "pos", "itr", "mis", "brs", "soc", "ppc", "sem", "kam", "scm", "atl", "btl"]);
+const CONTEXT_ONLY = new Set(["rag", "ror", "lld", "hld", "iac", "adf", "drf", "mui", "cnn", "eks", "aks", "gke", "dns", "lan", "wan", "vpn", "ios", "rust", "ruby", "scala", "ap", "ar", "bd", "ml", "qc", "js", "pos", "itr", "mis", "brs", "soc", "ppc", "sem", "kam", "scm", "atl", "btl"]);
+
+// A CV that shows a framework or product also shows its underlying language or
+// family (Spring Boot → Java). Used for CVs only: a job that asks for Spring Boot
+// should not silently add a separate Java requirement.
+export const IMPLIES: Record<string, string[]> = {
+  "spring-boot": ["java"], hibernate: ["java"], dotnet: ["c-sharp"], nextjs: ["react", "javascript"], react: ["javascript"], redux: ["javascript"],
+  angular: ["typescript"], vue: ["javascript"], jquery: ["javascript"], nodejs: ["javascript"], express: ["nodejs", "javascript"], "react-native": ["javascript"],
+  django: ["python"], flask: ["python"], fastapi: ["python"], pandas: ["python"], laravel: ["php"], rails: ["ruby"],
+  mysql: ["sql"], postgresql: ["sql"], "sql-server": ["sql"], "oracle-db": ["sql"], sqlite: ["sql"], selenium: ["software-testing", "test-automation"],
+  "test-automation": ["software-testing"], "api-testing": ["software-testing"], "performance-testing": ["software-testing"], kubernetes: ["docker"],
+  "deep-learning": ["machine-learning"], nlp: ["machine-learning"],
+};
 
 /** Every taxonomy skill mentioned in `text`, with the alias that matched. */
 // Accounting vocabulary ("purchase, sales, journal and receipt vouchers", "sales register")
@@ -233,7 +302,7 @@ const CONTEXT_ONLY = new Set(["ap", "ar", "bd", "ml", "qc", "js", "pos", "itr", 
 const VOUCHER_LIST = /\b((?:(?:purchase|sales|journal|payment|receipt|contra|debit|credit|note|notes|and)\s+)+)(vouchers?|entries|register|registers|ledgers?|invoices?|returns?|book|books|bills?)\b/g;
 const maskAccounting = (text: string) => text.replace(VOUCHER_LIST, (_m, list: string, tail: string) => `${list.replace(/\b(sales|purchase)\b/g, "$1_acct")}${tail}`);
 
-export function findSkills(text: string, opts: { allowShortAliases?: boolean } = {}): { skill: TaxonomySkill; alias: string; index: number }[] {
+export function findSkills(text: string, opts: { allowShortAliases?: boolean; implied?: boolean } = {}): { skill: TaxonomySkill; alias: string; index: number }[] {
   const haystack = maskAccounting(normalise(text));
   const found: { skill: TaxonomySkill; alias: string; index: number }[] = [];
   for (const skill of SKILLS) {
@@ -248,7 +317,14 @@ export function findSkills(text: string, opts: { allowShortAliases?: boolean } =
   // Drop a match fully contained in a longer match of a different skill
   // ("sales" inside "field sales" still counts as Sales: keep both; but "sap"
   // inside "sap fico" should not add generic SAP).
-  return found.filter(f => !found.some(o => o !== f && o.skill.family === f.skill.family && o.alias.length > f.alias.length && o.alias.includes(f.alias) && o.index <= f.index && f.index + f.alias.length <= o.index + o.alias.length && f.skill.id !== "sales"));
+  const kept = found.filter(f => !found.some(o => o !== f && o.skill.family === f.skill.family && o.alias.length > f.alias.length && o.alias.includes(f.alias) && o.index <= f.index && f.index + f.alias.length <= o.index + o.alias.length && f.skill.id !== "sales"));
+  if (!opts.implied) return kept;
+  const out = [...kept], have = new Set(kept.map(f => f.skill.id));
+  for (let i = 0; i < out.length; i++) for (const parent of IMPLIES[out[i].skill.id] ?? []) {
+    const p = byId.get(parent);
+    if (p && !have.has(parent)) { have.add(parent); out.push({ skill: p, alias: out[i].alias, index: out[i].index }); }
+  }
+  return out;
 }
 
 /** Resolve free text (a requirement or a CV skill item) to a taxonomy skill, or a normalised free term. */

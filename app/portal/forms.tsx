@@ -101,3 +101,21 @@ export function Reset({ token }: { token: string }) {
 }
 
 export const NOTICE = CONSENT_NOTICE;
+
+/** Invited client users (added by Job Point or their company owner) set their first password. */
+export function Accept({ token }: { token: string }) {
+  const f = useForm();
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault(); const d = new FormData(e.currentTarget);
+    if (d.get("password") !== d.get("confirm")) { f.setError("The two passwords do not match."); return; }
+    f.setBusy(true); try { f.setNotice((await post<{ message: string }>("/api/portal/auth/accept", { token, password: d.get("password") })).message); } catch (err) { f.setError((err as Error).message); } finally { f.setBusy(false); }
+  }
+  if (f.notice) return <div className="pj-list"><p className="pj-notice good">{f.notice}</p><a className="wp-btn" href="/portal/sign-in">Sign in</a></div>;
+  return <form onSubmit={submit} className="pj-list">
+    <p className="pj-muted">Choose a password of at least 12 characters. You will use it with your email address to sign in.</p>
+    {f.error && <p className="pj-notice bad">{f.error}</p>}
+    <label>Password<input name="password" type="password" minLength={12} required autoComplete="new-password" /></label>
+    <label>Repeat password<input name="confirm" type="password" minLength={12} required autoComplete="new-password" /></label>
+    <button className="wp-btn" disabled={f.busy}>Set password</button>
+  </form>;
+}

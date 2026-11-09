@@ -143,6 +143,9 @@ export async function deleteCandidateData(db: Db, candidateId: string, actor: st
   const at = nowIso();
   await db.batch([
     db.prepare("DELETE FROM cvs WHERE candidate_id = ?").bind(candidateId),
+    // Pipeline notes and interview feedback are about the person: erased. A placement
+    // row (company, role, dates, fee basis) is kept as the consultancy's business record.
+    db.prepare("DELETE FROM pipeline WHERE candidate_id = ?").bind(candidateId),
     db.prepare("DELETE FROM portal_applications WHERE candidate_id = ?").bind(candidateId),
     db.prepare("DELETE FROM assessment_attempts WHERE candidate_id = ?").bind(candidateId),
     db.prepare("DELETE FROM service_orders WHERE candidate_id = ?").bind(candidateId),

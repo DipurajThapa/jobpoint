@@ -43,6 +43,13 @@
       "when": 1794182500000,
       "tag": "0005_portal",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794182600000,
+      "tag": "0006_client_workspace",
+      "breakpoints": true
     }
   ]
 }

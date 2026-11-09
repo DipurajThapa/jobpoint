@@ -29,6 +29,7 @@ const match = await mod("match.ts");
 const assess = await mod("assessment.ts");
 const jdMod = await mod("jd.ts");
 const queue = await mod("queue.ts");
+const client = await mod("client.ts");
 
 const SECRET = "test-secret-test-secret-test-secret-123";
 let clock = new Date("2026-11-09T06:00:00Z");
@@ -534,6 +535,138 @@ await check("Services catalogue, orders and enrolments link to the candidate; pa
   assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM service_enrolments").first()).n, 0);
   const stub = await db.prepare("SELECT status, display_name, dedupe_email_hash FROM candidates WHERE id = ?").bind(cand).first();
   assert.deepEqual([stub.status, stub.display_name, stub.dedupe_email_hash], ["deleted", "", ""], "only a content-free stub remains");
+});
+
+// ---------- client workspace ----------
+const INVITE = { displayName: "Example Infotech", legalName: "Example Infotech Pvt Ltd", city: "Kolkata", ownerEmail: "owner@example-infotech.test", ownerName: "Owner", guaranteeDays: 90, nonSolicitMonths: 12, feeTerms: "8.33% of fixed CTC", params: PARAMS, plan: "free" };
+
+await check("Admin-invited client: owner sets a password from a one-time link; no public registration needed", async () => {
+  const db = await setup();
+  const out = await client.inviteClient(db, INVITE, "admin");
+  const co = await db.prepare("SELECT status, guarantee_days, non_solicit_months FROM companies WHERE id = ?").bind(out.companyId).first();
+  assert.deepEqual([co.status, co.guarantee_days, co.non_solicit_months], ["active", 90, 12]);
+  assert.ok(await company.currentParams(db, out.companyId), "parameters approved");
+  assert.equal((await quota.quotaStatus(db, out.companyId)).remaining, 3, "starting plan assigned");
+  await rejects(accounts.signIn(db, INVITE.ownerEmail, "anything at all here", "t"), "BAD_CREDENTIALS");
+  await accounts.redeemToken(db, out.token, "invite", "copper meadow 5520 window");
+  const token = await accounts.signIn(db, INVITE.ownerEmail, "copper meadow 5520 window", "t");
+  const acc = await accounts.accountFromToken(db, token);
+  assert.deepEqual([acc.kind, acc.companyId, acc.companyRole], ["company_user", out.companyId, "owner"]);
+  await rejects(accounts.redeemToken(db, out.token, "invite", "another long password 99"), "INVALID_LINK");
+  await rejects(client.inviteClient(db, INVITE, "admin"), "EMAIL_TAKEN");
+  await rejects(client.inviteClient(db, { ...INVITE, ownerEmail: "x@example.test", params: { minScore: 5 } }, "admin"), "INVALID_PARAMS");
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM companies").first()).n, 1, "a failed invite leaves nothing behind");
+});
+
+await check("Team: owner adds and removes colleagues; the owner cannot be removed", async () => {
+  const db = await setup();
+  const out = await client.inviteClient(db, INVITE, "admin");
+  const m = await client.inviteMember(db, out.companyId, out.accountId, "dev.lead@example-infotech.test", "Dev Lead");
+  await accounts.redeemToken(db, m.token, "invite", "silver harbour 2231 kettle");
+  const acc = await accounts.accountFromToken(db, await accounts.signIn(db, "dev.lead@example-infotech.test", "silver harbour 2231 kettle", "t"));
+  assert.deepEqual([acc.companyId, acc.companyRole], [out.companyId, "recruiter"]);
+  assert.equal((await client.teamList(db, out.companyId)).length, 2);
+  await rejects(client.removeMember(db, out.companyId, m.accountId, out.accountId), "OWNER");
+  await rejects(client.removeMember(db, out.companyId, out.accountId, out.accountId), "SELF");
+  await client.removeMember(db, out.companyId, out.accountId, m.accountId);
+  await rejects(accounts.signIn(db, "dev.lead@example-infotech.test", "silver harbour 2231 kettle", "t"), "BAD_CREDENTIALS");
+  assert.equal((await client.teamList(db, out.companyId)).length, 1);
+  const other = await client.inviteClient(db, { ...INVITE, ownerEmail: "o2@example.test" }, "admin");
+  await rejects(client.removeMember(db, other.companyId, other.accountId, out.accountId), "NOT_FOUND");
+});
+
+await check("Pipeline: unlock first; stage order and reasons enforced; joining creates a placement with guarantee and non-solicit dates", async () => {
+  const { db, comp, jd, cands, refs } = await releasedSetup(2);
+  await rejects(client.addToPipeline(db, comp.id, comp.userId, refs[cands[0]], jd), "NOT_UNLOCKED");
+  await quota.unlockCandidate(db, { companyId: comp.id, userId: comp.userId, candidateRef: refs[cands[0]], jdId: jd });
+  const { id } = await client.addToPipeline(db, comp.id, comp.userId, refs[cands[0]], jd);
+  assert.equal((await client.addToPipeline(db, comp.id, comp.userId, refs[cands[0]], jd)).created, false);
+  await rejects(client.moveStage(db, comp.id, comp.userId, id, { stage: "joined", joiningDate: "2026-11-09" }), "STAGE_ORDER");
+  await rejects(client.moveStage(db, comp.id, comp.userId, id, { stage: "rejected" }), "REASON");
+  const iv = await client.scheduleInterview(db, comp.id, comp.userId, id, { round: "Technical 1", scheduledAt: "2026-11-12T05:30:00Z", mode: "video", interviewer: "Lead" });
+  let view = (await client.pipelineView(db, comp.id))[0];
+  assert.equal(view.stage, "interview", "scheduling moves a shortlisted candidate to interviewing");
+  let ov = await client.clientOverview(db, comp.id);
+  assert.equal(ov.upcoming.length, 1);
+  tick(4 * 86_400_000);
+  ov = await client.clientOverview(db, comp.id);
+  assert.deepEqual([ov.upcoming.length, ov.needsFeedback.length], [0, 1], "a past interview without feedback is flagged");
+  await client.recordInterview(db, comp.id, comp.userId, iv.id, { status: "completed", outcome: "advance", rating: 4, feedback: "Strong on SQL" });
+  await client.moveStage(db, comp.id, comp.userId, id, { stage: "offered", offerCtcInr: 1_200_000 });
+  await rejects(client.moveStage(db, comp.id, comp.userId, id, { stage: "offer_accepted" }), "JOINING_DATE");
+  await client.moveStage(db, comp.id, comp.userId, id, { stage: "offer_accepted", joiningDate: "2026-12-14", lastWorkingDay: "2026-12-12", competingOffers: "one other offer" });
+  ov = await client.clientOverview(db, comp.id);
+  assert.match(ov.joining[0].checkpoint.label, /T-30/, "the next joining check-in is shown");
+  assert.equal(client.nextCheckpoint("2026-12-14", "2026-12-08").label, "Check in now (T-7)");
+  assert.equal(client.nextCheckpoint("2026-12-14", "2026-12-20").daysLeft < 0, true);
+  await rejects(client.moveStage(db, comp.id, comp.userId, id, { stage: "joined", joiningDate: "2026-12-14" }), "JOINING_DATE");
+  tick(35 * 86_400_000);
+  await client.moveStage(db, comp.id, comp.userId, id, { stage: "joined", joiningDate: "2026-12-14" });
+  const pl = await db.prepare("SELECT joined_on, guarantee_ends_on, non_solicit_until, ctc_inr, status FROM placements").first();
+  assert.deepEqual([pl.joined_on, pl.guarantee_ends_on, pl.non_solicit_until, pl.ctc_inr, pl.status], ["2026-12-14", "2027-03-14", "2027-12-14", 1_200_000, "active"]);
+  ov = await client.clientOverview(db, comp.id);
+  assert.deepEqual([ov.funnel.joined, ov.placements[0].inGuarantee, ov.metrics.offerAcceptance], [1, true, 100]);
+  const exit = await client.reportPlacementExit(db, comp.id, comp.userId, (await db.prepare("SELECT id FROM placements").first()).id, "2027-02-01", "Resigned");
+  assert.equal(exit.inGuarantee, true);
+  tick(-39 * 86_400_000);
+});
+
+await check("Another company cannot read or change this company's pipeline, interviews or placements", async () => {
+  const { db, comp, jd, cands, refs } = await releasedSetup(1);
+  await quota.unlockCandidate(db, { companyId: comp.id, userId: comp.userId, candidateRef: refs[cands[0]], jdId: jd });
+  const { id } = await client.addToPipeline(db, comp.id, comp.userId, refs[cands[0]], jd);
+  const iv = await client.scheduleInterview(db, comp.id, comp.userId, id, { round: "HR", scheduledAt: "2026-11-20T05:30:00Z", mode: "phone" });
+  const other = await makeCompany(db, "Other Co");
+  await company.activateCompany(db, other.id, PARAMS, "admin");
+  assert.equal((await client.pipelineView(db, other.id)).length, 0);
+  await rejects(client.moveStage(db, other.id, other.userId, id, { stage: "rejected", reason: "other" }), "NOT_FOUND");
+  await rejects(client.scheduleInterview(db, other.id, other.userId, id, { round: "x", scheduledAt: "2026-11-20T05:30:00Z", mode: "video" }), "NOT_FOUND");
+  await rejects(client.recordInterview(db, other.id, other.userId, iv.id, { status: "completed" }), "NOT_FOUND");
+  await rejects(client.addToPipeline(db, other.id, other.userId, refs[cands[0]], jd), "NOT_FOUND");
+  assert.equal((await client.clientOverview(db, other.id)).upcoming.length, 0);
+});
+
+await check("Job Point submissions: managed live job, candidate consent and hidden list respected; no unlock quota used", async () => {
+  const { db, comp, jd } = await releasedSetup(0);
+  const before = (await quota.quotaStatus(db, comp.id)).remaining;
+  const cand = await makeCandidate(db, "Managed Candidate");
+  await rejects(client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "Fits" }, "admin"), "NOT_MANAGED");
+  await client.setJdService(db, comp.id, jd, "managed", 2, comp.userId);
+  await rejects(client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "" }, "admin"), "NOTE");
+  const noConsent = await makeCandidate(db, "No Consent", { consentShare: false });
+  await rejects(client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: noConsent, note: "Fits" }, "admin"), "NO_CONSENT");
+  const hider = await makeCandidate(db, "Hider");
+  await db.prepare("UPDATE candidates SET hidden_company_ids = ? WHERE id = ?").bind(JSON.stringify([comp.id]), hider).run();
+  await rejects(client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: hider, note: "Fits" }, "admin"), "HIDDEN");
+  const out = await client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "4 yrs Tally and GST; 30 days notice" }, "admin");
+  assert.equal(out.ref, await dbm.candidateRef(SECRET, comp.id, cand), "same reference the company would see");
+  await rejects(client.submitByJobPoint(db, SECRET, { companyId: comp.id, jdId: jd, candidateId: cand, note: "again" }, "admin"), "ALREADY_SUBMITTED");
+  assert.equal((await quota.quotaStatus(db, comp.id)).remaining, before, "no unlock quota used");
+  const view = (await client.pipelineView(db, comp.id))[0];
+  assert.deepEqual([view.stage, view.source, view.recruiterNote, view.name], ["submitted", "job_point", "4 yrs Tally and GST; 30 days notice", "Managed Candidate"]);
+  await quota.unlockCandidate(db, { companyId: comp.id, userId: comp.userId, candidateRef: out.ref, jdId: jd }).then(r => assert.equal(r.charged, false, "already accessible; nothing charged"));
+  await client.moveStage(db, comp.id, comp.userId, view.id, { stage: "shortlisted" });
+});
+
+await check("Withdrawn consent hides the candidate in the pipeline and cancels interviews; deletion erases pipeline notes, keeps the placement record", async () => {
+  const { db, comp, jd, cands, refs } = await releasedSetup(2);
+  for (const c of cands) await quota.unlockCandidate(db, { companyId: comp.id, userId: comp.userId, candidateRef: refs[c], jdId: jd });
+  const a = await client.addToPipeline(db, comp.id, comp.userId, refs[cands[0]], jd);
+  const b = await client.addToPipeline(db, comp.id, comp.userId, refs[cands[1]], jd);
+  await client.scheduleInterview(db, comp.id, comp.userId, a.id, { round: "Technical 1", scheduledAt: "2026-11-20T05:30:00Z", mode: "video" });
+  await client.moveStage(db, comp.id, comp.userId, b.id, { stage: "offered" });
+  await client.moveStage(db, comp.id, comp.userId, b.id, { stage: "offer_accepted", joiningDate: "2026-11-09" });
+  await client.moveStage(db, comp.id, comp.userId, b.id, { stage: "joined", joiningDate: "2026-11-09" });
+  await consent.withdrawSharing(db, cands[0], "candidate");
+  const row = (await client.pipelineView(db, comp.id)).find(r => r.id === a.id);
+  assert.deepEqual([row.name, row.available, row.stage, row.interviews.length], ["Candidate withdrew consent", false, "withdrawn", 0]);
+  assert.equal((await db.prepare("SELECT status FROM interviews WHERE pipeline_id = ?").bind(a.id).first()).status, "cancelled");
+  await rejects(client.moveStage(db, comp.id, comp.userId, a.id, { stage: "shortlisted" }), "CONSENT_WITHDRAWN");
+  await candidate.deleteCandidateData(db, cands[1], "candidate");
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM pipeline WHERE candidate_id = ?").bind(cands[1]).first()).n, 0);
+  const pl = await db.prepare("SELECT status, title FROM placements WHERE candidate_id = ?").bind(cands[1]).first();
+  assert.ok(pl && pl.status === "active", "placement record kept for the consultancy's accounts");
+  assert.equal((await client.clientOverview(db, comp.id)).placements[0].name, "Candidate", "no name after deletion");
 });
 
 console.log(`\n${passed} portal checks passed.`);

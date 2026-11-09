@@ -61,6 +61,11 @@ export async function POST(request: Request, context: { params: Promise<{ action
       return json({ message: "If an account exists for that email, a reset link has been sent.", devLink });
     }
     if (action === "reset") { await redeemToken(db, str(body.token, 120), "reset", String(body.password ?? "")); return json({ message: "Password changed. Sign in with your new password." }); }
+    if (action === "accept") {
+      if (!(await withinLimits(db, ip, "auth")).ok) return fail("Too many requests. Wait 15 minutes.", 429, "RATE_LIMIT");
+      await redeemToken(db, str(body.token, 120), "invite", String(body.password ?? ""));
+      return json({ message: "Your password is set. Sign in to open your hiring dashboard." });
+    }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }
 }

@@ -33,7 +33,8 @@ export async function consentActive(db: Db, candidateId: string, purpose: Purpos
  * - revokes every active release (previews disappear),
  * - revokes platform access to already-unlocked copies (the unlock and quota
  *   record are kept for audit; companies are asked to delete downloaded copies),
- * - marks open applications as withdrawn.
+ * - marks open applications and open pipeline entries as withdrawn and cancels
+ *   scheduled interviews.
  * Returns the companies that had unlocked the CV, for the deletion notice.
  */
 export async function withdrawSharing(db: Db, candidateId: string, actor: string, ipHash = ""): Promise<{ companiesToNotify: string[] }> {
@@ -47,6 +48,8 @@ export async function withdrawSharing(db: Db, candidateId: string, actor: string
     db.prepare("UPDATE releases SET revoked_at = ?, revoke_reason = 'consent_withdrawn' WHERE candidate_id = ? AND revoked_at IS NULL").bind(at, candidateId),
     db.prepare("UPDATE unlocks SET access_revoked_at = ?, access_revoke_reason = 'consent_withdrawn' WHERE candidate_id = ? AND access_revoked_at IS NULL").bind(at, candidateId),
     db.prepare("UPDATE portal_applications SET status = 'withdrawn', updated_at = ? WHERE candidate_id = ? AND status NOT IN ('hired','rejected','withdrawn')").bind(at, candidateId),
+    db.prepare("UPDATE interviews SET status = 'cancelled', updated_at = ? WHERE status = 'scheduled' AND pipeline_id IN (SELECT id FROM pipeline WHERE candidate_id = ?)").bind(at, candidateId),
+    db.prepare("UPDATE pipeline SET stage = 'withdrawn', stage_reason = 'consent_withdrawn', updated_at = ? WHERE candidate_id = ? AND stage NOT IN ('joined','rejected','offer_declined','no_show','withdrawn')").bind(at, candidateId),
   ]);
   await audit(db, actor, "consent.withdrawn", "candidate", candidateId, `share_with_companies; ${results.length} unlocked copies revoked`);
   return { companiesToNotify: results.map(r => r.company_id) };

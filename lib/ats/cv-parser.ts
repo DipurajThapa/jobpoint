@@ -367,7 +367,7 @@ function collectSkills(lines: Line[], work: WorkEntry[], now: Date): CandidateSk
     const evidence = evidenceFor[line.section];
     if (!evidence) continue;
     const short = line.section === "skills" || line.section === "certifications";
-    for (const f of findSkills(line.text, { allowShortAliases: short })) add(f.skill.id, f.skill.label, f.skill.family, evidence, line.text);
+    for (const f of findSkills(line.text, { allowShortAliases: short, implied: true })) add(f.skill.id, f.skill.label, f.skill.family, evidence, line.text);
   }
   // Skills listed in the skills section that the taxonomy does not know yet.
   // Re-join items that a PDF wrapped across lines ("Excel (VLOOKUP, pivot" + "tables)").
