@@ -6,12 +6,8 @@ import { audit, newId, nowIso, sha256Hex, type Db } from "./db";
 
 export type Purpose = "profile_processing" | "share_with_companies" | "service_offers";
 
-export const CONSENT_NOTICE_VERSION = "portal-2026-11-09";
-export const CONSENT_NOTICE = {
-  profile_processing: "Job Point will store your CV and the details read from it (work history, education, skills, certifications, current and preferred cities, notice period and CTC) to build your profile, match it with job descriptions, and show you suitable jobs. Your name, gender, age, religion, caste, marital status and photo are never used for matching.",
-  share_with_companies: "When your profile closely matches a job, Job Point will show the hiring company an anonymous summary (title, years of experience, key skills, city, match score and the reasons for it). If the company unlocks your profile, it will see your full CV and contact details for that hiring purpose. You can withdraw this consent at any time from Privacy and consent; we then stop showing your profile to companies immediately.",
-  service_offers: "Optional: Job Point may tell you about paid services such as CV writing, LinkedIn profile optimisation, spoken English and technical training.",
-} as const;
+import { CONSENT_NOTICE, CONSENT_NOTICE_VERSION } from "./notice";
+export { CONSENT_NOTICE, CONSENT_NOTICE_VERSION };
 
 export async function noticeHash(purpose: Purpose) {
   return (await sha256Hex(`${CONSENT_NOTICE_VERSION}:${CONSENT_NOTICE[purpose]}`)).slice(0, 32);

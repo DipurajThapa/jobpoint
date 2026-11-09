@@ -83,15 +83,15 @@ const ENTRIES: Entry[] = [
   ["call-handling", "Inbound and outbound calls", "customer-service", "inbound calls", "outbound calls", "call handling", "voice process", "inbound", "outbound", "call centre", "call center", "bpo"],
   ["non-voice", "Non-voice support", "customer-service", "non voice", "chat support", "email support", "chat process"],
   ["complaint-handling", "Complaint resolution", "customer-service", "complaint handling", "grievance handling", "escalation handling", "issue resolution", "query resolution", "resolving queries"],
-  ["ticketing", "Ticketing tools", "customer-service", "zendesk", "freshdesk", "servicenow", "ticketing system", "helpdesk"],
+  ["ticketing", "Ticketing tools", "customer-service", "ticketing tool", "ticketing", "ticket management", "ticket logging", "zendesk", "freshdesk", "servicenow", "ticketing system", "helpdesk"],
   ["technical-support", "Technical support", "it-support", "tech support", "it support", "desktop support", "it helpdesk", "l1 support", "l2 support"],
 
   // Operations, admin, logistics, supply chain
   ["operations-management", "Operations management", "operations", "operations", "back office", "back office operations", "process management", "daily operations"],
   ["office-administration", "Office administration", "admin", "office administration", "administration", "admin work", "front office", "reception", "receptionist", "facility management", "office management"],
   ["documentation", "Documentation", "admin", "record keeping", "record maintenance", "document management", "maintaining records"],
-  ["inventory-management", "Inventory management", "supply-chain", "inventory control", "stock management", "stock maintenance", "store management", "store keeping", "storekeeping"],
-  ["warehouse-management", "Warehouse management", "supply-chain", "warehouse operations", "warehousing", "wms", "dispatch", "receiving and dispatch"],
+  ["inventory-management", "Inventory management", "supply-chain", "inventory", "inventory control", "cycle count", "cycle counts", "physical verification", "stock transfers", "sku", "skus", "stock management", "stock maintenance", "stock control", "store management", "store keeping", "storekeeping", "stores management", "stores in charge", "stores incharge", "store in charge", "store incharge", "stores executive", "stock register", "grn", "goods receipt"],
+  ["warehouse-management", "Warehouse management", "supply-chain", "warehouse", "warehouse operations", "godown", "godown management", "warehousing", "wms", "dispatch", "receiving and dispatch"],
   ["logistics", "Logistics", "supply-chain", "logistics coordination", "transportation", "fleet management", "shipment", "shipping"],
   ["procurement", "Procurement", "supply-chain", "purchase", "purchasing", "vendor management", "purchase orders", "vendor development"],
   ["supply-chain-management", "Supply chain management", "supply-chain", "scm", "supply chain"],
@@ -223,8 +223,13 @@ export const skillById = (id: string) => byId.get(id);
 const CONTEXT_ONLY = new Set(["ap", "ar", "bd", "ml", "qc", "js", "pos", "itr", "mis", "brs", "soc", "ppc", "sem", "kam", "scm", "atl", "btl"]);
 
 /** Every taxonomy skill mentioned in `text`, with the alias that matched. */
+// Accounting vocabulary ("purchase, sales, journal and receipt vouchers", "sales register")
+// names voucher types, not the sales or procurement skills.
+const VOUCHER_LIST = /\b((?:(?:purchase|sales|journal|payment|receipt|contra|debit|credit|note|notes|and)\s+)+)(vouchers?|entries|register|registers|ledgers?|invoices?|returns?|book|books|bills?)\b/g;
+const maskAccounting = (text: string) => text.replace(VOUCHER_LIST, (_m, list: string, tail: string) => `${list.replace(/\b(sales|purchase)\b/g, "$1_acct")}${tail}`);
+
 export function findSkills(text: string, opts: { allowShortAliases?: boolean } = {}): { skill: TaxonomySkill; alias: string; index: number }[] {
-  const haystack = normalise(text);
+  const haystack = maskAccounting(normalise(text));
   const found: { skill: TaxonomySkill; alias: string; index: number }[] = [];
   for (const skill of SKILLS) {
     let best: { alias: string; index: number } | null = null;

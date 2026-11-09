@@ -12,6 +12,11 @@ export type AnalyseOptions = { bytes: Uint8Array; fileName: string; knownName?: 
 export class CvReadError extends Error {}
 
 export async function analyseCv(opts: AnalyseOptions): Promise<CandidateProfile> {
+  return (await analyseCvWithText(opts)).profile;
+}
+
+/** Same as analyseCv, also returning the extracted text (used by the job portal). */
+export async function analyseCvWithText(opts: AnalyseOptions): Promise<{ profile: CandidateProfile; text: string; fileType: "pdf" | "docx" }> {
   if (opts.bytes.byteLength > MAX_CV_BYTES) throw new CvReadError("The CV exceeds the 5 MB limit.");
   const fileType = detectFileType(opts.bytes, opts.fileName);
   if (!fileType) throw new CvReadError("Upload a PDF or DOCX file.");
@@ -28,7 +33,7 @@ export async function analyseCv(opts: AnalyseOptions): Promise<CandidateProfile>
     if (outcome.warning) profile.parse.warnings.push(outcome.warning);
   } else profile = parseCv(input);
   profile.parse.warnings.unshift(...extracted.warnings);
-  return profile;
+  return { profile, text: extracted.text, fileType };
 }
 
 export function screen(profile: CandidateProfile, requirements: JobRequirements, desiredRole?: string, now?: Date): ScreeningResult {

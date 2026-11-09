@@ -21,7 +21,7 @@ import { titleSimilarity } from "../ats/score";
 import type { PortalProfile } from "./profile";
 import type { PortalRequirements } from "./jd";
 import type { CompanyParams } from "./params";
-import { SENIORITY_ORDER, formatLpa } from "./india";
+import { formatLpa, sameLabourMarket } from "./india";
 
 export const MATCH_ENGINE_VERSION = "portal-match-2026.11.1";
 export const LAMBDA = 1.0;
@@ -99,31 +99,34 @@ function project(raw: Record<ComponentKey, number>): Record<ComponentKey, number
   return Object.fromEntries(floors.map(x => [x.k, x.f])) as Record<ComponentKey, number>;
 }
 
+// Year ranges of the seniority bands, used with a one-year tolerance at the edges.
+const BAND_YEARS: Record<string, [number, number]> = { fresher: [0, 1], junior: [1, 3], mid: [3, 6], senior: [6, 10], lead: [10, 60] };
+const withinBands = (years: number, bands: string[], tolerance = 1) => bands.some(b => BAND_YEARS[b] && years >= BAND_YEARS[b][0] - tolerance && years < BAND_YEARS[b][1] + tolerance);
+
 /** Hard filters: pass/fail gates from the JD and the company's approved parameters. */
 export function hardFilters(p: PortalProfile, req: PortalRequirements, params: CompanyParams | null): string[] {
   const failed: string[] = [];
   const f = req.hard, i = p.india;
   if (!f.remote && f.cities.length) {
-    const here = [i.currentCity, ...i.preferredCities].filter(Boolean).map(c => c.toLowerCase());
-    const local = f.cities.some(c => here.includes(c.toLowerCase()));
+    const here = [i.currentCity, ...i.preferredCities].filter(Boolean);
+    const local = f.cities.some(c => here.some(h => sameLabourMarket(h, c)));
     if (!local && !(f.allowRelocation && i.willingToRelocate === true)) failed.push(`Location: not in ${f.cities.join(" or ")}${f.allowRelocation ? " and not willing to relocate" : ""}.`);
   }
   if (f.minYears !== null && i.yearsExperience + 0.25 < f.minYears) failed.push(`Experience: ${i.yearsExperience} years, needs at least ${f.minYears}.`);
   const workOnly = params?.mandatoryFilters?.includes("work_evidence_for_mandatory_skills");
-  for (const s of f.mandatorySkills) {
-    const have = p.skills.find(x => x.id === s.id);
-    if (!have || (workOnly && have.evidence !== "work" && have.evidence !== "certification")) failed.push(`Mandatory skill: ${s.name}${have ? " not shown in work history" : " not found"}.`);
+  const groups = req.mandatoryGroups ?? f.mandatorySkills.map(s => [s.id]);
+  const name = (id: string) => [...req.mustHave, ...f.mandatorySkills].find(s => s.id === id)?.name ?? id;
+  for (const group of groups) {
+    const ok = group.some(id => { const have = p.skills.find(x => x.id === id); return !!have && (!workOnly || have.evidence === "work" || have.evidence === "certification"); });
+    if (!ok) failed.push(`Mandatory skill: ${group.map(name).join(" or ")} not ${workOnly ? "shown in work history" : "found"}.`);
   }
   const notice = f.maxNoticeDays ?? params?.maxNoticeDays ?? null;
   if (notice !== null && i.noticeDays !== null && i.noticeDays > notice) failed.push(`Notice period: ${i.noticeDays} days, maximum ${notice}.`);
   if (f.ctcMaxInr !== null && i.ctcExpectedInr !== null && i.ctcExpectedInr > f.ctcMaxInr * 1.1) failed.push(`Expected CTC ${formatLpa(i.ctcExpectedInr)} is above the ${formatLpa(f.ctcMaxInr)} maximum.`);
   if (params?.mandatoryFilters?.includes("ctc_stated") && i.ctcExpectedInr === null) failed.push("Expected CTC is not stated.");
   if (params?.mandatoryFilters?.includes("notice_stated") && i.noticeDays === null) failed.push("Notice period is not stated.");
-  if (params?.seniority?.length && !params.seniority.includes(i.seniority)) failed.push(`Seniority (${i.seniority}) is outside this company's approved bands.`);
-  if (f.seniority.length) {
-    const idx = SENIORITY_ORDER.indexOf(i.seniority), allowed = f.seniority.map(s => SENIORITY_ORDER.indexOf(s));
-    if (!allowed.some(a => Math.abs(a - idx) <= 0) && !allowed.some(a => a === idx + 1 || a === idx - 1)) failed.push(`Seniority (${i.seniority}) is far from the role's level.`);
-  }
+  if (params?.seniority?.length && !params.seniority.includes(i.seniority) && !withinBands(i.yearsExperience, params.seniority)) failed.push(`Seniority (${i.seniority}, ${i.yearsExperience} years) is outside this company's approved bands.`);
+  if (f.seniority.length && !withinBands(i.yearsExperience, f.seniority, 2)) failed.push(`Seniority (${i.seniority}) is far from the role's level.`);
   return failed;
 }
 
@@ -212,8 +215,12 @@ export function scoreMatch(p: PortalProfile, req: PortalRequirements, params: Co
   const components: Component[] = [];
   const push = (key: ComponentKey, mean: number | null, sd: number, detail: string) => components.push({ key, label: LABEL[key], weight: weights[key], mean: mean === null ? null : Math.max(0, Math.min(1, mean)), sd, detail });
 
-  const mAgg = aggregate(must, req.mustHave), nAgg = aggregate(nice, req.niceToHave);
-  push("mustHave", mAgg?.mean ?? null, mAgg?.sd ?? 0, `${must.filter(c => c.status === "met" || c.status === "verified").length} of ${must.length} with evidence (${must.filter(c => c.status === "verified").length} verified by test).`);
+  // Any-of groups ("A, B or C"): each group counts once, with its best-evidenced skill.
+  const groups = (req.mustGroups ?? req.mustHave.map(s => [s.id])).map(g => g.map(id => must.findIndex(c => c.id === id)).filter(i => i >= 0)).filter(g => g.length);
+  const bestOfGroup = groups.map(g => g.reduce((x, i) => must[i].mean - must[i].sd * 0.01 > must[x].mean - must[x].sd * 0.01 ? i : x, g[0]));
+  const mAgg = aggregate(bestOfGroup.map(i => must[i]), bestOfGroup.map(i => req.mustHave[i])), nAgg = aggregate(nice, req.niceToHave);
+  const groupMet = bestOfGroup.filter(i => must[i].status === "met" || must[i].status === "verified").length;
+  push("mustHave", mAgg?.mean ?? null, mAgg?.sd ?? 0, `${groupMet} of ${bestOfGroup.length} requirements with evidence (${bestOfGroup.filter(i => must[i].status === "verified").length} verified by test).`);
   push("niceToHave", nAgg?.mean ?? null, nAgg?.sd ?? 0, `${nice.filter(c => c.mean >= 0.6).length} of ${nice.length} found.`);
 
   const dated = p.work.some(w => w.start);
@@ -242,13 +249,13 @@ export function scoreMatch(p: PortalProfile, req: PortalRequirements, params: Co
   if (req.educationLevel !== null || req.educationFields.length) {
     let mean = 1;
     if (req.educationLevel !== null) mean = !p.education.length ? 0.3 : top >= req.educationLevel ? 1 : top === req.educationLevel - 1 ? 0.5 : 0;
-    if (req.educationFields.length && !p.education.some(e => req.educationFields.some(f => `${e.field} ${e.qualification}`.toLowerCase().includes(f.toLowerCase().slice(0, 5))))) mean *= 0.7;
+    if (req.educationFields.length && !p.education.some(e => req.educationFields.some(f => fieldMatches(f, `${e.field} ${e.qualification}`)))) mean *= 0.7;
     push("education", mean, p.education.length ? 0.05 : 0.2, p.education.length ? `Highest qualification level ${top}.` : "Education not found.");
   } else push("education", null, 0, "No education requirement.");
 
   if (!req.hard.remote && req.hard.cities.length) {
-    const here = [p.india.currentCity, ...p.india.preferredCities].map(c => c.toLowerCase());
-    const local = req.hard.cities.some(c => here.includes(c.toLowerCase()));
+    const here = [p.india.currentCity, ...p.india.preferredCities].filter(Boolean);
+    const local = req.hard.cities.some(c => here.some(h => sameLabourMarket(h, c)));
     push("location", local ? 1 : p.india.willingToRelocate ? 0.6 : 0, 0, local ? "Local to the job." : p.india.willingToRelocate ? "Willing to relocate." : "Not local.");
   } else push("location", null, 0, "Location not weighted.");
 
@@ -277,17 +284,30 @@ export function scoreMatch(p: PortalProfile, req: PortalRequirements, params: Co
   const minScore = params?.minScore ?? 70;
   return {
     engineVersion: MATCH_ENGINE_VERSION, hardPass: failedFilters.length === 0, failedFilters, score, sd, lowerBound, weights, weightTrace: trace, components, checks,
-    explanation: explain(score, sd, must, nice, components, relevantYears, req, p, failedFilters),
+    explanation: explain(score, sd, must, nice, components, relevantYears, req, p, failedFilters, groups),
     band, gaps, nearThreshold: failedFilters.length === 0 && S >= minScore && L < minScore,
   };
 }
 
+const FIELD_HINTS: Record<string, RegExp> = {
+  commerce: /\b(b\.?\s?com|m\.?\s?com|commerce|accountancy|accounting|accounts)\b/i,
+  management: /\b(bba|bbm|mba|pgdm|management|business administration)\b/i,
+  engineering: /\b(b\.?\s?tech|m\.?\s?tech|b\.\s?e\.?|engineering)\b/i,
+  science: /\b(b\.?\s?sc|m\.?\s?sc|science)\b/i,
+  accounting: /\b(chartered accountant|cma|accounting|accountancy|commerce|b\.?\s?com)\b/i,
+  "computer applications": /\b(bca|mca|computer)\b/i,
+};
+const fieldMatches = (field: string, text: string) => (FIELD_HINTS[field.toLowerCase()] ?? new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")).test(text);
+
 /** Human-readable explanation built only from structured fields (no names, employers, contacts or links). */
-function explain(S: number, SD: number, must: Check[], nice: Check[], components: Component[], years: number, req: PortalRequirements, p: PortalProfile, failed: string[]) {
+function explain(S: number, SD: number, mustAll: Check[], nice: Check[], components: Component[], years: number, req: PortalRequirements, p: PortalProfile, failed: string[], groups: number[][]) {
+  // One line per requirement group: a met "A, B or C" group is reported by its met member only.
+  const groupChecks = groups.map(g => { const met = g.map(i => mustAll[i]).filter(c => c.status === "met" || c.status === "verified"); return met.length ? met : g.map(i => mustAll[i]); });
+  const must: Check[] = groupChecks.map(cs => cs.length === 1 || cs.some(c => c.status === "met" || c.status === "verified") ? cs[0] : { ...cs.reduce((a, b) => (b.mean > a.mean ? b : a)), requirement: cs.map(c => c.requirement).join(" or ") });
   const evidenced = must.filter(c => c.status === "met" || c.status === "verified");
   const verified = [...must, ...nice].filter(c => c.status === "verified");
   const lo = Math.max(0, Math.round(S - SD)), hi = Math.min(100, Math.round(S + SD));
-  const parts = [`meets ${evidenced.length} of ${must.length} must-have skills with evidence`];
+  const parts = [`meets ${evidenced.length} of ${must.length} must-have requirements with evidence`];
   if (verified.length) parts.push(`${verified.map(c => c.requirement).join(", ")} verified by test`);
   else parts.push("no skill tests taken, so the range is wider");
   const summary = `${Math.round(S)} (likely ${lo}–${hi}): ${parts.join("; ")}.`;
@@ -308,8 +328,11 @@ function explain(S: number, SD: number, must: Check[], nice: Check[], components
   const scored = components.filter(c => c.mean !== null && c.weight > 0);
   const strongest = [...scored].sort((a, b) => b.weight * b.mean! - a.weight * a.mean!)[0];
   const weakest = [...scored].sort((a, b) => b.weight * (1 - b.mean!) - a.weight * (1 - a.mean!))[0];
+  const lead = [...scored].filter(c => c.mean! >= 0.75).sort((a, b) => b.weight * b.mean! - a.weight * a.mean!)[0] ?? strongest;
   const why = weakest && weakest.mean! < 0.9
-    ? `Ranks here mainly on ${strongest.label.toLowerCase()}; held back by ${weakest.label.toLowerCase()} (${weakest.detail.replace(/\.$/, "")}).`
+    ? lead && lead.key !== weakest.key
+      ? `Ranks here on ${lead.label.toLowerCase()}; held back by ${weakest.label.toLowerCase()} (${weakest.detail.replace(/\.$/, "")}).`
+      : `Ranks here mainly on ${weakest.label.toLowerCase()}, which is only partly met (${weakest.detail.replace(/\.$/, "")}).`
     : `Ranks here because it meets the role's requirements across the board${verified.length ? ", with tested skills" : ""}.`;
   return { summary, meets, misses, why };
 }

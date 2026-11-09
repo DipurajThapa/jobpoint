@@ -125,6 +125,11 @@ export function citiesIn(text: string): string[] {
 
 export const canonicalCity = (name: string) => citiesIn(name)[0] ?? name.trim().replace(/\b[a-z]/g, c => c.toUpperCase());
 
+// Places within one metro labour market count as the same city for matching.
+const METRO: Record<string, string> = { howrah: "kolkata", "navi mumbai": "mumbai", thane: "mumbai", noida: "delhi", ghaziabad: "delhi", gurugram: "delhi", secunderabad: "hyderabad" };
+export const metroOf = (city: string) => METRO[city.trim().toLowerCase()] ?? city.trim().toLowerCase();
+export const sameLabourMarket = (a: string, b: string) => !!a && !!b && metroOf(a) === metroOf(b);
+
 export function relocationFrom(text: string): boolean | null {
   const s = text.toLowerCase();
   if (/\b(not|un)\s*(willing|open|ready)\s*to\s*relocat|\bno relocation\b|\bcannot relocate\b|relocat\w*\s*[:\-–]\s*no\b/.test(s)) return false;

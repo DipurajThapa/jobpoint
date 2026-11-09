@@ -37,8 +37,9 @@ export function parseJobDescription(job: JobInput): JobRequirements {
       for (const f of findSkills(raw, { allowShortAliases: true })) mentions.push({ skill: { id: f.skill.id, name: f.skill.label, family: f.skill.family }, kind });
       for (const m of raw.matchAll(PHRASE)) {
         for (const item of m[1].split(/\s*,\s*|\s+and\s+|\s+or\s+|\s*\/\s*/)) {
-          const text = item.replace(/^(the|a|an|basic|good|strong|sound|excellent|advanced)\s+/i, "").trim();
-          if (text.length < 3 || text.split(/\s+/).length > 4 || findSkills(text, { allowShortAliases: true }).length) continue;
+          const text = item.replace(/^(?:(?:the|a|an|any|basic|good|strong|sound|excellent|advanced|working|hands[- ]on|proven|relevant)\s+)+/i, "").replace(/\s+(?:preferred|preferably|is an advantage|an advantage|is a plus)$/i, "").trim();
+          // Keep short noun phrases only; drop qualifiers ("preferably in a trading", "manufacturing company").
+          if (text.length < 3 || text.split(/\s+/).length > 3 || /\b(preferab\w*|company|companies|industry|firm|organisation|organization|environment|years?|role|team|similar|related|field|domain|sector|in a|in an)\b/i.test(text) || findSkills(text, { allowShortAliases: true }).length) continue;
           const resolved = resolveSkill(text);
           if (resolved) mentions.push({ skill: resolved, kind });
         }
@@ -80,7 +81,8 @@ export function parseJobDescription(job: JobInput): JobRequirements {
 }
 
 function splitLines(text: string): string[] {
-  return text.split(/\n|(?<=[.;])\s+(?=[A-Z])|\s+•\s+/).map(l => l.replace(/^[\s•\-*–▪●◦➢✓✔>·\d.)]+/, "").trim()).filter(Boolean);
+  // Strip bullets and list numbering ("1." / "2)") but never a leading range such as "2-5 years".
+  return text.split(/\n|(?<=[.;])\s+(?=[A-Z])|\s+•\s+/).map(l => l.replace(/^(?:[\s•*▪●◦➢✓✔>·]+|[-–]\s+|\d{1,2}[.)]\s+)+/, "").trim()).filter(Boolean);
 }
 
 export function parseYears(text: string): { min: number; max: number | null } | null {

@@ -12,6 +12,9 @@ export const LIMITS: Record<string, { windowSec: number; max: number }[]> = {
   download: [{ windowSec: 3600, max: 60 }, { windowSec: 86_400, max: 200 }],
   unlock: [{ windowSec: 3600, max: 30 }, { windowSec: 86_400, max: 150 }],
   match_list: [{ windowSec: 3600, max: 120 }],
+  auth: [{ windowSec: 900, max: 20 }],
+  register: [{ windowSec: 3600, max: 10 }],
+  cv_upload: [{ windowSec: 30 * 86_400, max: 3 }, { windowSec: 86_400, max: 3 }],
 };
 
 export async function logAccess(db: Db, e: { actorKind: "company_user" | "candidate" | "admin"; actorId: string; companyId?: string | null; action: AccessAction; jdId?: string | null; candidateRef?: string | null; ipHash?: string; detail?: string }) {
