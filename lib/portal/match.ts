@@ -1,7 +1,7 @@
 // Portal matching engine: hard filters, JD-specific weights, and Bayesian fusion
 // of CV evidence with optional assessment scores.
 //
-// Design (sources in docs/PORTAL_MATCHING.md):
+// Design (sources in docs/research/portal-matching-design-2026-11-09.md):
 // - Each component has a mean m and variance v. A CV claim is a prior whose
 //   spread depends on how strong the evidence is; an assessment is an
 //   observation with known measurement error (SEM). They combine by

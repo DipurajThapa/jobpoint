@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { isOwnerRequest } from "@/lib/admin";
 import { clean, errorJson, json, sameOrigin, validEmail } from "@/lib/http";
 import { portalDb } from "@/lib/portal/session";
-import { unlinkWebsiteApplication, withdrawWebsiteConsents } from "@/lib/portal/website";
+import { syncWebsiteProfile, unlinkWebsiteApplication, withdrawWebsiteConsents } from "@/lib/portal/website";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +45,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ type:
           .bind(status, notes, fullName, email, phone, location, experience, desiredRole, skills, education, availability, withdrawing ? 0 : current.share_consent, withdrawing ? 0 : current.future_consent, id),
         audit(request, withdrawing ? "consent.withdrawn" : profile ? "profile.corrected" : body.notes === undefined ? "stage.changed" : "notes.updated", "application", id),
       ]);
+      // A correction made here is applied to the same person's record in the shared candidate list.
+      if (profile) await syncWebsiteProfile(portalDb(), id, { fullName, email, phone, location }, request.headers.get("oai-authenticated-user-id") ?? "owner");
       // The same person in the shared candidate list stops being matched or shared too.
       if (withdrawing) await withdrawWebsiteConsents(portalDb(), id, request.headers.get("oai-authenticated-user-id") ?? "owner");
       return json({ message: withdrawing ? "Consents withdrawn here and in the candidate list." : "Application updated." });

@@ -74,5 +74,7 @@ export async function DELETE(request: Request, { params }: Params) {
     auditStatement(`platform:${admin.id}`, "platform.user_deleted", "platform_user", id),
   ]);
   if (!results[3].meta.changes) return apiError("At least one active administrator must remain.", 409, "LAST_ADMIN");
+  // Jobs assigned to this person go back to unassigned, so the team can pick them up.
+  await db().prepare("UPDATE jds SET recruiter_id = NULL WHERE recruiter_id = ?").bind(id).run();
   return apiJson({ ok: true });
 }

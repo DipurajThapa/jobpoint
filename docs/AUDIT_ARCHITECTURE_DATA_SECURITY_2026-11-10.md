@@ -6,6 +6,30 @@ API route's auth guard, and the query layer (`lib/portal`, `lib/platform`,
 `app/api`). Nothing was run against a live database, and nothing was changed.
 Items marked **(verify)** depend on deployment settings I cannot see from the code.
 
+## Status after the fix pass (10 Nov 2026)
+
+| Item | Status |
+|---|---|
+| S1 suspended company access | **Fixed.** Suspended and closed companies are refused on every company route and page. |
+| S2 incomplete erasure | **Fixed.** Deletion is driven by one list (`CANDIDATE_DATA`); a test fails if a new table with `candidate_id` has no rule. |
+| S3 same person in two stores | **Mitigated.** Deleting a portal account also erases website applications linked to it or sent from its verified email. Full merge of the two stores is D1 (open). |
+| S4 privacy requests not linked | **Fixed.** A verified deletion request can erase by email from the request itself and records what was removed. |
+| S5 three sign-in systems, no 2FA | Open. Needs a product decision. |
+| S6 development shortcuts | **Fixed.** Test owner, built-in secret and on-screen one-time links need an explicit development or test run. |
+| S7 shared secret | Open. Changing it alters every stored candidate reference; needs a planned rotation. |
+| S8 headers | **Partly fixed.** HSTS added, plus the CSP parts that cannot break a page. A full script policy is open. |
+| S9 sign-up enumeration | **Fixed.** |
+| S10 edit limit read from audit log | **Fixed.** Own table, migration 0013 carries old edits over. |
+| S11 dangling staff references | **Fixed** for job assignment on staff deletion. |
+| D1 correction in two places | **Mitigated.** An admin correction to a website application now updates the linked candidate record. |
+| D12 two references after a merge | **Fixed.** Merge moves the hiring history; a company keeps one reference per person. |
+| D2–D11, R1, R2, R6, R7 | Open. These are data migrations and large moves; see section 5. |
+| R3 tests and CI | **Fixed.** `npm test` (53 tests) and a CI workflow. |
+| R4 tracked build cache | **Fixed** (`tsconfig.tsbuildinfo` untracked). Installer scripts and package name left: the hosting workflow may use them. |
+| R5 docs | **Partly fixed.** README test section and the broken reference. |
+
+The findings below are as written before the fixes.
+
 ## 0. Verdict
 
 **Tenant isolation is well built; the data model and repo structure are not.**

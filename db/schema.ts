@@ -74,6 +74,8 @@ export const privacyRequests = sqliteTable("privacy_requests", {
   details: text("details").notNull().default(""),
   status: text("status", { enum: ["new", "verifying", "in_progress", "completed", "declined"] }).notNull().default("new"),
   resolutionNote: text("resolution_note").notNull().default(""),
+  erasedAt: text("erased_at"),
+  erasureSummary: text("erasure_summary").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("privacy_requests_status_idx").on(table.status, table.createdAt)]);

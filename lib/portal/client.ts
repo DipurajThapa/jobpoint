@@ -101,7 +101,7 @@ export async function inviteClient(db: Db, input: ClientInvite, adminId: string)
   try { await activateCompany(db, companyId, input.params, adminId, input.plan || "free"); }
   catch (error) { await db.batch([db.prepare("DELETE FROM companies WHERE id = ?").bind(companyId), db.prepare("DELETE FROM portal_accounts WHERE id = ?").bind(accountId)]); throw error; }
   const token = await issuePortalToken(db, accountId, "invite", INVITE_HOURS);
-  await audit(db, adminId, "client.invited", "company", companyId, input.ownerEmail.trim().toLowerCase());
+  await audit(db, adminId, "client.invited", "company", companyId, `account ${accountId}`);
   return { companyId, accountId, token };
 }
 
@@ -131,7 +131,7 @@ export async function inviteMember(db: Db, companyId: string, actorId: string, e
   const accountId = await createInvitedAccount(db, email);
   await db.prepare("INSERT INTO company_users (id, company_id, account_id, role, display_name, created_at) VALUES (?, ?, ?, 'recruiter', ?, ?)").bind(newId(), companyId, accountId, name.trim().slice(0, 120), nowIso()).run();
   const token = await issuePortalToken(db, accountId, "invite", INVITE_HOURS);
-  await audit(db, actorId, "client.member_invited", "company", companyId, email.trim().toLowerCase());
+  await audit(db, actorId, "client.member_invited", "company", companyId, `account ${accountId}`);
   return { accountId, token };
 }
 
@@ -232,8 +232,9 @@ export async function submitByRecruiter(db: Db, secret: string, input: { company
   // Portal sharing consent, or the website's recruiter-reviewed sharing consent (this is a recruiter-reviewed submission).
   if (!await consentActive(db, candidateId, "share_with_companies") && !await consentActive(db, candidateId, "recruiter_sharing")) throw new PortalError("NO_CONSENT", "The candidate has not consented to their CV being shared with employers.", 403);
   if (!input.note.trim()) throw new PortalError("NOTE", "Add a recruiter note for the client: why this candidate, availability, CTC and notice.");
-  const ref = await candidateRef(secret, companyId, candidateId);
-  const unlock = await db.prepare("SELECT access_revoked_at FROM unlocks WHERE company_id = ? AND candidate_id = ?").bind(companyId, candidateId).first<{ access_revoked_at: string | null }>();
+  const unlock = await db.prepare("SELECT access_revoked_at, candidate_ref FROM unlocks WHERE company_id = ? AND candidate_id = ?").bind(companyId, candidateId).first<{ access_revoked_at: string | null; candidate_ref: string }>();
+  // A company knows a person by one reference. After a merge the surviving record keeps the reference the company already has.
+  const ref = unlock?.candidate_ref ?? await candidateRef(secret, companyId, candidateId);
   if (unlock?.access_revoked_at) throw new PortalError("CONSENT_WITHDRAWN", "The candidate withdrew consent for this company earlier.", 410);
   if (await db.prepare("SELECT 1 AS x FROM pipeline WHERE company_id = ? AND jd_id = ? AND candidate_id = ?").bind(companyId, jdId, candidateId).first()) throw new PortalError("ALREADY_SUBMITTED", "This candidate is already in the client's pipeline for this job.", 409);
   const match = await db.prepare("SELECT score FROM matches WHERE jd_id = ? AND candidate_id = ?").bind(jdId, candidateId).first<{ score: number }>();

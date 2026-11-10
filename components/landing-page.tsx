@@ -25,7 +25,7 @@ export default function LandingPage({ page }: { page: Landing }) {
   const [open, setOpen] = useState(false);
   useEffect(() => { const els = document.querySelectorAll(".reveal"); const observer = new IntersectionObserver(items => items.forEach(item => { if (item.isIntersecting) { item.target.classList.add("is-visible"); observer.unobserve(item.target); } }), { threshold: .12 }); els.forEach(el => observer.observe(el)); return () => observer.disconnect(); }, []);
   const employer = page.audience === "employer", cta = DEMO_MODE ? "Preview the form" : page.cta;
-  return <>
+  return <div className={`theme-wrap ${employer ? "theme-company" : "theme-candidate"}`}>
     <PublicHeader onHire={employer ? () => setOpen(true) : undefined} />
     <main id="page-top">
       <section className="hero"><div className="container hero-grid"><div className="hero-copy"><span className="eyebrow"><i /> {page.eyebrow}</span><h1>{page.title[0]}<br /><em>{page.title[1]}</em></h1><p>{page.intro}</p><div className="hero-actions"><button className="button" onClick={() => setOpen(true)}>{cta} <Icon name="north_east" /></button>{page.secondary && <Link className="button button-quiet" href={page.secondary.href}>{page.secondary.label}</Link>}</div></div><div className="hero-visual"><div className="photo-frame"><Image src={page.image.src} alt={page.image.alt} fill priority sizes="(max-width: 760px) 90vw, 48vw" /></div></div></div></section>
@@ -40,5 +40,5 @@ export default function LandingPage({ page }: { page: Landing }) {
     </main>
     <PublicFooter onCandidate={employer ? undefined : () => setOpen(true)} onEmployer={employer ? () => setOpen(true) : undefined} />
     {open && <PublicEnquiryDialog type={page.audience} onClose={() => setOpen(false)} />}
-  </>;
+  </div>;
 }

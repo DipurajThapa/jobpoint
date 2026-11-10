@@ -4,7 +4,7 @@ import { createCandidate } from "@/lib/portal/candidate";
 import { applyCompany } from "@/lib/portal/company";
 import { withinLimits } from "@/lib/portal/access";
 import { sendMail } from "@/lib/portal/mailer";
-import { audit } from "@/lib/portal/db";
+import { audit, PortalError } from "@/lib/portal/db";
 import { env } from "cloudflare:workers";
 
 export const dynamic = "force-dynamic";
@@ -25,10 +25,17 @@ export async function POST(request: Request, context: { params: Promise<{ action
       const kind = body.kind === "company" ? "company_user" : "candidate";
       if (body.adult !== true && kind === "candidate") return fail("Jobboard300 is for adults aged 18 or over.", 400, "AGE");
       if (body.terms !== true) return fail("Accept the terms to continue.", 400, "TERMS");
-      const accountId = await createAccount(db, kind, str(body.email, 254), String(body.password ?? ""), str(body.phone, 20));
+      if (kind === "company_user" && (!str(body.companyName) || !str(body.legalName))) return fail("Enter the company's name and registered legal name.", 400, "COMPANY");
+      let accountId: string;
+      try { accountId = await createAccount(db, kind, str(body.email, 254), String(body.password ?? ""), str(body.phone, 20)); }
+      catch (error) {
+        if (!(error instanceof PortalError) || error.code !== "EMAIL_TAKEN") throw error;
+        // Do not reveal that the address already has an account: tell its owner by email and answer as for a new sign-up.
+        const mail = await sendMail({ to: str(body.email, 254), subject: "Your Jobboard300 account", text: `Someone tried to create a Jobboard300 account with this email address, which already has one. If it was you, sign in or reset your password:\n${origin}/portal/forgot\n\nIf it was not you, ignore this email.` });
+        return json({ message: mail.sent ? "Check your email for a verification link." : mail.reason }, 201);
+      }
       if (kind === "candidate") await createCandidate(db, { accountId, displayName: str(body.name, 120), email: str(body.email, 254), phone: str(body.phone, 20), currentCity: str(body.city, 80) });
       else {
-        if (!str(body.companyName) || !str(body.legalName)) return fail("Enter the company's name and registered legal name.", 400, "COMPANY");
         await applyCompany(db, { accountId, displayName: str(body.companyName, 120), legalName: str(body.legalName, 160), city: str(body.city, 80), website: str(body.website), gstin: str(body.gstin, 15) });
       }
       const token = await issuePortalToken(db, accountId, "verify", 48);

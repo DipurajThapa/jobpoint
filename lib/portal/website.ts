@@ -17,7 +17,7 @@
 
 import { audit, newId, nowIso, sha256Hex, type Db } from "./db";
 import { consentActive, recordConsent, withdrawSharing } from "./consent";
-import { createCandidate, deleteCandidateData } from "./candidate";
+import { createCandidate, deleteCandidateData, normEmail, normPhone } from "./candidate";
 import { enqueue } from "./company";
 import { ingestCv, type Bucket } from "./ingest";
 import { WEBSITE_NOTICE, websiteNoticeVersion } from "./notice";
@@ -31,7 +31,7 @@ export type LinkResult = { candidateId: string; created: boolean; cv: "parsed" |
 
 /** Website-only candidate (no portal account) with the same email, if any: the same person applying again. */
 async function existingWebsiteCandidate(db: Db, email: string) {
-  const hash = await sha256Hex(email.trim().toLowerCase());
+  const hash = await sha256Hex(normEmail(email));
   return db.prepare(`SELECT c.id FROM candidates c WHERE c.dedupe_email_hash = ? AND c.account_id IS NULL AND c.status = 'active'
       AND EXISTS (SELECT 1 FROM candidate_sources s WHERE s.candidate_id = c.id AND s.kind = 'website_application') ORDER BY c.created_at LIMIT 1`).bind(hash).first<{ id: string }>();
 }
@@ -55,6 +55,23 @@ export async function linkWebsiteApplication(db: Db, bucket: Bucket, app: Websit
   if (matching && cv === "parsed") await enqueue(db, "candidate", candidateId, "website").run();
   await audit(db, actor, "candidate.website_linked", "candidate", candidateId, `application ${app.id}; cv ${cv}; matching ${matching}`);
   return { candidateId, created: !reuse, cv, matching, recruiterSharing: await consentActive(db, candidateId, "recruiter_sharing") };
+}
+
+/**
+ * The admin corrected a website application's details. The same correction is
+ * applied to the person's record in the candidate list, so the two never
+ * disagree. Only website-only records are touched: a portal account holder
+ * corrects their own profile.
+ */
+export async function syncWebsiteProfile(db: Db, applicationId: string, details: { fullName: string; email: string; phone: string; location: string }, actor: string): Promise<boolean> {
+  const row = await db.prepare(`SELECT c.id FROM candidate_sources s JOIN candidates c ON c.id = s.candidate_id
+      WHERE s.kind = 'website_application' AND s.ref_id = ? AND c.account_id IS NULL AND c.status NOT IN ('merged','deleted')`).bind(applicationId).first<{ id: string }>();
+  if (!row) return false;
+  const phone = normPhone(details.phone);
+  await db.prepare("UPDATE candidates SET display_name = ?, current_city = ?, dedupe_email_hash = ?, dedupe_phone_hash = ? WHERE id = ?")
+    .bind(details.fullName.trim().slice(0, 120), details.location.trim().slice(0, 80), await sha256Hex(normEmail(details.email)), phone.length === 10 ? await sha256Hex(phone) : "", row.id).run();
+  await audit(db, actor, "candidate.website_corrected", "candidate", row.id, `application ${applicationId}`);
+  return true;
 }
 
 /** The admin withdrew a website applicant's optional consents (privacy request): stop matching and sharing everywhere. */

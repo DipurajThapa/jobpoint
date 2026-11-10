@@ -1,7 +1,7 @@
 /* Job portal (candidates and companies). Builds on the Working Platform styles. */
 .pj-top{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px clamp(16px,4vw,40px);background:var(--navy);color:#fff}
 .pj-top a{color:#fff}.pj-top .pj-brand{display:flex;align-items:center;gap:10px;font-weight:800}.pj-top nav{display:flex;gap:6px;flex-wrap:wrap}
-.pj-top nav button{border:0;background:transparent;color:#cbd6ed;padding:9px 12px;border-radius:9px;font:600 15px var(--font);cursor:pointer}.pj-top nav button[aria-current=page],.pj-top nav button:hover{background:#ffffff1c;color:#fff}
+.pj-top nav button{border:0;background:transparent;color:var(--nav-muted,#cbd6ed);padding:9px 12px;border-radius:9px;font:600 15px var(--font);cursor:pointer}.pj-top nav button[aria-current=page],.pj-top nav button:hover{background:#ffffff1c;color:#fff}
 .pj-top form button{border:1px solid #ffffff55;background:transparent;color:#fff;border-radius:9px;padding:8px 12px;font:600 14px var(--font);cursor:pointer}
 .pj-main{max-width:1180px;margin:0 auto;padding:26px clamp(16px,4vw,40px) 60px;display:grid;gap:18px}
 .pj-card{background:#fff;border:1px solid #dfe5f1;border-radius:14px;padding:20px;display:grid;gap:12px}
@@ -9,25 +9,25 @@
 .pj-muted{color:var(--muted);font-size:14px}
 .pj-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .pj-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.pj-form .full{grid-column:1/-1}
-.pj-form textarea,.pj-card textarea{width:100%;min-height:90px;padding:11px 12px;border:1px solid #cfd8ea;border-radius:10px;font:500 15px/1.5 var(--font);color:var(--navy)}
+.pj-form textarea,.pj-card textarea{width:100%;min-height:90px;padding:11px 12px;border:1px solid var(--tint-line,#cfd8ea);border-radius:10px;font:500 15px/1.5 var(--font);color:var(--navy)}
 .pj-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .pj-btn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:10px;padding:10px 16px;background:var(--blue);color:#fff;font:700 15px var(--font);cursor:pointer;text-decoration:none}
-.pj-btn.quiet{background:#eef3ff;color:var(--blue)}.pj-btn.danger{background:#fbe9e7;color:#a3362a}.pj-btn:disabled{opacity:.55;cursor:not-allowed}
+.pj-btn.quiet{background:var(--tint,#eef3ff);color:var(--blue)}.pj-btn.danger{background:#fbe9e7;color:#a3362a}.pj-btn:disabled{opacity:.55;cursor:not-allowed}
 .pj-link{border:0;background:none;color:var(--blue);font:700 14px var(--font);cursor:pointer;padding:0;text-decoration:underline}
-.pj-notice{padding:11px 14px;border-radius:10px;background:#eaf1ff;color:var(--navy);font-size:15px}.pj-notice.bad{background:#fdecea;color:#8a2a1f}.pj-notice.good{background:#e8f8f0;color:#14603e}
-.pj-pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12.5px;font-weight:700;background:#eef2fa;color:#41506d}
-.pj-pill.strong{background:#e3f6ec;color:#14603e}.pj-pill.good{background:#e6eeff;color:#1d4ed8}.pj-pill.partial{background:#fff3df;color:#8a5a06}.pj-pill.weak{background:#fdecea;color:#8a2a1f}
+.pj-notice{padding:11px 14px;border-radius:10px;background:var(--tint-2,#eaf1ff);color:var(--navy);font-size:15px}.pj-notice.bad{background:#fdecea;color:#8a2a1f}.pj-notice.good{background:#e8f8f0;color:#14603e}
+.pj-pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12.5px;font-weight:700;background:var(--pill-bg,#eef2fa);color:var(--pill-ink,#41506d)}
+.pj-pill.strong{background:#e3f6ec;color:#14603e}.pj-pill.good{background:var(--tint,#e6eeff);color:var(--blue)}.pj-pill.partial{background:#fff3df;color:#8a5a06}.pj-pill.weak{background:#fdecea;color:#8a2a1f}
 .pj-list{display:grid;gap:10px}
-.pj-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 16px;align-items:start;padding:14px;border:1px solid #e4e9f3;border-radius:12px;background:#fbfcff}
+.pj-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 16px;align-items:start;padding:14px;border:1px solid #e4e9f3;border-radius:12px;background:var(--tint-4,#fbfcff)}
 .pj-item b{font-size:16px}.pj-item ul{margin:4px 0 0;padding-left:18px;font-size:14px;line-height:1.55}
 .pj-score{display:grid;justify-items:end;gap:4px}.pj-score b{font-size:24px}
 .pj-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}.pj-stats div{background:#fff;border:1px solid #dfe5f1;border-radius:12px;padding:14px}.pj-stats b{display:block;font-size:26px}
-.pj-chips{display:flex;flex-wrap:wrap;gap:6px}.pj-chips span{padding:3px 9px;border-radius:8px;background:#eef2fa;font-size:13px}
+.pj-chips{display:flex;flex-wrap:wrap;gap:6px}.pj-chips span{padding:3px 9px;border-radius:8px;background:var(--pill-bg,#eef2fa);font-size:13px}
 .pj-table{width:100%;border-collapse:collapse;font-size:14px}.pj-table th,.pj-table td{text-align:left;padding:8px;border-top:1px solid #e4e9f3;vertical-align:top}.pj-table th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-top:0}
 .pj-q{border:1px solid #e4e9f3;border-radius:12px;padding:14px;display:grid;gap:8px}.pj-q label{display:flex;gap:8px;align-items:center;font-weight:500}
 @media(max-width:720px){.pj-form{grid-template-columns:1fr}.pj-item{grid-template-columns:1fr}.pj-score{justify-items:start}.pj-top{flex-wrap:wrap}}
-.pj-note{margin:6px 0;padding:8px 10px;border-left:3px solid var(--blue);background:#f4f7ff;font-size:14px}
+.pj-note{margin:6px 0;padding:8px 10px;border-left:3px solid var(--blue);background:var(--tint-3,#f4f7ff);font-size:14px}
 .pj-funnel{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px}.pj-funnel button{display:grid;gap:2px;padding:12px;border:1px solid #dfe5f1;border-radius:12px;background:#fff;text-align:left;cursor:pointer;font:500 14px var(--font);color:var(--navy)}.pj-funnel b{font-size:24px}
-.pj-actions{align-content:start;justify-content:flex-end}.pj-actions select{padding:9px;border:1px solid #cfd8ea;border-radius:10px;font:600 14px var(--font)}
+.pj-actions{align-content:start;justify-content:flex-end}.pj-actions select{padding:9px;border:1px solid var(--tint-line,#cfd8ea);border-radius:10px;font:600 14px var(--font)}
 .pj-item .pj-form{margin-top:10px}
 .pj-list>label.pj-row{flex-wrap:nowrap;align-items:flex-start}.pj-list>label.pj-row input[type=checkbox]{margin-top:4px;flex:none}
