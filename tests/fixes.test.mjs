@@ -94,19 +94,27 @@ test("the built-in development secret is never used unless the run is explicitly
 test("a live job's requirements can change three times in 30 days, and clearing the audit log does not reset the count", async () => {
   const w = await world();
   const current = async () => JSON.parse((await w.db.prepare("SELECT requirements FROM jds WHERE id = ?").bind(w.A.jdId).first()).requirements);
-  const relive = async () => { await mods.company.submitJd(w.db, w.A.id, w.A.jdId, w.A.userId); await mods.company.decideJd(w.db, w.A.jdId, true, "admin"); };
-  for (let i = 0; i < 3; i++) { await mods.company.updateJdRequirements(w.db, w.A.id, w.A.jdId, await current(), w.A.userId); await relive(); }
-  await assert.rejects(mods.company.updateJdRequirements(w.db, w.A.id, w.A.jdId, await current(), w.A.userId), e => e.code === "EDIT_LIMIT");
+  // A real change to a live job goes straight to “waiting for approval”; the owner approves it again.
+  const relive = async () => { assert.equal((await w.db.prepare("SELECT status FROM jds WHERE id = ?").bind(w.A.jdId).first()).status, "pending"); await mods.company.decideJd(w.db, w.A.jdId, true, "admin"); };
+  const changed = async n => ({ ...await current(), maxYears: 10 + n });
+  for (let i = 0; i < 3; i++) { await mods.company.updateJdRequirements(w.db, w.A.id, w.A.jdId, await changed(i), w.A.userId); await relive(); }
+  await assert.rejects(mods.company.updateJdRequirements(w.db, w.A.id, w.A.jdId, await changed(9), w.A.userId), e => e.code === "EDIT_LIMIT");
   await w.db.prepare("DELETE FROM audit_events").run();
-  await assert.rejects(mods.company.updateJdRequirements(w.db, w.A.id, w.A.jdId, await current(), w.A.userId), e => e.code === "EDIT_LIMIT");
+  await assert.rejects(mods.company.updateJdRequirements(w.db, w.A.id, w.A.jdId, await changed(9), w.A.userId), e => e.code === "EDIT_LIMIT");
+  // Pressing Save with nothing changed does nothing: the job stays live and nothing is counted.
+  const same = await mods.company.updateJdRequirements(w.db, w.A.id, w.A.jdId, await current(), w.A.userId);
+  assert.equal(same.changed, false);
+  assert.equal((await w.db.prepare("SELECT status FROM jds WHERE id = ?").bind(w.A.jdId).first()).status, "live");
   // Company B's job has its own count.
-  await mods.company.updateJdRequirements(w.db, w.B.id, w.B.jdId, JSON.parse((await w.db.prepare("SELECT requirements FROM jds WHERE id = ?").bind(w.B.jdId).first()).requirements), w.B.userId);
+  await mods.company.updateJdRequirements(w.db, w.B.id, w.B.jdId, { ...JSON.parse((await w.db.prepare("SELECT requirements FROM jds WHERE id = ?").bind(w.B.jdId).first()).requirements), maxYears: 12 }, w.B.userId);
   // Edits older than the window stop counting.
   await w.db.prepare("UPDATE jd_requirement_edits SET at = ? WHERE jd_id = ?").bind(new Date(Date.now() - 31 * 86_400_000).toISOString(), w.A.jdId).run();
-  await mods.company.updateJdRequirements(w.db, w.A.id, w.A.jdId, await current(), w.A.userId);
+  await mods.company.updateJdRequirements(w.db, w.A.id, w.A.jdId, await changed(20), w.A.userId);
   // Editing a draft is not counted.
+  await mods.company.decideJd(w.db, w.A.jdId, true, "admin");
+  await w.db.prepare("UPDATE jds SET status = 'draft' WHERE id = ?").bind(w.A.jdId).run();
   const n = (await w.db.prepare("SELECT COUNT(*) AS n FROM jd_requirement_edits WHERE jd_id = ?").bind(w.A.jdId).first()).n;
-  await mods.company.updateJdRequirements(w.db, w.A.id, w.A.jdId, await current(), w.A.userId);
+  await mods.company.updateJdRequirements(w.db, w.A.id, w.A.jdId, await changed(21), w.A.userId);
   assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM jd_requirement_edits WHERE jd_id = ?").bind(w.A.jdId).first()).n, n);
 });
 

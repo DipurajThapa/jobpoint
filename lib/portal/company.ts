@@ -5,6 +5,7 @@ import { audit, newId, nowIso, parseJson, PortalError, type Db } from "./db";
 import { jdConflicts, sanitiseParams, type CompanyParams } from "./params";
 import { parsePortalJd, sanitisePortalRequirements, type JdInput, type PortalRequirements } from "./jd";
 import { FEE, REQUIREMENT_EDITS } from "./policy";
+import { notifyCompany, notifyStaff } from "./notify";
 
 export async function applyCompany(db: Db, input: { accountId: string; legalName: string; displayName: string; city: string; website?: string; gstin?: string }) {
   const id = newId(), at = nowIso();
@@ -104,33 +105,59 @@ export async function createJd(db: Db, companyId: string, userId: string, input:
   return { id, requirements };
 }
 
-/** Company correction of parsed JD requirements. Editing a live JD sends it back for approval. */
+/** The parts of the requirements a person can change on the job editor, in one comparable form. */
+const editable = (r: PortalRequirements) => JSON.stringify({
+  title: r.title, mustHave: r.mustHave.map(x => x.id).sort(), niceToHave: r.niceToHave.map(x => x.id).sort(), minYears: r.minYears, maxYears: r.maxYears, educationLevel: r.educationLevel,
+  cities: [...(r.hard?.cities ?? [])].sort(), remote: !!r.hard?.remote, allowRelocation: r.hard?.allowRelocation !== false, mandatory: (r.hard?.mandatorySkills ?? []).map(x => x.id).sort(),
+  maxNoticeDays: r.hard?.maxNoticeDays ?? null, ctcMinInr: r.hard?.ctcMinInr ?? null, ctcMaxInr: r.hard?.ctcMaxInr ?? null,
+});
+
+/**
+ * The editor sends only the fields it shows. Everything else the job already has (location, work mode, seniority,
+ * education fields, role family, assessments) is kept, so a save never changes what the person did not touch.
+ */
+function keepUnshown(raw: unknown, stored: PortalRequirements): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const r = { ...(raw as Record<string, unknown>) }, h = { ...((r.hard ?? {}) as Record<string, unknown>) };
+  for (const k of ["location", "workMode", "educationFields", "roleFamily", "assessmentIds"] as const) if (r[k] === undefined) r[k] = (stored as Record<string, unknown>)[k];
+  if (h.seniority === undefined) h.seniority = stored.hard?.seniority ?? [];
+  r.hard = h;
+  return r;
+}
+
+/**
+ * Company correction of parsed JD requirements. Saving with nothing changed does nothing. A real change to a
+ * live job goes straight to “waiting for approval” (one step) and the job stays visible to its recruiters.
+ */
 export async function updateJdRequirements(db: Db, companyId: string, jdId: string, raw: unknown, userId: string) {
-  const jd = await db.prepare("SELECT title, status FROM jds WHERE id = ? AND company_id = ?").bind(jdId, companyId).first<{ title: string; status: string }>();
+  const jd = await db.prepare("SELECT title, status, requirements FROM jds WHERE id = ? AND company_id = ?").bind(jdId, companyId).first<{ title: string; status: string; requirements: string }>();
   if (!jd) throw new PortalError("NOT_FOUND", "JD not found.", 404);
-  if (jd.status === "closed") throw new PortalError("CLOSED", "This JD is closed.");
-  const requirements = sanitisePortalRequirements(raw, jd.title);
+  if (jd.status === "closed") throw new PortalError("CLOSED", "This JD is closed. Send it for approval again to re-open it.");
+  const stored = parseJson<PortalRequirements>(jd.requirements, null as unknown as PortalRequirements);
+  const requirements = sanitisePortalRequirements(stored ? keepUnshown(raw, stored) : raw, jd.title);
   if (!requirements) throw new PortalError("INVALID_JD", "The requirements could not be read.");
+  if (stored && editable(stored) === editable(requirements)) return { requirements: stored, changed: false, status: jd.status };
   if (jd.status === "live") {
     // Repeatedly changing a live job's requirements is how matching gets probed: cap it and route further changes through a recruiter.
     const since = new Date(Date.parse(nowIso()) - REQUIREMENT_EDITS.days * 86_400_000).toISOString();
     const edits = await db.prepare("SELECT COUNT(*) AS n FROM jd_requirement_edits WHERE jd_id = ? AND at >= ?").bind(jdId, since).first<{ n: number }>();
     if ((edits?.n ?? 0) >= REQUIREMENT_EDITS.max) throw new PortalError("EDIT_LIMIT", `This job's requirements have already changed ${REQUIREMENT_EDITS.max} times in ${REQUIREMENT_EDITS.days} days. Ask your Jobboard300 recruiter to make further changes.`, 429);
   }
+  const next = jd.status === "live" ? "pending" : jd.status === "pending" ? "pending" : jd.status === "paused" ? "draft" : jd.status;
   await db.batch([
-    db.prepare("UPDATE jds SET requirements = ?, status = CASE WHEN status IN ('live','pending','paused') THEN 'draft' ELSE status END, updated_at = ? WHERE id = ? AND company_id = ?")
-      .bind(JSON.stringify(requirements), nowIso(), jdId, companyId),
+    db.prepare("UPDATE jds SET requirements = ?, status = ?, updated_at = ? WHERE id = ? AND company_id = ?").bind(JSON.stringify(requirements), next, nowIso(), jdId, companyId),
     ...(jd.status === "live" ? [db.prepare("INSERT INTO jd_requirement_edits (id, jd_id, edited_by, at) VALUES (?, ?, ?, ?)").bind(newId(), jdId, userId, nowIso())] : []),
   ]);
-  await audit(db, userId, "jd.edited", "jd", jdId, jd.status === "live" ? "was live; needs approval again" : "");
-  return requirements;
+  await audit(db, userId, "jd.edited", "jd", jdId, jd.status === "live" ? "was live; waiting for approval again" : "");
+  if (jd.status === "live") await notifyStaff(db, companyId, "job.edited", `The client changed the requirements of ${jd.title}`, "The job is waiting for approval again. Its candidates stay in the pipeline.", { jdId });
+  return { requirements, changed: true, status: next };
 }
 
 export async function submitJd(db: Db, companyId: string, jdId: string, userId: string) {
   await companyUserCheck(db, companyId);
   const jd = await db.prepare("SELECT status, requirements FROM jds WHERE id = ? AND company_id = ?").bind(jdId, companyId).first<{ status: string; requirements: string }>();
   if (!jd) throw new PortalError("NOT_FOUND", "JD not found.", 404);
-  if (!["draft", "rejected", "paused"].includes(jd.status)) throw new PortalError("BAD_STATE", "Only a draft, rejected or paused JD can be submitted.", 409);
+  if (!["draft", "rejected", "paused", "closed"].includes(jd.status)) throw new PortalError("BAD_STATE", "Only a draft, rejected, paused or closed job can be sent for approval.", 409);
   const current = await currentParams(db, companyId);
   if (!current) throw new PortalError("NO_PARAMS", "Your matching parameters are not approved yet.", 403);
   await db.prepare("UPDATE jds SET status = 'pending', updated_at = ? WHERE id = ?").bind(nowIso(), jdId).run();
@@ -147,6 +174,8 @@ export async function decideJd(db: Db, jdId: string, approve: boolean, adminId: 
     if (note.trim().length < 5) throw new PortalError("REASON_REQUIRED", "Give the company a reason for rejecting the JD.");
     await db.prepare("UPDATE jds SET status = 'rejected', decided_by = ?, decided_at = ?, decision_note = ?, updated_at = ? WHERE id = ?").bind(adminId, at, note.slice(0, 500), at, jdId).run();
     await audit(db, adminId, "jd.rejected", "jd", jdId);
+    const t = await db.prepare("SELECT title FROM jds WHERE id = ?").bind(jdId).first<{ title: string }>();
+    await notifyCompany(db, jd.company_id, "job.rejected", `${t?.title ?? "Your job"} needs changes`, note.trim().slice(0, 500));
     return { conflicts: [] as string[] };
   }
   const current = await currentParams(db, jd.company_id);
@@ -160,5 +189,7 @@ export async function decideJd(db: Db, jdId: string, approve: boolean, adminId: 
     enqueue(db, "jd", jdId, "jd_approved"),
   ]);
   await audit(db, adminId, "jd.approved", "jd", jdId, `params v${current.version}`);
+  const t = await db.prepare("SELECT title FROM jds WHERE id = ?").bind(jdId).first<{ title: string }>();
+  await notifyCompany(db, jd.company_id, "job.approved", `${t?.title ?? "Your job"} is live`, "Jobboard300 has approved it. A recruiter will now put suitable candidates in front of you.");
   return { conflicts };
 }

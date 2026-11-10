@@ -499,8 +499,8 @@ await check("Each hiring event writes exactly one inbox message for the right ca
   for (const secret of ["Private recruiter note", "Weak on reconciliation", "Internal: not strong", "skills_gap", "rating"]) assert.ok(!text.includes(secret), `inbox never carries ${secret}`);
   assert.ok(text.includes("11:00") && text.includes("https://meet.example/x"), "the interview message gives India time and the link");
   const notices = (await notify.companyNotices(t.db, t.compK.id)).map(n => n.kind).reverse();
-  assert.deepEqual(notices, ["submission", "stage.shortlisted", "interview.scheduled"], "the client is told about staff updates, not about its own");
-  assert.equal((await notify.companyNotices(t.db, t.compF.id)).length, 0);
+  assert.deepEqual([...notices].sort(), ["interview.scheduled", "job.approved", "stage.shortlisted", "submission"], "the client is told about staff updates, not about its own");
+  assert.equal((await notify.companyNotices(t.db, t.compF.id)).filter(n => n.kind !== "job.approved").length, 0);
   await notify.markInboxRead(t.db, cand);
   assert.ok((await notify.candidateInbox(t.db, cand)).every(m => m.read_at));
 });
@@ -613,10 +613,10 @@ await check("Contact details are stripped from CV text; the placement fee is 7.5
 
 await check("A live job's requirements can change only three times in 30 days; hiding from an employer works by typed name", async () => {
   const t = await staffSetup();
-  const relive = async () => { await company.submitJd(t.db, t.compK.id, t.jdK, t.compK.userId); await company.decideJd(t.db, t.jdK, true, "admin"); };
+  const relive = async () => { await company.decideJd(t.db, t.jdK, true, "admin"); };
   const req = JSON.parse((await t.db.prepare("SELECT requirements FROM jds WHERE id = ?").bind(t.jdK).first()).requirements);
-  for (let i = 0; i < 3; i++) { await company.updateJdRequirements(t.db, t.compK.id, t.jdK, req, t.compK.userId); await relive(); }
-  await rejects(company.updateJdRequirements(t.db, t.compK.id, t.jdK, req, t.compK.userId), "EDIT_LIMIT");
+  for (let i = 0; i < 3; i++) { await company.updateJdRequirements(t.db, t.compK.id, t.jdK, { ...req, maxYears: 10 + i }, t.compK.userId); await relive(); }
+  await rejects(company.updateJdRequirements(t.db, t.compK.id, t.jdK, { ...req, maxYears: 20 }, t.compK.userId), "EDIT_LIMIT");
   await client.setJdOpenings(t.db, t.compK.id, t.jdK, 1, t.compK.userId);
   const cand = await makeCandidate(t.db, "Hidden Person");
   await t.db.prepare("UPDATE candidates SET hidden_company_names = ? WHERE id = ?").bind(JSON.stringify(["kolkata client pvt. ltd."]), cand).run();
@@ -737,7 +737,7 @@ await check("Aptitude and client tests go only to invited candidates; the offer 
   await t.db.prepare("UPDATE jds SET aptitude_test = 1 WHERE id = ?").bind(t.jdK).run();
   const inv = await adaptive.inviteToTest(t.db, args, t.recA.id);
   await rejects(adaptive.inviteToTest(t.db, args, t.recA.id), "ALREADY");
-  const token = new URL(inv.link).searchParams.get("token");
+  const token = new URL(inv.link, "https://x.test").searchParams.get("token");
   await rejects(adaptive.testByToken(t.db, "0".repeat(64)), "NOT_FOUND");
   const found = await adaptive.testByToken(t.db, token);
   assert.equal(found.candidate_id, cand);
@@ -748,7 +748,7 @@ await check("Aptitude and client tests go only to invited candidates; the offer 
   await adaptive.addQuestions(t.db, clientBank, Array.from({ length: 20 }, (_, i) => ({ level: 1 + (i % 10), topic: "Client", stem: `Client question number ${i + 1}?`, options: ["Right", "Wrong one", "Wrong two"], answerIndex: 0 })), "admin");
   await adaptive.setBankStatus(t.db, clientBank, "active", "admin");
   await rejects(adaptive.inviteToTest(t.db, { bankId: clientBank, candidateId: cand, jdId: t.jdF, companyId: t.compF.id }, t.recF.id), "NOT_FOUND");
-  assert.ok((await adaptive.inviteToTest(t.db, { ...args, bankId: clientBank }, t.recA.id)).link.includes("/test?token="));
+  assert.ok((await adaptive.inviteToTest(t.db, { ...args, bankId: clientBank }, t.recA.id)).link.startsWith("/test?token="));
   assert.ok(!JSON.stringify(await client.pipelineView(t.db, t.compK.id, undefined, true)).match(/final_level|band|beginner/), "the client never sees test levels");
 
   // Offer-stage commitment
@@ -757,7 +757,7 @@ await check("Aptitude and client tests go only to invited candidates; the offer 
   await rejects(commitment.reissueCommitmentLink(t.db, sub.id, "staff"), "NOT_FOUND");
   await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "offered", offerCtcInr: 800_000 });
   assert.ok((await kinds(t.db, cand)).includes("commitment.requested"));
-  const link = await commitment.reissueCommitmentLink(t.db, sub.id, "staff"), ctoken = new URL(link).searchParams.get("token");
+  const link = await commitment.reissueCommitmentLink(t.db, sub.id, "staff"), ctoken = new URL(link, "https://x.test").searchParams.get("token");
   const read = await commitment.readCommitment(t.db, ctoken);
   assert.ok(read.body.includes("60 days") && read.body.includes("does not charge") && read.acceptedAt === null);
   const acc = await commitment.acceptCommitment(t.db, ctoken, "iphash");
@@ -776,6 +776,202 @@ await check("Aptitude and client tests go only to invited candidates; the offer 
   clock = new Date("2028-01-05T06:00:00Z");
   assert.deepEqual((await client.submissionCandidates(t.db, t.jdF)).map(c => c.candidate_id), [cand, other], "after 12 months the ranking is by fit again");
   clock = new Date("2026-11-09T06:00:00Z");
+});
+
+// ---------- Open audit items (11 Nov 2026): interviews, filling and closing a job, salary and replacement, consent ----------
+const toStage = async (t, id, stages, extra = {}) => { for (const stage of stages) await client.moveStage(t.db, t.compK.id, t.compK.userId, id, { stage, ...(extra[stage] ?? {}) }); };
+const inbox = async (t, cand) => (await notify.candidateInbox(t.db, cand)).map(m => m.kind);
+const staffFeed = async (t, staff = t.admin) => (await staffMod.staffWork(t.db, staff)).changes.items.map(i => i.kind);
+
+await check("Interviews: none in the past; reschedule and cancel tell the candidate; staff can record a result for the client; 'do not proceed' closes the candidate", async () => {
+  const t = await staffSetup();
+  await client.setJdOpenings(t.db, t.compK.id, t.jdK, 3, t.compK.userId);
+  const cand = await makeCandidate(t.db, "Interview Person");
+  const sub = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: cand, note: "Good" });
+  await toStage(t, sub.id, ["shortlisted"]);
+  await rejects(client.scheduleInterview(t.db, t.compK.id, t.compK.userId, sub.id, { round: "HR", scheduledAt: "2020-01-01T10:00:00Z", mode: "video" }), "WHEN_PAST");
+  const { id: ivId } = await client.scheduleInterview(t.db, t.compK.id, t.compK.userId, sub.id, { round: "Technical 1", scheduledAt: "2026-11-12T10:00:00Z", mode: "video", location: "https://meet.example/x" });
+  assert.ok((await staffFeed(t)).includes("interview.scheduled"), "recruiters see that the client scheduled an interview");
+  await rejects(client.rescheduleInterview(t.db, t.compK.id, t.compK.userId, ivId, { scheduledAt: "2026-11-12T10:00:00Z" }), "NO_CHANGE");
+  await rejects(client.rescheduleInterview(t.db, t.compK.id, t.compK.userId, ivId, { scheduledAt: "2020-01-01T10:00:00Z" }), "WHEN_PAST");
+  await client.rescheduleInterview(t.db, t.compK.id, t.compK.userId, ivId, { scheduledAt: "2026-11-13T05:30:00Z" });
+  const msg = (await notify.candidateInbox(t.db, cand)).find(m => m.kind === "interview.rescheduled");
+  assert.ok(msg && msg.body.includes("11:00") && msg.body.includes("https://meet.example/x"), "the candidate gets one message with the new India time and the old link");
+  assert.ok((await staffFeed(t)).includes("interview.rescheduled"));
+  // A recruiter records the result on the client's behalf; the client is told it was Jobboard300.
+  await rejects(staffMod.staffRecordInterview(t.db, t.recF, ivId, { status: "completed", outcome: "advance" }), "NOT_FOUND");
+  const adv = await staffMod.staffRecordInterview(t.db, t.recA, ivId, { status: "completed", outcome: "advance", rating: 4, feedback: "Strong on GST" });
+  assert.deepEqual([adv.suggest, adv.moved], ["next", null]);
+  assert.equal((await t.db.prepare("SELECT recorded_by, outcome FROM interviews WHERE id = ?").bind(ivId).first()).recorded_by, "Jobboard300");
+  assert.ok((await notify.companyNotices(t.db, t.compK.id)).some(n => n.kind === "interview.recorded"));
+  // Cancelling tells the candidate.
+  const second = await client.scheduleInterview(t.db, t.compK.id, t.compK.userId, sub.id, { round: "HR", scheduledAt: "2026-11-14T10:00:00Z", mode: "phone" });
+  await client.recordInterview(t.db, t.compK.id, t.compK.userId, second.id, { status: "cancelled" });
+  assert.ok((await inbox(t, cand)).includes("interview.cancelled"), "the candidate is told when an interview is cancelled");
+  // 'Do not proceed' without a reason only suggests; with a reason it closes the candidate in the same step.
+  const third = await client.scheduleInterview(t.db, t.compK.id, t.compK.userId, sub.id, { round: "Final", scheduledAt: "2026-11-15T10:00:00Z", mode: "video" });
+  const hint = await client.recordInterview(t.db, t.compK.id, t.compK.userId, third.id, { status: "completed", outcome: "reject", feedback: "No" });
+  assert.deepEqual([hint.suggest, hint.moved], ["rejected", null]);
+  const fourth = await client.scheduleInterview(t.db, t.compK.id, t.compK.userId, sub.id, { round: "Final 2", scheduledAt: "2026-11-16T10:00:00Z", mode: "video" });
+  await rejects(client.recordInterview(t.db, t.compK.id, t.compK.userId, fourth.id, { status: "completed", outcome: "reject", rejectReason: "nonsense" }), "REASON");
+  const done = await client.recordInterview(t.db, t.compK.id, t.compK.userId, fourth.id, { status: "completed", outcome: "reject", rejectReason: "skills_gap" });
+  assert.equal(done.moved, "rejected");
+  assert.equal((await t.db.prepare("SELECT stage, stage_reason FROM pipeline WHERE id = ?").bind(sub.id).first()).stage, "rejected");
+  assert.ok((await inbox(t, cand)).includes("stage.rejected"));
+});
+
+await check("A hire needs a salary; the last hire fills the job; the rest are closed out as 'position filled'; a hire who leaves inside the guarantee is replaced at no fee", async () => {
+  const t = await staffSetup();
+  await client.setJdOpenings(t.db, t.compK.id, t.jdK, 1, t.compK.userId);
+  const [a, b, c] = [await makeCandidate(t.db, "Hire One"), await makeCandidate(t.db, "Waiting Two"), await makeCandidate(t.db, "Waiting Three")];
+  const subA = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: a, note: "x" });
+  const subB = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: b, note: "x" });
+  const subC = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: c, note: "x" });
+  await toStage(t, subB.id, ["shortlisted"]);
+  // A candidate who has just been submitted can be withdrawn.
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, subC.id, { stage: "withdrawn", reason: "candidate_withdrew" });
+  // An offer without a salary cannot become a hire until the salary is given.
+  await toStage(t, subA.id, ["shortlisted", "interview", "offered", "offer_accepted"], { offered: {}, offer_accepted: { joiningDate: "2026-12-01" } });
+  clock = new Date("2026-12-01T06:00:00Z");
+  await rejects(client.moveStage(t.db, t.compK.id, t.compK.userId, subA.id, { stage: "joined", joiningDate: "2026-12-01" }), "CTC_REQUIRED");
+  await rejects(client.moveStage(t.db, t.compK.id, t.compK.userId, subA.id, { stage: "joined", joiningDate: "2026-12-01", offerCtcInr: 12 }), "CTC");
+  const hired = await client.moveStage(t.db, t.compK.id, t.compK.userId, subA.id, { stage: "joined", joiningDate: "2026-12-01", offerCtcInr: 1_000_000 });
+  assert.deepEqual(hired.filled, { jdId: t.jdK, remaining: 1 });
+  const first = await t.db.prepare("SELECT id, ctc_inr, fee_inr FROM placements WHERE pipeline_id = ?").bind(subA.id).first();
+  assert.deepEqual([first.ctc_inr, first.fee_inr], [1_000_000, 83_300]);
+  assert.equal((await t.db.prepare("SELECT status FROM jds WHERE id = ?").bind(t.jdK).first()).status, "closed", "the filled job is closed");
+  await rejects(staffMod.staffSubmit(t.db, SECRET, t.admin, { jdId: t.jdK, candidateId: await makeCandidate(t.db, "Late Person"), note: "x" }), "JD_CLOSED");
+  assert.ok((await staffFeed(t)).includes("job.filled") && (await notify.companyNotices(t.db, t.compK.id)).some(n => n.kind === "job.filled"));
+  const closed = await staffMod.staffCloseRemaining(t.db, t.recA, t.jdK);
+  assert.equal(closed.closed, 1);
+  assert.deepEqual([(await t.db.prepare("SELECT stage, stage_reason FROM pipeline WHERE id = ?").bind(subB.id).first()).stage_reason.split(":")[0], (await inbox(t, b)).includes("stage.rejected")], ["position_filled", true]);
+  const view = await staffMod.staffWork(t.db, t.recA);
+  assert.ok(view.jobs.some(j => j.id === t.jdK && j.status === "closed"), "a filled job stays visible to recruiters under the Closed filter");
+  // Leaving inside the guarantee re-opens the job with one more opening.
+  clock = new Date("2026-12-20T06:00:00Z");
+  const exit = await client.reportPlacementExit(t.db, t.compK.id, t.compK.userId, first.id, "2026-12-19", "Left");
+  assert.equal(exit.inGuarantee, true);
+  const jd = await t.db.prepare("SELECT status, openings FROM jds WHERE id = ?").bind(t.jdK).first();
+  assert.deepEqual([jd.status, jd.openings], ["live", 2]);
+  assert.ok((await staffFeed(t)).includes("placement.replacement"), "recruiters get a replacement task");
+  // The replacement hire is linked to the placement it replaces and carries no new fee.
+  const d = await makeCandidate(t.db, "Replacement Hire");
+  const subD = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: d, note: "Replacement" });
+  await toStage(t, subD.id, ["shortlisted", "interview", "offered", "offer_accepted"], { offered: { offerCtcInr: 900_000 }, offer_accepted: { joiningDate: "2027-01-05" } });
+  clock = new Date("2027-01-05T06:00:00Z");
+  const rep = await client.moveStage(t.db, t.compK.id, t.compK.userId, subD.id, { stage: "joined", joiningDate: "2027-01-05" });
+  assert.equal(rep.replacement, true);
+  const second = await t.db.prepare("SELECT fee_inr, replaces_placement_id FROM placements WHERE pipeline_id = ?").bind(subD.id).first();
+  assert.deepEqual([second.fee_inr, second.replaces_placement_id], [0, first.id]);
+  assert.equal((await t.db.prepare("SELECT status FROM placements WHERE id = ?").bind(first.id).first()).status, "replaced");
+  clock = new Date("2026-11-09T06:00:00Z");
+});
+
+await check("Closing a job closes its candidates with a message and keeps it visible; re-open goes through approval; saving a job with no change does nothing and a real change erases nothing", async () => {
+  const t = await staffSetup();
+  const cand = await makeCandidate(t.db, "Closing Person");
+  const sub = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: cand, note: "x" });
+  await toStage(t, sub.id, ["shortlisted"]);
+  const before = JSON.parse((await t.db.prepare("SELECT requirements FROM jds WHERE id = ?").bind(t.jdK).first()).requirements);
+  // The editor sends only what it shows.
+  const shown = { title: before.title, mustHave: before.mustHave.map(x => x.name).join(", "), niceToHave: before.niceToHave.map(x => x.name).join(", "), minYears: before.minYears, maxYears: before.maxYears, educationLevel: before.educationLevel,
+    hard: { cities: before.hard.cities.join(", "), remote: before.hard.remote, allowRelocation: before.hard.allowRelocation, mandatorySkills: before.hard.mandatorySkills.map(x => x.name).join(", "), maxNoticeDays: before.hard.maxNoticeDays, ctcMinInr: before.hard.ctcMinInr, ctcMaxInr: before.hard.ctcMaxInr } };
+  const same = await company.updateJdRequirements(t.db, t.compK.id, t.jdK, shown, t.compK.userId);
+  assert.equal(same.changed, false);
+  assert.equal((await t.db.prepare("SELECT status FROM jds WHERE id = ?").bind(t.jdK).first()).status, "live", "pressing Save with no change leaves the job live");
+  assert.equal((await t.db.prepare("SELECT COUNT(*) AS n FROM jd_requirement_edits WHERE jd_id = ?").bind(t.jdK).first()).n, 0, "and uses none of the three edits");
+  const edit = await company.updateJdRequirements(t.db, t.compK.id, t.jdK, { ...shown, maxYears: 9 }, t.compK.userId);
+  assert.deepEqual([edit.changed, edit.status], [true, "pending"], "a real change goes straight to waiting for approval");
+  const after = JSON.parse((await t.db.prepare("SELECT requirements FROM jds WHERE id = ?").bind(t.jdK).first()).requirements);
+  assert.deepEqual([after.location, after.workMode, after.hard.seniority, after.educationFields, after.roleFamily], [before.location, before.workMode, before.hard.seniority, before.educationFields, before.roleFamily], "details the editor does not show are kept");
+  assert.ok((await staffMod.staffWork(t.db, t.recA)).jobs.some(j => j.id === t.jdK), "the job stays visible to its recruiters while it waits for approval");
+  assert.ok((await staffFeed(t)).includes("job.edited"));
+  await company.decideJd(t.db, t.jdK, true, "admin");
+  assert.ok((await notify.companyNotices(t.db, t.compK.id)).some(n => n.kind === "job.approved"), "the client is told when a job is approved");
+  // Close it.
+  const out = await client.closeJob(t.db, t.compK.id, t.compK.userId, t.jdK);
+  assert.equal(out.closed, 1);
+  const row = await t.db.prepare("SELECT stage, stage_reason FROM pipeline WHERE id = ?").bind(sub.id).first();
+  assert.deepEqual([row.stage, row.stage_reason.split(":")[0]], ["withdrawn", "position_closed"]);
+  assert.ok((await inbox(t, cand)).includes("stage.withdrawn"), "the candidate is told");
+  assert.ok((await staffMod.staffWork(t.db, t.recA)).jobs.some(j => j.id === t.jdK && j.status === "closed"), "a closed job stays visible to staff");
+  await rejects(company.updateJdRequirements(t.db, t.compK.id, t.jdK, { ...shown, maxYears: 11 }, t.compK.userId), "CLOSED");
+  await company.submitJd(t.db, t.compK.id, t.jdK, t.compK.userId);
+  assert.equal((await t.db.prepare("SELECT status FROM jds WHERE id = ?").bind(t.jdK).first()).status, "pending", "a closed job can be sent for approval again");
+});
+
+await check("Consent: hiding from an employer ends its access; withdrawing writes the stage history and tells recruiters; allowing sharing again makes the person submittable", async () => {
+  const t = await staffSetup();
+  const cand = await makeCandidate(t.db, "Consent Person");
+  const sub = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: cand, note: "x" });
+  await toStage(t, sub.id, ["shortlisted"]);
+  // Hiding from this very employer.
+  assert.equal(await consent.withdrawFromCompany(t.db, cand, t.compK.id, `candidate:${cand}`), 1);
+  assert.equal((await t.db.prepare("SELECT stage, stage_reason FROM pipeline WHERE id = ?").bind(sub.id).first()).stage, "withdrawn");
+  await rejects(views.unlockedCandidate(t.db, t.compK.id, sub.ref, true), "CONSENT_WITHDRAWN");
+  assert.ok((await staffFeed(t)).includes("candidate.withdrew"));
+  assert.equal(await consent.withdrawFromCompany(t.db, cand, t.compF.id, `candidate:${cand}`), 0, "an employer that never had the profile is unaffected");
+  // Withdrawing sharing altogether writes a history row for every entry it closes.
+  const other = await makeCandidate(t.db, "Withdrawing Person");
+  const sub2 = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: other, note: "x" });
+  await consent.withdrawSharing(t.db, other, `candidate:${other}`);
+  const history = (await t.db.prepare("SELECT stage, actor FROM pipeline_events WHERE pipeline_id = ? ORDER BY at, rowid").bind(sub2.id).all()).results;
+  assert.deepEqual(history.at(-1), { stage: "withdrawn", actor: "candidate" });
+  // Withdrew once, then allowed sharing again: submittable again, with the old withdrawal kept in the ledger.
+  const again = await makeCandidate(t.db, "Changed Mind");
+  await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: again, note: "x" });
+  await consent.withdrawSharing(t.db, again, `candidate:${again}`);
+  const { id: jd2 } = await company.createJd(t.db, t.compK.id, t.compK.userId, ACCOUNTS_JD);
+  await company.submitJd(t.db, t.compK.id, jd2, t.compK.userId); await company.decideJd(t.db, jd2, true, "admin");
+  await rank(t.db, jd2, again, 99);
+  await rejects(staffMod.staffSubmit(t.db, SECRET, t.admin, { jdId: jd2, candidateId: again, note: "Back again" }), "NO_CONSENT");
+  clock = new Date("2026-11-09T07:00:00Z");
+  await consent.recordConsent(t.db, again, "share_with_companies", "granted");
+  const resub = await staffMod.staffSubmit(t.db, SECRET, t.admin, { jdId: jd2, candidateId: again, note: "Back again" });
+  assert.ok(resub.id, "allowed sharing again makes the person submittable");
+  assert.equal((await t.db.prepare("SELECT access_revoked_at FROM unlocks WHERE company_id = ? AND candidate_id = ?").bind(t.compK.id, again).first()).access_revoked_at, null, "the client's access starts again with this submission");
+  assert.equal((await t.db.prepare("SELECT COUNT(*) AS n FROM candidate_consents WHERE candidate_id = ? AND action = 'withdrawn'").bind(again).first()).n >= 1, true, "the withdrawal stays in the ledger");
+  clock = new Date("2026-11-09T06:00:00Z");
+});
+
+await check("Recruiters: 'What changed', undo a pass, joining list, technical results, profile without contact details, links on any address", async () => {
+  const t = await staffSetup();
+  const cands = []; for (let i = 0; i < 4; i++) cands.push(await makeCandidate(t.db, `Short Person ${i}`)); for (const [i, c] of cands.entries()) await rank(t.db, t.jdK, c, 90 - i);
+  await staffMod.staffPass(t.db, t.recA, { jdId: t.jdK, candidateId: cands[0], reason: "other" });
+  assert.deepEqual((await staffMod.staffPassedCandidates(t.db, t.recA, t.jdK)).map(p => p.candidate_id), [cands[0]]);
+  await rejects(staffMod.staffUnpass(t.db, t.recB, { jdId: t.jdK, candidateId: cands[0] }), "MANAGER_ONLY");
+  await staffMod.staffUnpass(t.db, t.recA, { jdId: t.jdK, candidateId: cands[0] });
+  assert.ok((await staffMod.staffCandidates(t.db, t.recA, t.jdK)).some(c => c.candidate_id === cands[0]), "an undone pass puts the candidate back");
+  const prof = await staffMod.staffProfile(t.db, t.recA, { jdId: t.jdK, candidateId: cands[0] });
+  assert.ok(prof.profile.skills.length > 0 && !prof.profile.contact.email && !prof.profile.contact.phone, "the profile is readable and carries no phone or email");
+  await rejects(staffMod.staffProfile(t.db, t.recF, { jdId: t.jdK, candidateId: cands[0] }), "NOT_FOUND");
+  assert.ok((await t.db.prepare("SELECT COUNT(*) AS n FROM audit_events WHERE kind = 'access' AND action = 'profile_view'").first()).n >= 1, "profile views are logged");
+  // A technical result shows on the card.
+  const bank = (await t.db.prepare("SELECT id FROM question_banks WHERE kind = 'technical' LIMIT 1").first())?.id;
+  if (bank) {
+    await t.db.prepare("INSERT INTO adaptive_tests (id, bank_id, candidate_id, status, level, final_level, band, completed_at, created_at) VALUES ('tt1', ?, ?, 'completed', 5, 6, 'Intermediate', ?, ?)").bind(bank, cands[0], clock.toISOString(), clock.toISOString()).run();
+    assert.equal((await staffMod.staffCandidates(t.db, t.recA, t.jdK)).find(c => c.candidate_id === cands[0]).technical[0].level, 6);
+  }
+  // Joining list and links.
+  const sub = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: cands[1], note: "x" });
+  await toStage(t, sub.id, ["shortlisted", "interview", "offered", "offer_accepted"], { offered: { offerCtcInr: 600_000 }, offer_accepted: { joiningDate: "2026-12-01", lastWorkingDay: "2026-11-28", competingOffers: "One other offer" } });
+  const work = await staffMod.staffWork(t.db, t.recA);
+  assert.deepEqual([work.joining.length, work.joining[0]?.last_working_day, work.joining[0]?.competing_offers], [1, "2026-11-28", "One other offer"]);
+  assert.equal((await staffMod.staffWork(t.db, t.recF)).joining.length, 0, "another team does not see it");
+  const pipe = await staffMod.staffPipeline(t.db, t.recA, t.jdK);
+  assert.equal(pipe[0].candidateId, cands[1]);
+  const link = await commitment.reissueCommitmentLink(t.db, sub.id, "staff");
+  assert.ok(link.startsWith("/commit?token="), "a link is a path on this site, so it is right on any address");
+  const msgs = (await notify.candidateInbox(t.db, cands[1])).filter(m => m.kind === "commitment.requested");
+  assert.equal(msgs.length, 2, "the inbox gets the new link when the old one stops working");
+  assert.ok(msgs.every(m => m.link.startsWith("/commit?token=") && !m.body.includes("http")), "the link is its own field, not text in the message");
+  // What changed: new items count, and viewing clears them.
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "no_show", reason: "unreachable" });
+  const feed = (await staffMod.staffWork(t.db, t.recA)).changes;
+  assert.ok(feed.unread >= 1 && feed.items.some(i => i.kind === "stage.no_show" && i.name === "Short Person 1"));
+  await staffMod.markChangesSeen(t.db, t.recA);
+  assert.equal((await staffMod.staffWork(t.db, t.recA)).changes.unread, 0);
+  assert.equal((await staffMod.staffWork(t.db, t.recF)).changes.items.length, 0, "another team does not see it");
 });
 
 console.log(`\n${passed} portal checks passed.`);

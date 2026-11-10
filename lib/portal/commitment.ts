@@ -5,7 +5,6 @@
 // is charged.
 import { audit, newId, nowIso, PortalError, sha256Hex, type Db } from "./db";
 import { notifyCandidate } from "./notify";
-import { SITE_URL } from "../site";
 
 export const COMMITMENT_VERSION = "commitment-2026-11";
 export const EARLY_EXIT = { days: 60, lowPriorityMonths: 12 } as const;
@@ -19,19 +18,19 @@ export const commitmentText = (role: string) => [
 
 const newToken = () => `${newId()}${newId()}`.replace(/-/g, "");
 
-/** Create the commitment for a pipeline entry at offer stage (once) and send the candidate the link. */
+/** Create the commitment for a pipeline entry at offer stage (once) and send the candidate the link (a path on this site). */
 export async function createCommitment(db: Db, pipelineId: string) {
   const p = await db.prepare("SELECT p.candidate_id, p.company_id, j.title FROM pipeline p JOIN jds j ON j.id = p.jd_id WHERE p.id = ?").bind(pipelineId).first<{ candidate_id: string; company_id: string; title: string }>();
   if (!p || await db.prepare("SELECT 1 AS x FROM candidate_commitments WHERE pipeline_id = ?").bind(pipelineId).first()) return null;
   const token = newToken();
   await db.prepare("INSERT INTO candidate_commitments (id, pipeline_id, candidate_id, company_id, version, body, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(newId(), pipelineId, p.candidate_id, p.company_id, COMMITMENT_VERSION, commitmentText(p.title), await sha256Hex(token), nowIso()).run();
-  const link = `${SITE_URL}/commit?token=${token}`;
-  await notifyCandidate(db, p.candidate_id, "commitment.requested", "Please confirm your commitment for this offer", `Before you join, please read and accept a short commitment about joining and staying at least 60 days: ${link}`, p.company_id);
+  const link = `/commit?token=${token}`;
+  await notifyCandidate(db, p.candidate_id, "commitment.requested", "Please confirm your commitment for this offer", "Before you join, please read and accept a short commitment about joining and staying at least 60 days. Use the button below.", p.company_id, link);
   return link;
 }
 
-/** Staff ask for a fresh link to send by hand (the old link stops working). Only while not yet accepted. */
+/** Staff ask for a fresh link to send by hand (the old link stops working). Returns a path on this site; the candidate's inbox gets the new link too. Only while not yet accepted. */
 export async function reissueCommitmentLink(db: Db, pipelineId: string, actor: string) {
   const c = await db.prepare("SELECT id, accepted_at FROM candidate_commitments WHERE pipeline_id = ?").bind(pipelineId).first<{ id: string; accepted_at: string | null }>();
   if (!c) throw new PortalError("NOT_FOUND", "There is no commitment for this candidate yet. It is created when an offer is made.", 404);
@@ -39,7 +38,11 @@ export async function reissueCommitmentLink(db: Db, pipelineId: string, actor: s
   const token = newToken();
   await db.prepare("UPDATE candidate_commitments SET token_hash = ? WHERE id = ?").bind(await sha256Hex(token), c.id).run();
   await audit(db, actor, "commitment.link", "pipeline", pipelineId);
-  return `${SITE_URL}/commit?token=${token}`;
+  // The first link stops working, so the candidate's inbox gets the new one.
+  const p = await db.prepare("SELECT candidate_id, company_id FROM pipeline WHERE id = ?").bind(pipelineId).first<{ candidate_id: string; company_id: string }>();
+  const link = `/commit?token=${token}`;
+  if (p) await notifyCandidate(db, p.candidate_id, "commitment.requested", "A new link to confirm your commitment", "Your earlier link no longer works. Please use the button below to read and accept your commitment.", p.company_id, link);
+  return link;
 }
 
 const byToken = async (db: Db, token: string) => {

@@ -18,7 +18,6 @@
 
 import { audit, newId, now, nowIso, parseJson, PortalError, sha256Hex, type Db } from "./db";
 import { notifyCandidate } from "./notify";
-import { SITE_URL } from "../site";
 
 export const TEST = { questions: 20, minutes: 25, startLevel: 5, levels: 10, cooldownDays: 30, validityDays: 365, inviteDays: 7 } as const;
 export const KINDS = ["technical", "aptitude", "client"] as const;
@@ -254,9 +253,9 @@ export async function inviteToTest(db: Db, input: { bankId: string; candidateId:
   const id = newId(), token = `${newId()}${newId()}`.replace(/-/g, "");
   await db.prepare("INSERT INTO adaptive_tests (id, bank_id, candidate_id, jd_id, invited_by, token_hash, status, level, deadline_at, created_at) VALUES (?, ?, ?, ?, ?, ?, 'invited', ?, ?, ?)")
     .bind(id, input.bankId, input.candidateId, input.jdId, staffId, await sha256Hex(token), TEST.startLevel, new Date(now().getTime() + TEST.inviteDays * 86_400_000).toISOString(), nowIso()).run();
-  const link = `${SITE_URL}/test?token=${token}`;
+  const link = `/test?token=${token}`;
   await audit(db, staffId, "test.invited", "adaptive_test", id, bank.kind);
-  await notifyCandidate(db, input.candidateId, "test.invited", "You have a test to take", `As part of a role you are being considered for, please take a short test (${TEST.questions} questions, about ${TEST.minutes} minutes) within ${TEST.inviteDays} days: ${link}`, input.companyId);
+  await notifyCandidate(db, input.candidateId, "test.invited", "You have a test to take", `As part of a role you are being considered for, please take a short test (${TEST.questions} questions, about ${TEST.minutes} minutes) within ${TEST.inviteDays} days. Use the button below to start.`, input.companyId, link);
   return { id, link };
 }
 

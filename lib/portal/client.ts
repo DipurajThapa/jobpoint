@@ -11,12 +11,12 @@
 // Every read and write is scoped to one company, and candidates whose consent
 // was withdrawn are shown without any personal detail.
 
-import { sharedForRole } from "./vacancy";
+import { closeVacancy, sharedForRole } from "./vacancy";
 import { audit, candidateRef, newId, now, nowIso, parseJson, PortalError, type Db } from "./db";
 import { ACTIVE_CONSENT_SQL, consentActive } from "./consent";
 import { issuePortalToken } from "./accounts";
 import { activateCompany, currentParams } from "./company";
-import { notifyCandidate, notifyCompany, notifyStage } from "./notify";
+import { notifyCandidate, notifyCompany, notifyStaff, notifyStage } from "./notify";
 import { FEE, feePercent, nameKey, placementFee } from "./policy";
 import { createCommitment, EARLY_EXIT } from "./commitment";
 
@@ -28,11 +28,11 @@ export const STAGE_LABEL: Record<Stage, string> = {
   joined: "Joined", rejected: "Not selected", offer_declined: "Offer declined", no_show: "Did not join", withdrawn: "Withdrawn",
 };
 const NEXT: Record<Stage, Stage[]> = {
-  submitted: ["shortlisted", "rejected"],
+  submitted: ["shortlisted", "rejected", "withdrawn"],
   shortlisted: ["interview", "offered", "rejected", "withdrawn"],
   interview: ["offered", "rejected", "withdrawn"],
   offered: ["offer_accepted", "offer_declined", "withdrawn"],
-  offer_accepted: ["joined", "no_show", "offer_declined"],
+  offer_accepted: ["joined", "no_show", "offer_declined", "withdrawn"],
   joined: [],
   rejected: ["shortlisted"],
   offer_declined: [],
@@ -222,6 +222,12 @@ async function openJd(db: Db, companyId: string, jdId: string) {
 }
 
 
+/** Did the candidate give sharing consent after `since`? The latest sharing row must be a grant made later than the withdrawal. */
+async function grantedAfter(db: Db, candidateId: string, since: string) {
+  const row = await db.prepare(`SELECT action, at FROM candidate_consents WHERE candidate_id = ? AND purpose IN ('share_with_companies', 'recruiter_sharing') ORDER BY at DESC, rowid DESC LIMIT 1`).bind(candidateId).first<{ action: string; at: string }>();
+  return row?.action === "granted" && row.at > since;
+}
+
 /**
  * Jobboard300 submits a candidate to a client's managed search. Requires the
  * candidate's active consent to share, the company not being hidden by the
@@ -242,10 +248,13 @@ export async function submitByRecruiter(db: Db, secret: string, input: { company
   // or the website form's tick to share the CV with the employer for this very role.
   if (!await consentActive(db, candidateId, "share_with_companies") && !await consentActive(db, candidateId, "recruiter_sharing") && !await sharedForRole(db, candidateId, jdId)) throw new PortalError("NO_CONSENT", "The candidate has not consented to their CV being shared with employers.", 403);
   if (!input.note.trim()) throw new PortalError("NOTE", "Add a recruiter note for the client: why this candidate, availability, CTC and notice.");
-  const unlock = await db.prepare("SELECT access_revoked_at, candidate_ref FROM unlocks WHERE company_id = ? AND candidate_id = ?").bind(companyId, candidateId).first<{ access_revoked_at: string | null; candidate_ref: string }>();
+  const unlock = await db.prepare("SELECT access_revoked_at, access_revoke_reason, candidate_ref FROM unlocks WHERE company_id = ? AND candidate_id = ?").bind(companyId, candidateId).first<{ access_revoked_at: string | null; access_revoke_reason: string | null; candidate_ref: string }>();
   // A company knows a person by one reference. After a merge the surviving record keeps the reference the company already has.
   const ref = unlock?.candidate_ref ?? await candidateRef(secret, companyId, candidateId);
-  if (unlock?.access_revoked_at) throw new PortalError("CONSENT_WITHDRAWN", "The candidate withdrew consent for this company earlier.", 410);
+  // A withdrawal ended this company's access. A grant given after it (checked above) is a fresh consent, so the person can be put forward again.
+  // (Hiding an employer is undone by showing the profile to them again, which is checked above.)
+  const renewed = !!unlock?.access_revoked_at && (unlock.access_revoke_reason === "hidden_by_candidate" || await grantedAfter(db, candidateId, unlock.access_revoked_at));
+  if (unlock?.access_revoked_at && !renewed) throw new PortalError("CONSENT_WITHDRAWN", "The candidate withdrew consent for this company earlier and has not allowed sharing again.", 410);
   if (await db.prepare("SELECT 1 AS x FROM pipeline WHERE company_id = ? AND jd_id = ? AND candidate_id = ?").bind(companyId, jdId, candidateId).first()) throw new PortalError("ALREADY_SUBMITTED", "This candidate is already in the client's pipeline for this job.", 409);
   const match = await db.prepare("SELECT score FROM matches WHERE jd_id = ? AND candidate_id = ?").bind(jdId, candidateId).first<{ score: number }>();
   const params = await currentParams(db, companyId);
@@ -256,6 +265,8 @@ export async function submitByRecruiter(db: Db, secret: string, input: { company
       .bind(newId(), jdId, companyId, candidateId, ref, match?.score ?? 0, params?.version ?? 0, at, jdId, candidateId),
     db.prepare(`INSERT OR IGNORE INTO unlocks (id, company_id, candidate_id, candidate_ref, first_jd_id, unlocked_by, subscription_id, trace_id, unlocked_at) VALUES (?, ?, ?, ?, ?, ?, 'managed', ?, ?)`)
       .bind(newId(), companyId, candidateId, ref, jdId, `admin:${adminId}`, trace, at),
+    // The earlier withdrawal stays in the consent ledger; the company's access starts again with this submission.
+    ...(renewed ? [db.prepare("UPDATE unlocks SET access_revoked_at = NULL, access_revoke_reason = NULL WHERE company_id = ? AND candidate_id = ?").bind(companyId, candidateId)] : []),
     db.prepare("INSERT INTO pipeline (id, company_id, jd_id, candidate_id, candidate_ref, source, stage, recruiter_note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'job_point', 'submitted', ?, ?, ?, ?)")
       .bind(id, companyId, jdId, candidateId, ref, input.note.trim().slice(0, 2000), `admin:${adminId}`, at, at),
     db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, note, at) VALUES (?, ?, 'submitted', ?, 'Submitted by Jobboard300', ?)").bind(newId(), id, `admin:${adminId}`, at),
@@ -287,6 +298,16 @@ export async function moveStage(db: Db, companyId: string, actorId: string, pipe
     if (ctc !== null && !(ctc >= 50_000 && ctc <= 100_000_000)) throw new PortalError("CTC", "Enter the offered annual CTC in rupees (for example 1200000 for ₹12 LPA).");
     sets.push("offer_ctc_inr = ?", "offer_date = ?"); values.push(ctc, isDate(input.offerDate) ? input.offerDate : day(at));
   }
+  let joinedCtc: number | null = null;
+  if (stage === "joined") {
+    // The fee is a share of the salary, so a hire cannot be recorded without it.
+    const given = input.offerCtcInr == null ? null : Math.round(Number(input.offerCtcInr));
+    if (given !== null && !(given >= 50_000 && given <= 100_000_000)) throw new PortalError("CTC", "Enter the annual CTC the candidate joined at, in rupees (for example 1200000 for ₹12 LPA).");
+    const have = (await db.prepare("SELECT offer_ctc_inr FROM pipeline WHERE id = ?").bind(row.id).first<{ offer_ctc_inr: number | null }>())?.offer_ctc_inr ?? null;
+    joinedCtc = given ?? have;
+    if (joinedCtc === null) throw new PortalError("CTC_REQUIRED", "Enter the annual CTC the candidate joined at. The placement fee is worked out from it.");
+    if (given !== null) { sets.push("offer_ctc_inr = ?"); values.push(given); }
+  }
   if (stage === "offer_accepted" || stage === "joined") {
     if (!isDate(input.joiningDate)) throw new PortalError("JOINING_DATE", stage === "joined" ? "Enter the date the candidate joined." : "Enter the expected joining date.");
     if (stage === "joined" && Date.parse(input.joiningDate) > now().getTime() + 86_400_000) throw new PortalError("JOINING_DATE", "The joining date cannot be in the future. Use “Offer accepted” until the candidate joins.");
@@ -305,19 +326,77 @@ export async function moveStage(db: Db, companyId: string, actorId: string, pipe
     ...await syncApplication(db, row.candidate_id, row.jd_id, stage, actorLabel(actorId), { pipelineId: row.id, at }),
   ];
   if (["rejected", "offer_declined", "no_show", "withdrawn"].includes(stage)) statements.push(db.prepare("UPDATE interviews SET status = 'cancelled', updated_at = ? WHERE pipeline_id = ? AND status = 'scheduled' AND EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = ? AND updated_at = ?)").bind(at, row.id, row.id, stage, at));
+  let replaced: { id: string } | null = null;
   if (stage === "joined") {
     const c = await db.prepare("SELECT guarantee_days, non_solicit_months, fee_percent FROM companies WHERE id = ?").bind(companyId).first<{ guarantee_days: number; non_solicit_months: number; fee_percent: number }>();
     const jd = await db.prepare("SELECT title FROM jds WHERE id = ?").bind(row.jd_id).first<{ title: string }>();
-    const offer = await db.prepare("SELECT offer_ctc_inr FROM pipeline WHERE id = ?").bind(row.id).first<{ offer_ctc_inr: number | null }>();
-    statements.push(db.prepare("INSERT OR IGNORE INTO placements (id, pipeline_id, company_id, candidate_id, jd_id, title, joined_on, ctc_inr, guarantee_ends_on, non_solicit_until, fee_percent, fee_inr, created_by, created_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = 'joined' AND updated_at = ?)")
-      .bind(newId(), row.id, companyId, row.candidate_id, row.jd_id, jd?.title ?? "", input.joiningDate, offer?.offer_ctc_inr ?? null, addDays(input.joiningDate!, c?.guarantee_days ?? FEE.guaranteeDays), addMonths(input.joiningDate!, c?.non_solicit_months ?? 12), c?.fee_percent ?? FEE.defaultPct, placementFee(offer?.offer_ctc_inr, c?.fee_percent ?? FEE.defaultPct), actorId, at, row.id, at));
+    // A hire for a job where someone left inside the guarantee is the replacement: no new fee.
+    replaced = await db.prepare("SELECT id FROM placements WHERE jd_id = ? AND company_id = ? AND status = 'left_in_guarantee' AND NOT EXISTS (SELECT 1 FROM placements r WHERE r.replaces_placement_id = placements.id) ORDER BY left_on LIMIT 1").bind(row.jd_id, companyId).first<{ id: string }>();
+    const pct = c?.fee_percent ?? FEE.defaultPct;
+    const won = "EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = 'joined' AND updated_at = ?)";
+    statements.push(db.prepare(`INSERT OR IGNORE INTO placements (id, pipeline_id, company_id, candidate_id, jd_id, title, joined_on, ctc_inr, guarantee_ends_on, non_solicit_until, fee_percent, fee_inr, replaces_placement_id, created_by, created_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${won}`)
+      .bind(newId(), row.id, companyId, row.candidate_id, row.jd_id, jd?.title ?? "", input.joiningDate, joinedCtc, addDays(input.joiningDate!, c?.guarantee_days ?? FEE.guaranteeDays), addMonths(input.joiningDate!, c?.non_solicit_months ?? 12), pct, replaced ? 0 : placementFee(joinedCtc, pct), replaced?.id ?? null, actorId, at, row.id, at));
+    if (replaced) statements.push(db.prepare(`UPDATE placements SET status = 'replaced', note = CASE WHEN note = '' THEN 'Replaced by a new hire' ELSE note END WHERE id = ? AND ${won}`).bind(replaced.id, row.id, at));
   }
   const results = await db.batch(statements) as { meta: { changes?: number } }[];
   if (!results[0]?.meta.changes) throw new PortalError("CONFLICT", "Someone else updated this candidate just now. Reload and try again.", 409);
   await audit(db, actorId, "pipeline.stage", "pipeline", row.id, `${row.stage} → ${stage}`);
   await notifyStage(db, { candidateId: row.candidate_id, companyId, jdId: row.jd_id, stage, byStaff: actorId.startsWith("staff:") });
   if (stage === "offered") await createCommitment(db, row.id);
-  return { stage };
+  const fromClient = !actorId.startsWith("staff:");
+  if (fromClient) {
+    const jdTitle = (await db.prepare("SELECT title FROM jds WHERE id = ?").bind(row.jd_id).first<{ title: string }>())?.title ?? "a job";
+    await notifyStaff(db, companyId, `stage.${stage}`, `The client moved a candidate to “${STAGE_LABEL[stage]}” for ${jdTitle}`, [reasons ? `Reason: ${(input.reason ?? "").replace(/_/g, " ")}.` : "", note].filter(Boolean).join(" "), { jdId: row.jd_id, pipelineId: row.id });
+  }
+  const filled = stage === "joined" ? await jobFilledCheck(db, companyId, row.jd_id, actorId) : null;
+  return { stage, filled, replacement: !!replaced };
+}
+
+/** After a hire: when every opening has someone who joined, the job is filled. It closes, and the rest are offered a close-out. */
+async function jobFilledCheck(db: Db, companyId: string, jdId: string, actorId: string) {
+  const jd = await db.prepare("SELECT title, status, openings FROM jds WHERE id = ? AND company_id = ?").bind(jdId, companyId).first<{ title: string; status: string; openings: number }>();
+  if (!jd || jd.status !== "live") return null;
+  const joined = (await db.prepare("SELECT COUNT(*) AS n FROM pipeline WHERE jd_id = ? AND stage = 'joined'").bind(jdId).first<{ n: number }>())?.n ?? 0;
+  if (joined < jd.openings) return null;
+  await closeVacancy(db, jdId, "Filled: every opening has a hire.", actorId);
+  const remaining = (await db.prepare("SELECT COUNT(*) AS n FROM pipeline WHERE jd_id = ? AND stage IN ('submitted','shortlisted','interview')").bind(jdId).first<{ n: number }>())?.n ?? 0;
+  const text = remaining ? `${remaining} other candidate${remaining === 1 ? " is" : "s are"} still in process. Close them out as “position filled” from the job.` : "No other candidates are in process.";
+  await notifyCompany(db, companyId, "job.filled", `${jd.title} is filled`, `${joined} of ${jd.openings} opening${jd.openings === 1 ? "" : "s"} filled; the job is closed. ${text}`);
+  await notifyStaff(db, companyId, "job.filled", `${jd.title} is filled`, text, { jdId });
+  return { jdId, remaining };
+}
+
+/**
+ * Close out the candidates still being considered for a job and tell each of them. Used when a job is filled
+ * ("position filled": not selected) and when it is closed ("position closed": withdrawn). Candidates who already
+ * have an offer are left alone when the job is filled.
+ */
+export async function closeOpenCandidates(db: Db, companyId: string, actorId: string, jdId: string, why: "filled" | "closed") {
+  if (!await db.prepare("SELECT 1 AS x FROM jds WHERE id = ? AND company_id = ?").bind(jdId, companyId).first()) throw new PortalError("NOT_FOUND", "Job not found.", 404);
+  const stages = why === "filled" ? ["submitted", "shortlisted", "interview"] : ["submitted", "shortlisted", "interview", "offered", "offer_accepted"];
+  const { results } = await db.prepare(`SELECT id, stage FROM pipeline WHERE company_id = ? AND jd_id = ? AND stage IN (${stages.map(() => "?").join(",")})`).bind(companyId, jdId, ...stages).all<{ id: string; stage: Stage }>();
+  let closed = 0;
+  for (const r of results) {
+    try { await moveStage(db, companyId, actorId, r.id, why === "filled" ? { stage: "rejected", reason: "position_filled", note: "The position was filled" } : { stage: "withdrawn", reason: "position_closed", note: "The job was closed" }); closed++; }
+    catch (error) { if (!(error instanceof PortalError) || !["CONSENT_WITHDRAWN", "NOT_UNLOCKED", "CONFLICT"].includes(error.code)) throw error; }
+  }
+  await audit(db, actorId, why === "filled" ? "jd.filled_closeout" : "jd.closed_closeout", "jd", jdId, `${closed} candidate(s) closed`);
+  return { closed };
+}
+
+/**
+ * The client closes a job. Open candidates are closed as “withdrawn: position closed” and told; the job stays
+ * visible (read-only) and can be sent for approval again.
+ */
+export async function closeJob(db: Db, companyId: string, actorId: string, jdId: string) {
+  const jd = await db.prepare("SELECT title, status FROM jds WHERE id = ? AND company_id = ?").bind(jdId, companyId).first<{ title: string; status: string }>();
+  if (!jd) throw new PortalError("NOT_FOUND", "Job not found.", 404);
+  if (jd.status === "closed") throw new PortalError("CLOSED", "This job is already closed.");
+  const { closed } = await closeOpenCandidates(db, companyId, actorId, jdId, "closed");
+  await closeVacancy(db, jdId, "Closed by the client.", actorId);
+  await audit(db, actorId, "jd.closed", "jd", jdId, jd.status);
+  if (!actorId.startsWith("staff:")) await notifyStaff(db, companyId, "job.closed", `The client closed ${jd.title}`, closed ? `${closed} candidate${closed === 1 ? " was" : "s were"} closed as “position closed” and told.` : "", { jdId });
+  return { closed };
 }
 
 export type InterviewInput = { round: string; scheduledAt: string; mode: string; location?: string; interviewer?: string };
@@ -331,6 +410,7 @@ export async function scheduleInterview(db: Db, companyId: string, actorId: stri
   if (!round) throw new PortalError("ROUND", "Name the round, for example “Technical 1” or “HR”.");
   const when = Date.parse(input.scheduledAt ?? "");
   if (Number.isNaN(when)) throw new PortalError("WHEN", "Choose a date and time.");
+  if (when < now().getTime() - 5 * 60_000) throw new PortalError("WHEN_PAST", "Choose a time in the future.");
   if (!["video", "phone", "in_person"].includes(input.mode)) throw new PortalError("MODE", "Choose video, phone or in person.");
   const id = newId(), at = nowIso();
   await db.batch([
@@ -347,11 +427,44 @@ export async function scheduleInterview(db: Db, companyId: string, actorId: stri
   const where = (input.location ?? "").trim();
   await notifyCandidate(db, row.candidate_id, "interview.scheduled", `Interview for ${jdTitle}: ${round}`, `${whenText} India time, ${input.mode === "in_person" ? "in person" : input.mode === "phone" ? "by phone" : "by video"}${where ? `. ${input.mode === "in_person" ? "Address" : "Link"}: ${where.slice(0, 300)}` : ""}. Reply to your recruiter if you cannot attend.`, companyId);
   if (actorId.startsWith("staff:")) await notifyCompany(db, companyId, "interview.scheduled", `Interview scheduled for ${jdTitle}`, `Jobboard300 scheduled “${round}” on ${whenText} India time.`);
+  else await notifyStaff(db, companyId, "interview.scheduled", `The client scheduled “${round}” for ${jdTitle}`, `${whenText} India time.`, { jdId: row.jd_id, pipelineId: row.id });
   return { id };
 }
 
-export async function recordInterview(db: Db, companyId: string, actorId: string, interviewId: string, input: { status: string; outcome?: string; rating?: number | null; feedback?: string }) {
-  const iv = await db.prepare("SELECT i.id, p.candidate_id FROM interviews i JOIN pipeline p ON p.id = i.pipeline_id WHERE i.id = ? AND i.company_id = ?").bind(interviewId, companyId).first<{ id: string; candidate_id: string }>();
+const indiaTime = (iso: string) => new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit" });
+
+/** Change the time, mode, link or interviewer of an interview that has not happened yet. One message tells the candidate and the other side. */
+export async function rescheduleInterview(db: Db, companyId: string, actorId: string, interviewId: string, input: Partial<InterviewInput>) {
+  const iv = await db.prepare("SELECT i.id, i.round, i.scheduled_at, i.mode, i.location, i.interviewer, i.status, p.id AS pipeline_id, p.candidate_id, p.jd_id FROM interviews i JOIN pipeline p ON p.id = i.pipeline_id WHERE i.id = ? AND i.company_id = ?")
+    .bind(interviewId, companyId).first<{ id: string; round: string; scheduled_at: string; mode: string; location: string; interviewer: string; status: string; pipeline_id: string; candidate_id: string; jd_id: string }>();
+  if (!iv) throw new PortalError("NOT_FOUND", "Interview not found.", 404);
+  await activeUnlock(db, companyId, iv.candidate_id);
+  if (iv.status !== "scheduled") throw new PortalError("NOT_SCHEDULED", "Only an interview that has not happened yet can be changed.");
+  const when = input.scheduledAt ? Date.parse(input.scheduledAt) : Date.parse(iv.scheduled_at);
+  if (Number.isNaN(when)) throw new PortalError("WHEN", "Choose a date and time.");
+  if (when < now().getTime() - 5 * 60_000) throw new PortalError("WHEN_PAST", "Choose a time in the future.");
+  const mode = input.mode || iv.mode;
+  if (!["video", "phone", "in_person"].includes(mode)) throw new PortalError("MODE", "Choose video, phone or in person.");
+  const location = input.location === undefined ? iv.location : input.location.trim().slice(0, 300), interviewer = input.interviewer === undefined ? iv.interviewer : input.interviewer.trim().slice(0, 120);
+  const iso = new Date(when).toISOString();
+  if (iso === iv.scheduled_at && mode === iv.mode && location === iv.location && interviewer === iv.interviewer) throw new PortalError("NO_CHANGE", "Nothing was changed.");
+  await db.prepare("UPDATE interviews SET scheduled_at = ?, mode = ?, location = ?, interviewer = ?, updated_at = ? WHERE id = ? AND status = 'scheduled'").bind(iso, mode, location, interviewer, nowIso(), iv.id).run();
+  await audit(db, actorId, "interview.rescheduled", "interview", iv.id, iso);
+  const jdTitle = (await db.prepare("SELECT title FROM jds WHERE id = ?").bind(iv.jd_id).first<{ title: string }>())?.title ?? "your application";
+  const modeText = mode === "in_person" ? "in person" : mode === "phone" ? "by phone" : "by video";
+  await notifyCandidate(db, iv.candidate_id, "interview.rescheduled", `Interview for ${jdTitle} rescheduled: ${iv.round}`, `It is now ${indiaTime(iso)} India time, ${modeText}${location ? `. ${mode === "in_person" ? "Address" : "Link"}: ${location}` : ""}. Reply to your recruiter if you cannot attend.`, companyId);
+  if (actorId.startsWith("staff:")) await notifyCompany(db, companyId, "interview.rescheduled", `Interview rescheduled for ${jdTitle}`, `Jobboard300 moved “${iv.round}” to ${indiaTime(iso)} India time.`);
+  else await notifyStaff(db, companyId, "interview.rescheduled", `The client rescheduled “${iv.round}” for ${jdTitle}`, `Now ${indiaTime(iso)} India time.`, { jdId: iv.jd_id, pipelineId: iv.pipeline_id });
+}
+
+/**
+ * Record how an interview went. The client does this for their own interviews; Jobboard300 can do it on the
+ * client's behalf (the actor is “staff:<id>”) when the client reports the result by phone.
+ * “Do not proceed” can close the candidate in the same step (pass `rejectReason`); otherwise the answer says
+ * what to do next (`suggest`).
+ */
+export async function recordInterview(db: Db, companyId: string, actorId: string, interviewId: string, input: { status: string; outcome?: string; rating?: number | null; feedback?: string; rejectReason?: string }) {
+  const iv = await db.prepare("SELECT i.id, i.round, i.status, p.id AS pipeline_id, p.candidate_id, p.jd_id, p.stage FROM interviews i JOIN pipeline p ON p.id = i.pipeline_id WHERE i.id = ? AND i.company_id = ?").bind(interviewId, companyId).first<{ id: string; round: string; status: string; pipeline_id: string; candidate_id: string; jd_id: string; stage: Stage }>();
   if (!iv) throw new PortalError("NOT_FOUND", "Interview not found.", 404);
   await activeUnlock(db, companyId, iv.candidate_id);
   if (!["completed", "cancelled", "no_show"].includes(input.status)) throw new PortalError("STATUS", "Choose completed, cancelled or no-show.");
@@ -359,9 +472,25 @@ export async function recordInterview(db: Db, companyId: string, actorId: string
   if (!["pending", "advance", "hold", "reject"].includes(outcome)) throw new PortalError("OUTCOME", "Choose an outcome.");
   const rating = input.rating == null || input.rating === 0 ? null : Math.round(Number(input.rating));
   if (rating !== null && !(rating >= 1 && rating <= 5)) throw new PortalError("RATING", "Rating is 1 to 5.");
-  await db.prepare("UPDATE interviews SET status = ?, outcome = ?, rating = ?, feedback = ?, updated_at = ? WHERE id = ?")
-    .bind(input.status, outcome, rating, (input.feedback ?? "").trim().slice(0, 2000), nowIso(), iv.id).run();
+  if (outcome === "reject" && input.rejectReason && !REASONS.rejected!.includes(input.rejectReason)) throw new PortalError("REASON", "Choose a reason. It helps Jobboard300 send better candidates.");
+  const byStaff = actorId.startsWith("staff:");
+  await db.prepare("UPDATE interviews SET status = ?, outcome = ?, rating = ?, feedback = ?, recorded_by = ?, updated_at = ? WHERE id = ?")
+    .bind(input.status, outcome, rating, (input.feedback ?? "").trim().slice(0, 2000), byStaff ? "Jobboard300" : "client", nowIso(), iv.id).run();
   await audit(db, actorId, "interview.recorded", "interview", iv.id, `${input.status}/${outcome}`);
+  const jdTitle = (await db.prepare("SELECT title FROM jds WHERE id = ?").bind(iv.jd_id).first<{ title: string }>())?.title ?? "your application";
+  if (input.status === "cancelled") await notifyCandidate(db, iv.candidate_id, "interview.cancelled", `Interview cancelled: ${jdTitle}`, `Your “${iv.round}” interview has been cancelled. Your recruiter will contact you about what happens next.`, companyId);
+  const result = input.status === "completed" ? `completed, outcome: ${outcome === "advance" ? "move forward" : outcome === "reject" ? "do not proceed" : outcome}` : input.status.replace("_", " ");
+  if (byStaff) await notifyCompany(db, companyId, "interview.recorded", `Interview result recorded for ${jdTitle}`, `Jobboard300 recorded “${iv.round}” as ${result}, on your behalf.`);
+  else await notifyStaff(db, companyId, "interview.recorded", `The client recorded “${iv.round}” for ${jdTitle}: ${result}`, (input.feedback ?? "").trim().slice(0, 300), { jdId: iv.jd_id, pipelineId: iv.pipeline_id });
+  // What should happen next, so the screen can offer it (or, for “do not proceed” with a reason, do it).
+  let suggest: "rejected" | "next" | null = null, moved: Stage | null = null;
+  if (input.status === "completed" && ["shortlisted", "interview"].includes(iv.stage)) {
+    if (outcome === "reject") {
+      if (input.rejectReason) { await moveStage(db, companyId, actorId, iv.pipeline_id, { stage: "rejected", reason: input.rejectReason, note: "After the interview" }); moved = "rejected"; }
+      else suggest = "rejected";
+    } else if (outcome === "advance") suggest = "next";
+  }
+  return { suggest, moved };
 }
 
 /** The client reports that a placed candidate left. Inside the guarantee window this opens a replacement. */
@@ -373,6 +502,17 @@ export async function reportPlacementExit(db: Db, companyId: string, actorId: st
   const status = leftOn <= p.guarantee_ends_on ? "left_in_guarantee" : "left";
   await db.prepare("UPDATE placements SET status = ?, left_on = ?, note = ? WHERE id = ?").bind(status, leftOn, note.trim().slice(0, 500), p.id).run();
   await audit(db, actorId, "placement.exit", "placement", p.id, status);
+  if (status === "left_in_guarantee") {
+    // The job needs another hire: open it again with one more opening, and tell the team. The replacement carries no new fee.
+    const jd = await db.prepare("SELECT j.id, j.title, j.status FROM placements pl JOIN jds j ON j.id = pl.jd_id WHERE pl.id = ?").bind(p.id).first<{ id: string; title: string; status: string }>();
+    if (jd) {
+      await db.batch([
+        db.prepare("UPDATE jds SET openings = openings + 1, status = CASE WHEN status = 'closed' AND decision_note LIKE 'Filled%' THEN 'live' ELSE status END, decision_note = CASE WHEN status = 'closed' AND decision_note LIKE 'Filled%' THEN 'Re-opened to replace a hire who left inside the guarantee.' ELSE decision_note END, updated_at = ? WHERE id = ?").bind(nowIso(), jd.id),
+        db.prepare("UPDATE jobs SET status = 'published', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'closed' AND EXISTS (SELECT 1 FROM jds WHERE id = ? AND status = 'live')").bind(jd.id, jd.id),
+      ]);
+      await notifyStaff(db, companyId, "placement.replacement", `Replacement needed for ${jd.title}`, `The hire left on ${leftOn}, inside the guarantee. The job is open again with one more opening. The replacement carries no new fee.`, { jdId: jd.id });
+    }
+  }
   return { status, inGuarantee: status === "left_in_guarantee" };
 }
 
@@ -465,7 +605,7 @@ export async function adminClientWork(db: Db) {
 export async function submissionCandidates(db: Db, jdId: string) {
   const jd = await db.prepare("SELECT company_id FROM jds WHERE id = ?").bind(jdId).first<{ company_id: string }>();
   if (!jd) throw new PortalError("NOT_FOUND", "Job not found.", 404);
-  const since = now(); since.setUTCMonth(since.getUTCMonth() - EARLY_EXIT.lowPriorityMonths);
+  const since = new Date(now()); since.setUTCMonth(since.getUTCMonth() - EARLY_EXIT.lowPriorityMonths);
   const lowPrioritySince = since.toISOString().slice(0, 10);
   const { results } = await db.prepare(`SELECT m.candidate_id, k.display_name, k.current_city, m.score, m.lower_bound, m.hard_pass, m.explanation,
       EXISTS (SELECT 1 FROM pipeline p WHERE p.jd_id = m.jd_id AND p.candidate_id = m.candidate_id) AS in_pipeline,

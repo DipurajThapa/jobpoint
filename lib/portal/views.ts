@@ -57,7 +57,7 @@ export async function companyDashboard(db: Db, companyId: string) {
   const { results: jds } = await db.prepare(`SELECT j.id, j.title, j.status, j.decision_note, j.updated_at,
       (SELECT COUNT(*) FROM releases r WHERE r.jd_id = j.id AND r.revoked_at IS NULL) AS released,
       (SELECT COUNT(*) FROM unlocks u WHERE u.first_jd_id = j.id) AS unlocked
-      FROM jds j WHERE j.company_id = ? AND j.status != 'closed' ORDER BY j.updated_at DESC`).bind(companyId).all();
+      FROM jds j WHERE j.company_id = ? ORDER BY j.status = 'closed', j.updated_at DESC LIMIT 200`).bind(companyId).all();
   return { company, params, jds };
 }
 
@@ -78,6 +78,12 @@ export async function unlockedCandidate(db: Db, companyId: string, ref: string, 
     if (!open.length) throw new PortalError("ACCESS_ENDED", "This profile is available only while the hiring process for this candidate is open.", 403);
     contactsHidden = !open.some(o => (CONTACT_STAGES as readonly string[]).includes(o.stage));
     if (contactsHidden) p.profile = { ...p.profile, contact: { ...p.profile.contact, email: "", phone: "", links: [] } };
+  }
+  // One source for contact details: the candidate's record (the verified sign-up details) comes first, the CV's own are the fallback.
+  // This is what the recruiter sees too, so the client never gets a dead address at the moment an offer goes out.
+  if (!contactsHidden) {
+    const rec = await db.prepare("SELECT email, phone FROM candidates WHERE id = ?").bind(u.candidate_id).first<{ email: string | null; phone: string | null }>();
+    p.profile = { ...p.profile, contact: { ...p.profile.contact, email: rec?.email || p.profile.contact.email, phone: rec?.phone || p.profile.contact.phone } };
   }
   const { results: apps } = await db.prepare("SELECT a.id, a.status, j.title FROM portal_applications a JOIN jds j ON j.id = a.jd_id WHERE a.candidate_id = ? AND j.company_id = ?").bind(u.candidate_id, companyId).all();
   return { contactsHidden, candidateId: u.candidate_id, traceId: u.trace_id, unlockedAt: u.unlocked_at, profile: p.profile, cv: { r2Key: p.r2Key, fileName: p.fileName }, applications: apps };
