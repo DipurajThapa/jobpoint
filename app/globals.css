@@ -74,3 +74,26 @@ html{scroll-padding-top:104px}.header{height:88px}.brand img{width:200px;height:
 .theme-candidate{--pill-bg:#eef2fa;--pill-ink:#41506d;--primary:#1d4ed8;--blue:#1D4ED8;--blue-dark:#1237A0;--navy:#0A1F5C;--ink:#0A1F5C;--accent:#93C5FD;--foreground:#0a1f5c;--tint:#eef3ff;--tint-2:#eaf1ff;--tint-3:#f4f7ff;--tint-4:#fbfcff;--tint-line:#cfd8ea;--nav-muted:#cbd6ed}
 .theme-company{--pill-bg:#edf4ef;--pill-ink:#3f5a48;--primary:#147a3a;--blue:#147A3A;--blue-dark:#166534;--navy:#0B3B24;--ink:#0B3B24;--accent:#86EFAC;--foreground:#0b3b24;--tint:#e8f6ed;--tint-2:#e3f4ea;--tint-3:#f1faf4;--tint-4:#fafdfb;--tint-line:#c9decf;--nav-muted:#c5dccd}
 .wp-root.theme-candidate{background:#f5f7fb}.wp-root.theme-company{background:#f4f8f5}
+
+/* Public forms, header and footer (11 Nov 2026) */
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.nav-links .nav-signin{padding:8px 14px;border:1px solid var(--line);border-radius:999px;color:var(--navy)}
+.nav-links .nav-signin:hover{border-color:var(--blue);color:var(--blue)}
+.footer-top{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
+.footer-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:32px}
+.footer-links a,.footer-links button{text-align:left;cursor:pointer;font-family:inherit;line-height:1.4}
+@media(max-width:900px){.footer-top{grid-template-columns:1fr}.nav-links .nav-signin{text-align:center}}
+@media(max-width:560px){.footer-links{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}}
+.consent>span{flex:1;min-width:0}
+.consent-options,.call-picker{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0;display:grid;gap:10px;min-width:0}
+.consent-options legend,.call-picker legend{padding:0 6px;font-weight:700;color:var(--navy);font-size:15px}
+.call-picker .form-grid{margin:0}
+.call-picker p{margin:0}
+.form-message.form-error{background:#fdecec;color:#8a1c1c!important}
+.form-confirmation{display:grid;justify-items:start;gap:10px;padding:22px;border-radius:14px;background:#edf7f1;color:var(--navy)}
+.form-confirmation h3{margin:0;font-size:22px}
+.form-confirmation p{margin:0;color:var(--navy)}
+.form-confirmation-icon{color:#14603e;display:flex}
+.form-confirmation-icon .material-symbols-rounded{font-size:36px}
+.admin-sources{border-collapse:collapse;margin:8px 0 18px;font-size:14px}.admin-sources caption{text-align:left;font-weight:700;color:var(--navy);padding-bottom:6px}.admin-sources th,.admin-sources td{text-align:left;padding:5px 18px 5px 0;border-bottom:1px solid var(--line)}
+.contact-direct{margin-top:18px;font-size:16px}.contact-direct a,.footer-bottom span a{text-decoration:underline}

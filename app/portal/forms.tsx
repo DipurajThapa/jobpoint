@@ -9,6 +9,8 @@ export async function post<T = Record<string, unknown>>(url: string, body: unkno
   return data;
 }
 
+// Every form here is method="post": if the button is pressed before the page's script has loaded, the
+// browser must not put what was typed (a password) into the address bar. The script then takes over.
 function useForm() {
   const [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false), [link, setLink] = useState("");
   return { error, setError, notice, setNotice, busy, setBusy, link, setLink };
@@ -21,7 +23,7 @@ export function SignIn({ next }: { next: string }) {
     try { const r = await post<{ next: string }>("/api/portal/auth/sign-in", { email: d.get("email"), password: d.get("password") }); window.location.assign(next.startsWith("/candidate") || next.startsWith("/company") ? next : r.next); }
     catch (err) { f.setError((err as Error).message); f.setBusy(false); }
   }
-  return <form onSubmit={submit} className="pj-list">
+  return <form onSubmit={submit} method="post" className="pj-list">
     {f.error && <p className="pj-notice bad" role="alert">{f.error}</p>}
     <label>Email<input name="email" type="email" required autoComplete="username" /></label>
     <label>Password<input name="password" type="password" required autoComplete="current-password" /></label>
@@ -40,7 +42,7 @@ export function Register({ kind }: { kind: "candidate" | "company" }) {
     finally { f.setBusy(false); }
   }
   if (f.notice) return <div className="pj-list"><p className="pj-notice good" role="status">{f.notice}</p>{f.link && <p className="pj-muted">Local development: <a href={f.link}>open the verification link</a>.</p>}</div>;
-  return <form onSubmit={submit} className="pj-list">
+  return <form onSubmit={submit} method="post" className="pj-list">
     {f.error && <p className="pj-notice bad" role="alert">{f.error}</p>}
     {kind === "candidate" ? <>
       <label>Full name<input name="name" required maxLength={120} autoComplete="name" /></label>
@@ -78,7 +80,7 @@ export function Forgot() {
     try { const r = await post<{ message: string; devLink?: string }>("/api/portal/auth/reset-request", { email: new FormData(e.currentTarget).get("email") }); f.setNotice(r.message); f.setLink(r.devLink ?? ""); }
     catch (err) { f.setError((err as Error).message); } finally { f.setBusy(false); }
   }
-  return <form onSubmit={submit} className="pj-list">
+  return <form onSubmit={submit} method="post" className="pj-list">
     {f.error && <p className="pj-notice bad">{f.error}</p>}{f.notice && <p className="pj-notice good">{f.notice}</p>}{f.link && <a href={f.link}>Local development: reset link</a>}
     <label>Email<input name="email" type="email" required /></label><button className="wp-btn" disabled={f.busy}>Send reset link</button>
   </form>;
@@ -92,7 +94,7 @@ export function Reset({ token }: { token: string }) {
     f.setBusy(true); try { f.setNotice((await post<{ message: string }>("/api/portal/auth/reset", { token, password: d.get("password") })).message); } catch (err) { f.setError((err as Error).message); } finally { f.setBusy(false); }
   }
   if (f.notice) return <div className="pj-list"><p className="pj-notice good">{f.notice}</p><a className="wp-btn" href="/portal/sign-in">Sign in</a></div>;
-  return <form onSubmit={submit} className="pj-list">
+  return <form onSubmit={submit} method="post" className="pj-list">
     {f.error && <p className="pj-notice bad">{f.error}</p>}
     <label>New password<input name="password" type="password" minLength={12} required autoComplete="new-password" /></label>
     <label>Repeat password<input name="confirm" type="password" minLength={12} required autoComplete="new-password" /></label>
@@ -111,7 +113,7 @@ export function Accept({ token }: { token: string }) {
     f.setBusy(true); try { f.setNotice((await post<{ message: string }>("/api/portal/auth/accept", { token, password: d.get("password") })).message); } catch (err) { f.setError((err as Error).message); } finally { f.setBusy(false); }
   }
   if (f.notice) return <div className="pj-list"><p className="pj-notice good">{f.notice}</p><a className="wp-btn" href="/portal/sign-in">Sign in</a></div>;
-  return <form onSubmit={submit} className="pj-list">
+  return <form onSubmit={submit} method="post" className="pj-list">
     <p className="pj-muted">Choose a password of at least 12 characters. You will use it with your email address to sign in.</p>
     {f.error && <p className="pj-notice bad">{f.error}</p>}
     <label>Password<input name="password" type="password" minLength={12} required autoComplete="new-password" /></label>

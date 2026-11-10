@@ -69,26 +69,34 @@ const today = new Date().toISOString().slice(0, 10);
 section("1. An employer sends a hiring enquiry from the website");
 const visitor = await person("visitor");
 let enquiryRef = "";
-await step("U1.1", "the home page opens and the \"Send a hiring requirement\" button opens the enquiry form", async () => {
+await step("U1.1", "the home page opens and the \"Send a hiring enquiry\" button opens the enquiry form", async () => {
   await visitor.go("/");
-  await visitor.page.getByRole("button", { name: /Send a hiring requirement/ }).first().click();
+  await visitor.page.getByRole("button", { name: /Send a hiring enquiry/ }).first().click();
   await visitor.page.locator("[role=dialog] [name=contactName]").waitFor();
 }, { severity: "blocker" });
-await step("U1.2", "the employer fills the form and gets a reference number", async () => {
+await step("U1.2", "the employer sends a short enquiry, books a call and sees a confirmation that matches what was really sent", async () => {
   const d = visitor.page.locator("[role=dialog]");
-  await fill(d, { contactName: CLIENT.owner, company: CLIENT.name, email: CLIENT.email, phone: "+91 90000 56001", roleTitle: "Accounts Executive", location: "Durgapur", headcount: 1, details: "One accounts executive with Tally and GST for our Durgapur office, to start next month.", consent: true, terms: true });
-  await d.getByRole("button", { name: /Send hiring enquiry/ }).click();
-  await d.locator(".form-message").filter({ hasText: /Reference: HE-/ }).waitFor();
-  enquiryRef = (await d.locator(".form-message").innerText()).match(/HE-[A-Z0-9]+/)?.[0] ?? "";
+  await fill(d, { contactName: CLIENT.owner, company: CLIENT.name, email: CLIENT.email, phone: "+91 90000 56001", details: "One accounts executive with Tally and GST for our Durgapur office, to start next month.", consent: true, terms: true, whatsappConsent: true });
+  // Book a call: the first day offered, then a time on that day.
+  await d.getByLabel("Day for the call").selectOption({ index: 1 });
+  await d.getByLabel("Time for the call").selectOption({ index: 2 });
+  await d.getByRole("button", { name: /Send enquiry/ }).click();
+  await d.locator(".form-confirmation").waitFor();
+  const said = await d.locator(".form-confirmation").innerText();
+  const stored = row("SELECT id, meeting_at, meeting_status, ack_email FROM employer_enquiries WHERE email = ?", CLIENT.email);
+  enquiryRef = `HE-${String(stored?.id ?? "").slice(0, 13).replaceAll("-", "").toUpperCase()}`;
+  // The page may say "we have emailed" only when the email really went.
+  if (/emailed/.test(said) !== (stored?.ack_email === "sent")) throw new Error(`the confirmation says "${said.replace(/\s+/g, " ").slice(0, 160)}" but the acknowledgement email is recorded as ${stored?.ack_email}`);
+  if (!/call on/.test(said) || stored?.meeting_status !== "requested") throw new Error("the call request is missing from the confirmation or the database");
   await visitor.shot("01-enquiry-sent");
   return !!enquiryRef && count("employer_enquiries", "email = ?", CLIENT.email) === 1;
 }, { severity: "blocker" });
 await step("U1.3", "an incomplete enquiry is stopped by the form (required fields)", async () => {
   await visitor.go("/employers");
-  await visitor.page.getByRole("button", { name: /Send a hiring requirement/ }).first().click();
+  await visitor.page.getByRole("button", { name: /Send a hiring enquiry/ }).first().click();
   const d = visitor.page.locator("[role=dialog]");
   await d.locator("[name=contactName]").fill("Only A Name");
-  await d.getByRole("button", { name: /Send hiring enquiry/ }).click();
+  await d.getByRole("button", { name: /Send enquiry/ }).click();
   await visitor.page.waitForTimeout(400);
   return await d.locator("[name=company]").evaluate(e => !e.validity.valid) && count("employer_enquiries", "contact_name = 'Only A Name'") === 0;
 }, { severity: "medium" });
@@ -125,16 +133,16 @@ await step("U2.3", "the owner invites the client from the Job portal tab and get
 await step("U2.4", "the owner links the enquiry to the new client and marks it in progress", async () => {
   await owner.page.getByRole("button", { name: /^Employer enquiries/ }).click();
   let card = owner.page.locator("article", { hasText: CLIENT.name }).first();
-  const offered = await card.locator("select").nth(1).locator("option").allInnerTexts();
+  const offered = await card.getByLabel(`Client that ${CLIENT.name} became`).locator("option").allInnerTexts();
   if (!offered.includes(`Client: ${CLIENT.name}`)) {
     finding("U2.4a", { severity: "low", kind: "defect", title: "A client created a moment ago is missing from the console's lists until the page is reloaded", actual: `Straight after "Create client and get sign-in link", the enquiry's "Client that … became" list offers: ${offered.join(", ")}. The new client is not in it, and it is also missing from "Client this role is for" on the Open roles tab. Reloading the page brings it in.`, expected: "Lists refresh after a client is created.", fix: "Have PortalPanel call the console's refresh() after a successful action (pass it as a prop), in app/admin/admin-client.tsx.", where: "app/admin/admin-client.tsx; app/admin/portal-panel.tsx" });
     await owner.go("/admin");
     await owner.page.getByRole("button", { name: /^Employer enquiries/ }).click();
     card = owner.page.locator("article", { hasText: CLIENT.name }).first();
   }
-  await card.locator("select").nth(1).selectOption({ label: `Client: ${CLIENT.name}` });
+  await card.getByLabel(`Client that ${CLIENT.name} became`).selectOption({ label: `Client: ${CLIENT.name}` });
   await owner.page.getByText("Enquiry linked to the client.").waitFor();
-  await card.locator("select").first().selectOption("in_progress");
+  await card.getByLabel(`Status for ${CLIENT.name}`).selectOption("in_progress");
   await owner.page.getByText("Enquiry status updated.").waitFor();
   const e = row("SELECT status, company_id FROM employer_enquiries WHERE email = ?", CLIENT.email);
   return e.status === "in_progress" && !!e.company_id;
@@ -291,11 +299,11 @@ await step("U6.1", "the visitor finds the role on the home page and opens it", a
 }, { severity: "blocker" });
 await step("U6.2", "the visitor fills the application, attaches a CV and gets a reference", async () => {
   const f = visitor.page.locator("form.apply-form");
-  await fill(f, { fullName: APPLICANT.name, email: APPLICANT.email, phone: APPLICANT.phone, location: "Durgapur", skills: "Tally, GST, TDS", availability: "30 days", education: "B.Com", experience: "Three years of accounts work in Tally Prime with GST and TDS.", consent: true, adult: true, terms: true, shareConsent: true });
+  await fill(f, { fullName: APPLICANT.name, email: APPLICANT.email, phone: APPLICANT.phone, declaration: true, consent: true, shareConsent: true, whatsappConsent: true });
   await f.locator("[name=resume]").setInputFiles(await cvFor(APPLICANT.name, APPLICANT.email, APPLICANT.phone));
   await f.getByRole("button", { name: "Apply for this role" }).click();
-  await f.locator(".form-message").filter({ hasText: /Reference: JP-/ }).waitFor({ timeout: 30_000 });
-  applyRef = (await f.locator(".form-message").innerText()).match(/JP-[A-Z0-9]+/)?.[0] ?? "";
+  await visitor.page.locator(".apply-form .form-confirmation").waitFor({ timeout: 30_000 });
+  applyRef = `JP-${String(row("SELECT id FROM applications WHERE email = ?", APPLICANT.email)?.id ?? "").slice(0, 13).replaceAll("-", "").toUpperCase()}`;
   await visitor.shot("08-application-sent");
   return !!applyRef && count("applications", "email = ?", APPLICANT.email) === 1;
 }, { severity: "blocker" });
@@ -647,10 +655,10 @@ await step("U11.3", "a visitor registers a general CV from \"Upload your CV\" an
   await visitor.page.getByRole("button", { name: /Upload your CV/ }).first().click();
   const d = visitor.page.locator("[role=dialog]");
   const g = { name: `Ishita Paul${U.replace(/\d/g, "")}`.slice(0, 40), email: mail("ishita") };
-  await fill(d, { fullName: g.name, email: g.email, phone: "+91 90000 58001", location: "Kolkata", desiredRole: "Accounts Executive", skills: "Tally, GST", experience: "Two years of accounts work.", consent: true, adult: true, terms: true, futureConsent: true });
+  await fill(d, { fullName: g.name, email: g.email, phone: "+91 90000 58001", declaration: true, consent: true });
   await d.locator("[name=resume]").setInputFiles(await cvFor(g.name, g.email, "+91 90000 58001"));
-  await d.getByRole("button", { name: "Submit my details" }).click();
-  await d.locator(".form-message").filter({ hasText: /Reference: JP-/ }).waitFor({ timeout: 30_000 });
+  await d.getByRole("button", { name: /Upload my CV/ }).click();
+  await d.locator(".form-confirmation").waitFor({ timeout: 30_000 });
   return count("applications", "email = ? AND job_id IS NULL", g.email) === 1;
 }, { severity: "high" });
 await step("U11.4", "signing out of the client workspace ends the session", async () => {

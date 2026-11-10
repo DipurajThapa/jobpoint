@@ -1,11 +1,21 @@
+import type { Metadata } from "next";
 import LandingPage from "@/components/landing-page";
 import { EMPLOYER_PAGE } from "@/lib/landing";
 import { SITE_URL } from "@/lib/site";
 
-export const metadata = { title: "Hire screened talent and pay only on placement", description: "Hire IT and non-IT professionals through Jobboard300. A recruiter-screened shortlist, a fee of 7.5% to 8.33% on placement and one free replacement within 60 days.", alternates: { canonical: "/employers" }, openGraph: { title: "Hire screened talent and pay only on placement | Jobboard300", description: "Hire IT and non-IT professionals through Jobboard300. A recruiter-screened shortlist, a fee of 7.5% to 8.33% on placement and one free replacement within 60 days.", url: "/employers", type: "website" } };
+const title = "Recruitment agency in Kolkata for employers";
+const description = "Hire IT and office staff through Jobboard300, Kolkata. A recruiter-screened shortlist, a 7.5% to 8.33% fee only when your hire joins, 60-day replacement.";
+const shareTitle = `${title} | Jobboard300`;
+const shareImage = "/images/career-conversation.webp";
+
+export const metadata: Metadata = {
+  title, description, alternates: { canonical: "/employers" },
+  openGraph: { title: shareTitle, description, url: "/employers", type: "website", siteName: "Jobboard300", locale: "en_IN", images: [shareImage] },
+  twitter: { card: "summary_large_image", title: shareTitle, description, images: [shareImage] },
+};
 
 export default function Page() {
   const faq = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: EMPLOYER_PAGE.faqs.map(({ question, answer }) => ({ "@type": "Question", name: question, acceptedAnswer: { "@type": "Answer", text: answer } })) };
-  const service = { "@context": "https://schema.org", "@type": "Service", name: "Recruitment services for employers", provider: { "@id": `${SITE_URL}/#agency` }, url: `${SITE_URL}/employers`, description: "Hire IT and non-IT professionals through Jobboard300. A recruiter-screened shortlist, a fee of 7.5% to 8.33% on placement and one free replacement within 60 days." };
+  const service = { "@context": "https://schema.org", "@type": "Service", name: "Recruitment services for employers", provider: { "@id": `${SITE_URL}/#agency` }, url: `${SITE_URL}/employers`, description };
   return <><LandingPage page={EMPLOYER_PAGE} />{[faq, service].map((data, i) => <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, "\\u003c") }} />)}</>;
 }

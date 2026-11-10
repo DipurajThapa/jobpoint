@@ -199,7 +199,7 @@ export async function deleteCandidateData(db: Db, candidateId: string, actor: st
     db.prepare("DELETE FROM score_queue WHERE kind = 'candidate' AND ref_id = ?").bind(candidateId),
     db.prepare("DELETE FROM duplicate_flags WHERE a_id = ? OR b_id = ?").bind(candidateId, candidateId),
     db.prepare("DELETE FROM abuse_flags WHERE subject_kind = 'candidate' AND subject_id = ?").bind(candidateId),
-    db.prepare("UPDATE candidates SET status = 'deleted', account_id = NULL, display_name = '', email = '', phone = '', current_city = '', preferred_cities = '[]', hidden_company_ids = '[]', hidden_company_names = '[]', dedupe_email_hash = '', dedupe_phone_hash = '', merged_into = NULL, fast_track_at = NULL, last_active_at = ? WHERE id = ?").bind(at, candidateId),
+    db.prepare("UPDATE candidates SET status = 'deleted', account_id = NULL, display_name = '', email = '', phone = '', whatsapp_consent_at = NULL, whatsapp_consent_version = '', current_city = '', preferred_cities = '[]', hidden_company_ids = '[]', hidden_company_names = '[]', dedupe_email_hash = '', dedupe_phone_hash = '', merged_into = NULL, fast_track_at = NULL, last_active_at = ? WHERE id = ?").bind(at, candidateId),
     ...(account?.account_id ? [db.prepare("UPDATE portal_accounts SET status = 'deleted', email = 'deleted-' || id || '@invalid', phone = '', password_hash = NULL WHERE id = ?").bind(account.account_id), db.prepare("DELETE FROM portal_sessions WHERE account_id = ?").bind(account.account_id), db.prepare("DELETE FROM portal_tokens WHERE account_id = ?").bind(account.account_id)] : []),
   ]);
   await audit(db, actor, "candidate.deleted", "candidate", candidateId, `${results.length} CV file(s) and ${apps.length} website application(s) erased`);

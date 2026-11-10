@@ -24,7 +24,7 @@
 
 import { audit, newId, nowIso, sha256Hex, type Db } from "./db";
 import { consentActive, recordConsent, withdrawSharing } from "./consent";
-import { contactEmail, contactPhone, createCandidate, deleteCandidateData, mergeCandidates, normEmail, normPhone } from "./candidate";
+import { contactEmail, contactPhone, correctProfile, createCandidate, deleteCandidateData, mergeCandidates, normEmail, normPhone, primaryProfile } from "./candidate";
 import { notifyCandidate } from "./notify";
 import { recordRoleApplication } from "./vacancy";
 import { enqueue } from "./company";
@@ -80,17 +80,29 @@ export async function linkWebsiteApplication(db: Db, bucket: Bucket, app: Websit
     return { candidateId: owner.id, created: false, cv: "none", matching: await consentActive(db, owner.id, "profile_processing"), recruiterSharing: await consentActive(db, owner.id, "recruiter_sharing") };
   }
   const reuse = await existingWebsiteCandidate(db, app.email);
-  const candidateId = reuse?.id ?? await createCandidate(db, { accountId: null, displayName: app.fullName, email: app.email, phone: app.phone, currentCity: app.location });
+  const candidateId = reuse?.id ?? await createCandidate(db, { accountId: null, displayName: app.fullName, email: app.email, phone: app.phone, currentCity: "" });
   await db.prepare("INSERT INTO candidate_sources (id, candidate_id, kind, ref_id, created_at) VALUES (?, ?, 'website_application', ?, ?)").bind(newId(), candidateId, app.id, nowIso()).run();
   const version = websiteNoticeVersion(app.privacyVersion);
   // A later form with a box left unticked is not a withdrawal of an earlier tick; withdrawal goes through a privacy request.
-  if (app.futureConsent) await recordConsent(db, candidateId, "profile_processing", "granted", "", "website", { version, text: WEBSITE_NOTICE.profile_processing });
+  if (app.futureConsent) await recordConsent(db, candidateId, "profile_processing", "granted", "", "website", { version, text: app.jobId ? WEBSITE_NOTICE.profile_processing : WEBSITE_NOTICE.registration });
   if (app.shareConsent && !app.jobId) await recordConsent(db, candidateId, "recruiter_sharing", "granted", "", "website", { version, text: WEBSITE_NOTICE.recruiter_sharing });
   let cv: LinkResult["cv"] = "none";
   if (cvBytes && app.resumeName) {
-    try { cv = (await ingestCv(db, bucket, candidateId, { bytes: cvBytes, fileName: app.resumeName, knownName: app.fullName, knownLocation: app.location })).status as "parsed" | "needs_review"; }
+    try { cv = (await ingestCv(db, bucket, candidateId, { bytes: cvBytes, fileName: app.resumeName, knownName: app.fullName })).status as "parsed" | "needs_review"; }
     catch { cv = "unreadable"; }
   }
+  // "Preferred work location" is where the person wants to work, not where they live. The CV gives the
+  // current city; the typed place is added to the preferred cities, and stands in only when the CV names no city.
+  if (cv === "parsed") {
+    try {
+      const p = await primaryProfile(db, candidateId), typed = app.location.trim();
+      if (p && typed) {
+        const has = !!p.profile.india.currentCity;
+        await correctProfile(db, candidateId, has ? { preferredCities: [...p.profile.india.preferredCities, typed] } : { currentCity: typed }, "", "admin", actor);
+      }
+      if (p && !typed) await db.prepare("UPDATE candidates SET current_city = ? WHERE id = ? AND current_city = ''").bind(p.profile.india.currentCity ?? "", candidateId).run();
+    } catch (error) { console.error("website applicant city not recorded", app.id, error instanceof Error ? error.message : error); }
+  } else if (app.location.trim()) await db.prepare("UPDATE candidates SET current_city = ? WHERE id = ? AND current_city = ''").bind(app.location.trim().slice(0, 80), candidateId).run();
   const matching = await consentActive(db, candidateId, "profile_processing");
   // One vacancy record: an application to a website role is an application to that client job.
   const applied = !!app.jobId && await recordRoleApplication(db, candidateId, app.jobId, app.id);

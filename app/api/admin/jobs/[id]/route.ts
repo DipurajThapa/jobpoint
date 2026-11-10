@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { jobs } from "@/db/schema";
 import { adminActor, isOwnerRequest } from "@/lib/admin";
-import { portalDb } from "@/lib/portal/session";
+import { portalDb, portalSecret } from "@/lib/portal/session";
+import { drainQueue } from "@/lib/portal/queue";
 import { syncRoleStatus } from "@/lib/portal/vacancy";
 import { errorJson, json, sameOrigin } from "@/lib/http";
 
@@ -19,6 +20,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     await getDb().update(jobs).set({ status, updatedAt: new Date().toISOString() }).where(eq(jobs.id, id));
     // The same vacancy in the Recruiting tool opens, pauses or closes with it.
     await syncRoleStatus(portalDb(), id, status, adminActor(request));
+    if (status === "published") { try { await drainQueue(portalDb(), portalSecret(), 400); } catch (error) { console.error("scoring after publish failed", id, error instanceof Error ? error.message : error); } }
     return json({ message: `Job ${status}.` });
   } catch { return errorJson("The job could not be updated.", 503); }
 }

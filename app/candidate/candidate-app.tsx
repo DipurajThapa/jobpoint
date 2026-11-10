@@ -36,7 +36,7 @@ export default function CandidateApp() {
     <main className="pj-main">
       {notice && <p className={`pj-notice ${notice.bad ? "bad" : "good"}`} role="status">{notice.text}</p>}
       {profile?.status === "needs_review" && <p className="pj-notice">We could not read your CV automatically. A Jobboard300 reviewer will check it shortly; nothing has been lost.</p>}
-      {profile?.profile && <p className="pj-notice">{profile.sharing ? "Your CV is on file. When a role fits, Jobboard300 shares an anonymous summary with the employer, and a recruiter contacts you before anything else happens." : "Your CV is on file, but sharing with employers is off, so no employer can see your profile. You can turn it on below."}</p>}
+      {profile?.profile && <p className="pj-notice">{profile.sharing ? "Your CV is on file and sharing is on. When a role fits, a Jobboard300 recruiter may put you forward to the employer and will tell you here." : "Your CV is on file, but sharing with employers is off, so no employer can see your profile. You can turn it on below."}</p>}
       <Inbox />
       <Tests say={say} />
       <Cv data={profile} reload={loadProfile} say={say} />
@@ -54,14 +54,19 @@ function Tests({ say }: { say: (t: string, bad?: boolean) => void }) {
   const [v, setV] = useState<TestsView | null>(null), [sitting, setSitting] = useState<{ bankId?: string } | null>(null), testId = useRef<string | undefined>(undefined);
   const load = useCallback(() => get<TestsView>("/api/portal/candidate/tests").then(setV).catch(() => undefined), []);
   useEffect(() => { load(); }, [load]);
+  // The list is read through a ref, so that refreshing it when a test finishes does not make the
+  // test screen load again (which reported "finished" again, and so on without end).
+  const view = useRef<TestsView | null>(null);
+  useEffect(() => { view.current = v; }, [v]);
   const call = useCallback(async (action: "load" | "start" | "answer", choice?: number | null) => {
+    const v = view.current;
     if (action === "answer") return post<Step>("/api/portal/candidate/test-answer", { testId: testId.current, choice });
     // Opening a test shows the instructions first; the clock starts only on Start.
     if (action === "load") return testId.current ? get<Step>(`/api/portal/candidate/test?id=${testId.current}`) : { id: "", title: v?.technical.find(b => b.id === sitting?.bankId)?.title ?? "Technical test", total: v?.test.questions ?? 20, minutes: v?.test.minutes ?? 25, state: "ready" as const };
     const s = await post<Step>("/api/portal/candidate/test-start", testId.current ? { testId: testId.current } : { bankId: sitting?.bankId });
     testId.current = s.id;
     return s;
-  }, [sitting, v]);
+  }, [sitting]);
   if (!v) return null;
   if (sitting) return <><TestRunner call={call} onDone={load} /><button className="pj-link" onClick={() => { testId.current = undefined; setSitting(null); load(); }}>Back to my tests</button></>;
   const invited = v.tests.filter(t => t.status === "invited" || t.status === "in_progress"), done = v.tests.filter(t => t.status === "completed");
@@ -95,7 +100,7 @@ function Inbox() {
   </section>;
 }
 
-function Cv({ data, reload, say }: { data: { profile: Profile | null; status: string } | null; reload: () => void; say: (t: string, bad?: boolean) => void }) {
+function Cv({ data, reload, say }: { data: { profile: Profile | null; status: string; sharing?: boolean; whatsapp?: boolean } | null; reload: () => void; say: (t: string, bad?: boolean) => void }) {
   const [busy, setBusy] = useState(false);
   async function upload(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); setBusy(true);
@@ -120,8 +125,9 @@ function Cv({ data, reload, say }: { data: { profile: Profile | null; status: st
       <form className="pj-list" onSubmit={upload}>
         <label>CV file <span className="pj-muted">PDF or DOCX with selectable text, up to 5 MB</span><input name="resume" type="file" required accept=".pdf,.docx" /></label>
         <label className="pj-row"><input type="checkbox" name="consentProfile" value="yes" required /> <span><b>Required.</b> {CONSENT_NOTICE.profile_processing}</span></label>
-        <label className="pj-row"><input type="checkbox" name="consentShare" value="yes" defaultChecked /> <span><b>Recommended.</b> {CONSENT_NOTICE.share_with_companies}</span></label>
+        <label className="pj-row"><input type="checkbox" name="consentShare" value="yes" key={`share-${p ? data?.sharing : "new"}`} defaultChecked={p ? !!data?.sharing : true} /> <span><b>Recommended.</b> {CONSENT_NOTICE.share_with_companies}</span></label>
         <label className="pj-row"><input type="checkbox" name="consentOffers" value="yes" /> <span>{CONSENT_NOTICE.service_offers}</span></label>
+        <label className="pj-row"><input type="checkbox" name="consentWhatsapp" value="yes" key={`wa-${data?.whatsapp}`} defaultChecked={!!data?.whatsapp} /> <span>Send me updates on WhatsApp at my mobile number, as well as in my inbox. Leave unticked for no WhatsApp messages.</span></label>
         <button className="pj-btn" disabled={busy}>{busy ? "Reading your CV…" : "Upload CV"}</button>
       </form>
     </section>
@@ -155,9 +161,9 @@ function Privacy({ data, reload, say }: { data: { sharing: boolean } | null; rel
   return <>
     <section className="pj-card"><h2>Sharing with employers</h2>
       <p>{CONSENT_NOTICE.share_with_companies}</p>
-      <p><b>Status:</b> {data?.sharing ? "On — matching employers can see your anonymous summary." : "Off — no employer can see your profile."}</p>
+      <p><b>Status:</b> {data?.sharing ? "On — a recruiter may put you forward to an employer for a role that fits." : "Off — no employer can see your profile."}</p>
       <div className="pj-row">{data?.sharing ? <button className="pj-btn danger" onClick={() => act("/api/portal/candidate/consent", { purpose: "share_with_companies", grant: false })}>Stop sharing now</button> : <button className="pj-btn" onClick={() => act("/api/portal/candidate/consent", { purpose: "share_with_companies", grant: true })}>Allow sharing</button>}</div>
-      {info && <p className="pj-muted">Your anonymous summary is currently shown to {info.sharing.previewCompanies} employer(s).{info.sharing.unlockedBy.length ? ` Unlocked by: ${info.sharing.unlockedBy.map(u => `${u.company} (${u.unlocked_at.slice(0, 10)}${u.access_revoked_at ? ", access revoked" : ""})`).join("; ")}.` : " No employer has unlocked your full CV."}</p>}
+      {info && <p className="pj-muted">{info.sharing.unlockedBy.length ? `Your profile has been shared with: ${info.sharing.unlockedBy.map(u => `${u.company} (${u.unlocked_at.slice(0, 10)}${u.access_revoked_at ? ", access ended" : ""})`).join("; ")}.` : "Your profile has not been shared with any employer yet."}</p>}
     </section>
     <section className="pj-card"><h2>Hide my profile from specific companies</h2>
       <p className="pj-muted">Type the name of any employer that must never receive your profile, such as your current one. We do not show which companies hire through Jobboard300.</p>
@@ -168,8 +174,14 @@ function Privacy({ data, reload, say }: { data: { sharing: boolean } | null; rel
     <section className="pj-card"><h2>Your data</h2>
       <div className="pj-row">
         <a className="pj-btn quiet" href="/api/portal/candidate/export" download>Download my data</a>
-        {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load on purpose after deletion: it clears client state */}
-        <button className="pj-btn danger" onClick={() => { const c = window.prompt("This deletes your account and CV permanently. Type DELETE to confirm."); if (c) act("/api/portal/candidate/delete", { confirm: c }).then(() => window.location.assign("/portal/sign-in")); }}>Delete my account</button></div>
+        <button className="pj-btn danger" onClick={async () => {
+          const c = window.prompt("This permanently deletes your account, your CV and your profile, and closes any open applications. It cannot be undone. Type DELETE to confirm.");
+          if (c === null) return;
+          if (c.trim() !== "DELETE") { say("Nothing was deleted. To delete your account, type the word DELETE in capital letters.", true); return; }
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full page load on purpose after deletion: it clears client state
+          try { await post("/api/portal/candidate/delete", { confirm: "DELETE" }); window.location.assign("/portal/sign-in"); }
+          catch (e) { say(`Your account was not deleted: ${(e as Error).message}`, true); }
+        }}>Delete my account</button></div>
       <p className="pj-muted">To withdraw consent, complain or ask a question about your data, write to Jobboard300. You can also complain to the Data Protection Board of India.</p>
     </section>
   </>;

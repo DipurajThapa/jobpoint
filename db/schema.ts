@@ -38,6 +38,14 @@ export const applications = sqliteTable("applications", {
   consent: integer("consent", { mode: "boolean" }).notNull(),
   shareConsent: integer("share_consent", { mode: "boolean" }).notNull().default(false),
   futureConsent: integer("future_consent", { mode: "boolean" }).notNull().default(false),
+  // WhatsApp updates are sent only when the applicant ticked this.
+  whatsappConsent: integer("whatsapp_consent", { mode: "boolean" }).notNull().default(false),
+  // Where the person came from: campaign tags, referring site (host only) and first page. See lib/attribution.ts.
+  source: text("source").notNull().default(""),
+  medium: text("medium").notNull().default(""),
+  campaign: text("campaign").notNull().default(""),
+  referrer: text("referrer").notNull().default(""),
+  landing: text("landing").notNull().default(""),
   privacyVersion: text("privacy_version").notNull().default("2026-10-13"),
   termsVersion: text("terms_version").notNull().default(""),
   consentAt: text("consent_at"),
@@ -64,6 +72,19 @@ export const employerEnquiries = sqliteTable("employer_enquiries", {
   status: text("status", { enum: ["new", "contacted", "in_progress", "closed"] }).notNull().default("new"),
   // The client (companies.id) this enquiry became, once it has.
   companyId: text("company_id"),
+  whatsappConsent: integer("whatsapp_consent", { mode: "boolean" }).notNull().default(false),
+  // A call with a consultant the employer asked for: start of a 30-minute slot (UTC).
+  meetingAt: text("meeting_at"),
+  meetingStatus: text("meeting_status", { enum: ["none", "requested", "confirmed", "done", "cancelled"] }).notNull().default("none"),
+  // What happened to the acknowledgement: sent, not_configured, failed, queued, no_consent.
+  ackEmail: text("ack_email").notNull().default(""),
+  ackWhatsapp: text("ack_whatsapp").notNull().default(""),
+  // Where the person came from: campaign tags, referring site (host only) and first page. See lib/attribution.ts.
+  source: text("source").notNull().default(""),
+  medium: text("medium").notNull().default(""),
+  campaign: text("campaign").notNull().default(""),
+  referrer: text("referrer").notNull().default(""),
+  landing: text("landing").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("enquiries_status_created_idx").on(table.status, table.createdAt), index("employer_enquiries_company_idx").on(table.companyId)]);
