@@ -2,14 +2,11 @@ import { env } from "cloudflare:workers";
 import { adminActor, isOwnerRequest } from "@/lib/admin";
 import { portalDb, portalSecret, json, fail, failFrom, sameOrigin } from "@/lib/portal/session";
 import { activateCompany, decideJd, decideParamRequest, requestParamChange } from "@/lib/portal/company";
-import { adjustQuota, assignPlan, upsertPlans } from "@/lib/portal/quota";
 import { mergeCandidates, primaryProfile, purgeExpiredStubs, resolveReview } from "@/lib/portal/candidate";
 import { drainQueue } from "@/lib/portal/queue";
 import { adminOverview } from "@/lib/portal/views";
-import { selfService } from "@/lib/portal/policy";
-import { DEFAULT_PLANS } from "@/lib/portal/plans";
 import { audit } from "@/lib/portal/db";
-import { adminClientWork, inviteClient, linkClientToOutreach, linkEnquiryToClient, outreachOrgs, setJdService, submissionCandidates, submitByRecruiter, updateClientTerms } from "@/lib/portal/client";
+import { adminClientWork, inviteClient, linkClientToOutreach, linkEnquiryToClient, outreachOrgs, setJdOpenings, submissionCandidates, submitByRecruiter, updateClientTerms } from "@/lib/portal/client";
 import { sendMail } from "@/lib/portal/mailer";
 import { weeklySummaries } from "@/lib/portal/notify";
 import { countUnlinkedWebsiteApplications, linkWebsiteApplication, unlinkedWebsiteApplications } from "@/lib/portal/website";
@@ -26,9 +23,7 @@ export async function GET(request: Request, context: Ctx) {
   const db = portalDb();
   try {
     if (action === "overview") {
-      const plans = await db.prepare("SELECT COUNT(*) AS n FROM plans").first<{ n: number }>();
-      if (!plans?.n) await upsertPlans(db, DEFAULT_PLANS);
-      return json({ ...await adminOverview(db), selfService: selfService(env.CLIENT_SELF_SERVICE), clientWork: await adminClientWork(db), websiteUnlinked: await countUnlinkedWebsiteApplications(db), outreachOrgs: await outreachOrgs(db) });
+      return json({ ...await adminOverview(db), clientWork: await adminClientWork(db), websiteUnlinked: await countUnlinkedWebsiteApplications(db), outreachOrgs: await outreachOrgs(db) });
     }
     if (action === "submission-candidates") return json({ candidates: await submissionCandidates(db, new URL(request.url).searchParams.get("jd") ?? "") });
     if (action === "review-cv") {
@@ -64,7 +59,7 @@ export async function POST(request: Request, context: Ctx) {
         return done(`${linked} website application(s) added to the candidate list${unreadable ? `; ${unreadable} CV(s) need manual review` : ""}.`);
       }
       case "client-invite": {
-        const out = await inviteClient(db, { displayName: s(b.displayName, 120), legalName: s(b.legalName, 160), city: s(b.city, 80), website: s(b.website), gstin: s(b.gstin, 15), ownerEmail: s(b.ownerEmail, 254), ownerName: s(b.ownerName, 120), guaranteeDays: Number(b.guaranteeDays ?? 60), nonSolicitMonths: Number(b.nonSolicitMonths ?? 12), feeTerms: s(b.feeTerms, 300), feePercent: b.feePercent == null || b.feePercent === "" ? undefined : Number(b.feePercent), params: b.params, plan: s(b.plan, 20) || "free" }, admin);
+        const out = await inviteClient(db, { displayName: s(b.displayName, 120), legalName: s(b.legalName, 160), city: s(b.city, 80), website: s(b.website), gstin: s(b.gstin, 15), ownerEmail: s(b.ownerEmail, 254), ownerName: s(b.ownerName, 120), guaranteeDays: Number(b.guaranteeDays ?? 60), nonSolicitMonths: Number(b.nonSolicitMonths ?? 12), feeTerms: s(b.feeTerms, 300), feePercent: b.feePercent == null || b.feePercent === "" ? undefined : Number(b.feePercent), params: b.params }, admin);
         // Invited from an employer enquiry: the enquiry remembers the client it became.
         if (s(b.enquiryId, 60)) await linkEnquiryToClient(db, s(b.enquiryId, 60), out.companyId, admin);
         const link = `${new URL(request.url).origin}/portal/accept?token=${out.token}`;
@@ -77,8 +72,8 @@ export async function POST(request: Request, context: Ctx) {
       case "jd-service": {
         const jd = await db.prepare("SELECT company_id, openings FROM jds WHERE id = ?").bind(s(b.jdId, 60)).first<{ company_id: string; openings: number }>();
         if (!jd) return fail("Job not found.", 404);
-        await setJdService(db, jd.company_id, s(b.jdId, 60), s(b.service, 10), Number(b.openings ?? jd.openings), admin);
-        return json({ message: "Job service updated." });
+        await setJdOpenings(db, jd.company_id, s(b.jdId, 60), Number(b.openings ?? jd.openings), admin);
+        return json({ message: "Openings saved." });
       }
       case "submit-candidate": {
         const out = await submitByRecruiter(db, portalSecret(), { companyId: s(b.companyId, 60), jdId: s(b.jdId, 60), candidateId: s(b.candidateId, 60), note: s(b.note, 2000) }, admin);
@@ -92,7 +87,7 @@ export async function POST(request: Request, context: Ctx) {
         await audit(db, admin, "placement.status", "placement", s(b.placementId, 60), status);
         return json({ message: "Placement updated." });
       }
-      case "company-activate": await activateCompany(db, s(b.companyId, 60), b.params, admin, s(b.plan, 20) || "free"); return done("Company approved with its matching parameters and plan.");
+      case "company-activate": await activateCompany(db, s(b.companyId, 60), b.params, admin); return done("Company approved with its matching rules.");
       case "company-params": { const id = await requestParamChange(db, s(b.companyId, 60), b.params, admin); const out = await decideParamRequest(db, id, true, admin, "Set by admin"); return done(`Parameters updated.${out.paused.length ? ` ${out.paused.length} live JD(s) paused because they no longer fit.` : ""}`); }
       case "company-status": {
         const status = s(b.status, 20);
@@ -101,9 +96,6 @@ export async function POST(request: Request, context: Ctx) {
         await audit(db, admin, `company.${status}`, "company", s(b.companyId, 60), s(b.note, 300));
         return done(`Company ${status}.`);
       }
-      case "plan-assign": await assignPlan(db, s(b.companyId, 60), s(b.plan, 20), admin); return json({ message: "Plan assigned. Payments are a stub: record the invoice separately." });
-      case "quota-adjust": await adjustQuota(db, s(b.companyId, 60), Number(b.delta), s(b.note, 300), admin); return json({ message: "Quota adjusted." });
-      case "params-decide": { const out = await decideParamRequest(db, s(b.requestId, 60), b.approve === true, admin, s(b.note, 500)); return done(b.approve === true ? `Parameters approved.${out.paused.length ? ` ${out.paused.length} live JD(s) paused.` : ""}` : "Request rejected."); }
       case "jd-decide": await decideJd(db, s(b.jdId, 60), b.approve === true, admin, s(b.note, 500)); return done(b.approve === true ? "JD is live. Matching CVs will be released automatically." : "JD rejected.");
       case "review-resolve": {
         const id = s(b.candidateId, 60), p = await primaryProfile(db, id);

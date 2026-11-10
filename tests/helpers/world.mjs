@@ -23,7 +23,7 @@ export const route = path => import(resolve(root, "app/api", path, "route.ts"));
 export const mods = {
   db: await lib("portal/db.ts"), accounts: await lib("portal/accounts.ts"), candidate: await lib("portal/candidate.ts"),
   company: await lib("portal/company.ts"), consent: await lib("portal/consent.ts"), client: await lib("portal/client.ts"),
-  quota: await lib("portal/quota.ts"), website: await lib("portal/website.ts"), staff: await lib("portal/staff.ts"),
+  website: await lib("portal/website.ts"), staff: await lib("portal/staff.ts"),
   views: await lib("portal/views.ts"), admin: await lib("admin.ts"), platformAuth: await lib("platform/auth.ts"),
 };
 
@@ -121,7 +121,6 @@ export async function call(mod, method, path, { cookie, body, action, params, he
  */
 export async function world() {
   const { db, BUCKET } = freshDb();
-  await mods.quota.upsertPlans(db, [{ code: "free", name: "Free allowance", unlockQuota: 3, validityDays: 30, priceInr: 0, isFree: true }]);
   const A = await makeCompany(db, "Alpha Steel Works", "owner@alpha-steel.example");
   const B = await makeCompany(db, "Bravo Logistics", "owner@bravo-logistics.example");
   const asha = await makeCandidate(db, BUCKET, "Asha Mukherjee", "asha.mukherjee@person.example", "9830011111");

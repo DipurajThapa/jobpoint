@@ -3,7 +3,7 @@
 // - Client accounts and team members are invited by Jobboard300 (registration
 //   can stay closed): an account without a password plus a one-time link.
 // - Managed searches: Jobboard300's recruiters submit candidates to a client's
-//   JD with a note. No unlock quota is used; the fee is on placement.
+//   JD with a note. The fee is on placement.
 // - The hiring pipeline per candidate and JD: submitted → shortlisted →
 //   interview → offered → offer accepted → joined, or a closed outcome with a
 //   reason. Interviews carry rounds, schedule and feedback.
@@ -79,7 +79,7 @@ async function createInvitedAccount(db: Db, email: string) {
   return id;
 }
 
-export type ClientInvite = { displayName: string; legalName: string; city: string; website?: string; gstin?: string; ownerEmail: string; ownerName?: string; guaranteeDays?: number; nonSolicitMonths?: number; feeTerms?: string; feePercent?: number; params: unknown; plan?: string };
+export type ClientInvite = { displayName: string; legalName: string; city: string; website?: string; gstin?: string; ownerEmail: string; ownerName?: string; guaranteeDays?: number; nonSolicitMonths?: number; feeTerms?: string; feePercent?: number; params: unknown };
 
 /**
  * Jobboard300 onboards a client directly: an active company with approved
@@ -99,7 +99,7 @@ export async function inviteClient(db: Db, input: ClientInvite, adminId: string)
       .bind(companyId, input.legalName.trim().slice(0, 160), input.displayName.trim().slice(0, 120), (input.gstin ?? "").trim().toUpperCase().slice(0, 15), (input.website ?? "").trim().slice(0, 200), (input.city ?? "").trim().slice(0, 80), guarantee, nonSolicit, (input.feeTerms ?? "").trim().slice(0, 300), fee, at),
     db.prepare("INSERT INTO company_users (id, company_id, account_id, role, display_name, created_at) VALUES (?, ?, ?, 'owner', ?, ?)").bind(newId(), companyId, accountId, (input.ownerName ?? "").trim().slice(0, 120), at),
   ]);
-  try { await activateCompany(db, companyId, input.params, adminId, input.plan || "free"); }
+  try { await activateCompany(db, companyId, input.params, adminId); }
   catch (error) { await db.batch([db.prepare("DELETE FROM companies WHERE id = ?").bind(companyId), db.prepare("DELETE FROM portal_accounts WHERE id = ?").bind(accountId)]); throw error; }
   const token = await issuePortalToken(db, accountId, "invite", INVITE_HOURS);
   await audit(db, adminId, "client.invited", "company", companyId, `account ${accountId}`);
@@ -221,31 +221,11 @@ async function openJd(db: Db, companyId: string, jdId: string) {
   return jd;
 }
 
-/** Company adds an unlocked candidate to a job's pipeline (stage: shortlisted). */
-export async function addToPipeline(db: Db, companyId: string, actorId: string, ref: string, jdId: string) {
-  await openJd(db, companyId, jdId);
-  const u = await db.prepare("SELECT candidate_id, access_revoked_at FROM unlocks WHERE company_id = ? AND candidate_ref = ?").bind(companyId, ref).first<{ candidate_id: string; access_revoked_at: string | null }>();
-  if (!u) throw new PortalError("NOT_UNLOCKED", "Unlock this profile before adding it to your pipeline.", 403);
-  if (u.access_revoked_at) throw new PortalError("CONSENT_WITHDRAWN", "The candidate has withdrawn consent; this profile is no longer available.", 410);
-  const existing = await db.prepare("SELECT id FROM pipeline WHERE company_id = ? AND jd_id = ? AND candidate_id = ?").bind(companyId, jdId, u.candidate_id).first<{ id: string }>();
-  if (existing) return { id: existing.id, created: false };
-  const applied = await db.prepare("SELECT 1 AS x FROM portal_applications WHERE candidate_id = ? AND jd_id = ?").bind(u.candidate_id, jdId).first();
-  const id = newId(), at = nowIso();
-  await db.batch([
-    db.prepare("INSERT INTO pipeline (id, company_id, jd_id, candidate_id, candidate_ref, source, stage, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'shortlisted', ?, ?, ?)")
-      .bind(id, companyId, jdId, u.candidate_id, ref, applied ? "application" : "release", actorId, at, at),
-    db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, at) VALUES (?, ?, 'shortlisted', ?, ?)").bind(newId(), id, actorLabel(actorId), at),
-    ...await syncApplication(db, u.candidate_id, jdId, "shortlisted", actorLabel(actorId), { pipelineId: id, at }),
-  ]);
-  await notifyStage(db, { candidateId: u.candidate_id, companyId, jdId, stage: "shortlisted", byStaff: false });
-  return { id, created: true };
-}
 
 /**
  * Jobboard300 submits a candidate to a client's managed search. Requires the
  * candidate's active consent to share, the company not being hidden by the
- * candidate, and a live managed JD. Grants the client access without using
- * unlock quota (subscription "managed"); the fee is on placement.
+ * candidate, and a live JD. The fee is on placement.
  */
 export async function submitByRecruiter(db: Db, secret: string, input: { companyId: string; jdId: string; candidateId: string; note: string }, adminId: string) {
   const { companyId, jdId, candidateId } = input;
@@ -253,7 +233,6 @@ export async function submitByRecruiter(db: Db, secret: string, input: { company
   if (company?.status !== "active") throw new PortalError("COMPANY_NOT_ACTIVE", "The client account is not active.");
   const jd = await openJd(db, companyId, jdId);
   if (jd.status !== "live") throw new PortalError("NOT_LIVE", "The job must be live before candidates are submitted.");
-  if (jd.service !== "managed") throw new PortalError("NOT_MANAGED", "This job is self-service. Switch it to a managed search first.");
   const cand = await db.prepare("SELECT status, hidden_company_ids, hidden_company_names FROM candidates WHERE id = ?").bind(candidateId).first<{ status: string; hidden_company_ids: string; hidden_company_names: string }>();
   if (!cand || cand.status !== "active") throw new PortalError("NOT_FOUND", "Candidate not found or not active.", 404);
   const names = await db.prepare("SELECT display_name, legal_name FROM companies WHERE id = ?").bind(companyId).first<{ display_name: string; legal_name: string }>();
@@ -504,11 +483,11 @@ export async function submissionCandidates(db: Db, jdId: string) {
   return results.map(r => ({ ...r, explanation: parseJson<{ summary?: string }>(r.explanation, {}).summary ?? "" }));
 }
 
-export async function setJdService(db: Db, companyId: string, jdId: string, service: string, openings: number, actor: string) {
-  if (!["self", "managed"].includes(service)) throw new PortalError("SERVICE", "Choose self-service or a managed search.");
+/** How many people the client wants to hire for the job. */
+export async function setJdOpenings(db: Db, companyId: string, jdId: string, openings: number, actor: string) {
   const n = Math.round(Number(openings));
   if (!(n >= 1 && n <= 500)) throw new PortalError("OPENINGS", "Openings must be between 1 and 500.");
-  const r = await db.prepare("UPDATE jds SET service = ?, openings = ?, updated_at = ? WHERE id = ? AND company_id = ?").bind(service, n, nowIso(), jdId, companyId).run();
+  const r = await db.prepare("UPDATE jds SET service = 'managed', openings = ?, updated_at = ? WHERE id = ? AND company_id = ?").bind(n, nowIso(), jdId, companyId).run();
   if (!r.meta.changes) throw new PortalError("NOT_FOUND", "Job not found.", 404);
-  await audit(db, actor, "jd.service", "jd", jdId, `${service}, ${n} opening(s)`);
+  await audit(db, actor, "jd.openings", "jd", jdId, `${n} opening(s)`);
 }

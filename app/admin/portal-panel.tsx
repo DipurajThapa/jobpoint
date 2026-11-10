@@ -1,11 +1,11 @@
 "use client";
 // Platform admin for the job portal (site owner only): onboarding and matching
-// parameters, parameter and JD approvals, plans and quota, review queues,
-// duplicates, abuse flags, and the release and unlock log.
+// parameters, JD approvals, review queues,
+// duplicates, abuse flags, and the log of candidates shared with clients.
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Row = Record<string, string | number | null>;
-type Overview = { selfService?: boolean; websiteUnlinked?: number; companies: Row[]; paramRequests: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; plans: Row[]; clientWork?: { managed: Row[]; placements: Row[] }; outreachOrgs?: { id: string; name: string }[] };
+type Overview = { websiteUnlinked?: number; companies: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; clientWork?: { managed: Row[]; placements: Row[] }; outreachOrgs?: { id: string; name: string }[] };
 const ROLE_FAMILIES = ["accounts-finance", "sales-bd", "customer-support", "operations-supply", "hr-admin", "software-it", "marketing", "manufacturing-engineering", "healthcare", "education", "hospitality-retail", "field-services"];
 const SENIORITY = ["fresher", "junior", "mid", "senior", "lead"];
 
@@ -46,9 +46,9 @@ function ParamsFields() {
   </div>;
 }
 
-function InviteClient({ plans, selfService, act }: { plans: Row[]; selfService: boolean; act: (action: string, body: object) => Promise<boolean> }) {
+function InviteClient({ act }: { act: (action: string, body: object) => Promise<boolean> }) {
   return <form className="admin-form" onSubmit={async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const form = e.currentTarget, f = new FormData(form);
-    const ok = await act("client-invite", { displayName: f.get("displayName"), legalName: f.get("legalName"), city: f.get("city"), website: f.get("website"), gstin: f.get("gstin"), ownerName: f.get("ownerName"), ownerEmail: f.get("ownerEmail"), guaranteeDays: Number(f.get("guaranteeDays")), nonSolicitMonths: Number(f.get("nonSolicitMonths")), feeTerms: f.get("feeTerms"), feePercent: Number(f.get("feePercent")), params: paramsFrom(f), plan: f.get("plan") ?? "free" });
+    const ok = await act("client-invite", { displayName: f.get("displayName"), legalName: f.get("legalName"), city: f.get("city"), website: f.get("website"), gstin: f.get("gstin"), ownerName: f.get("ownerName"), ownerEmail: f.get("ownerEmail"), guaranteeDays: Number(f.get("guaranteeDays")), nonSolicitMonths: Number(f.get("nonSolicitMonths")), feeTerms: f.get("feeTerms"), feePercent: Number(f.get("feePercent")), params: paramsFrom(f) });
     if (ok) form.reset(); }}>
     <div className="form-grid">
       <label>Company name<input name="displayName" required maxLength={120} /></label><label>Registered legal name<input name="legalName" required maxLength={160} /></label>
@@ -60,7 +60,7 @@ function InviteClient({ plans, selfService, act }: { plans: Row[]; selfService: 
       <label className="full-field">Other fee terms (shown to you only)<input name="feeTerms" maxLength={300} placeholder="e.g. payable within 30 days of joining" /></label>
     </div>
     <ParamsFields />
-    {selfService && <label>Starting plan<select name="plan">{plans.map(p => <option key={String(p.code)} value={String(p.code)}>{p.name} ({p.unlock_quota} unlocks, {p.validity_days} days)</option>)}</select></label>}
+    
     <button className="button button-small">Create client and get sign-in link</button>
   </form>;
 }
@@ -96,7 +96,7 @@ export default function PortalPanel() {
   return <div className="admin-portal">
     {notice && <p className="admin-notice" role="status">{notice}</p>}
     <section className="admin-records"><h2>Overview</h2>
-      <p>{pending.length} company application(s) · {o.paramRequests.length} parameter request(s) · {o.pendingJds.length} JD(s) awaiting approval · {o.reviews.length} CV(s) in manual review · {o.duplicates.length} duplicate flag(s) · {o.flags.length} abuse flag(s) · {o.queue} scoring job(s) queued</p>
+      <p>{pending.length} company application(s) · {o.pendingJds.length} JD(s) awaiting approval · {o.reviews.length} CV(s) in manual review · {o.duplicates.length} duplicate flag(s) · {o.flags.length} abuse flag(s) · {o.queue} scoring job(s) queued</p>
       <div className="admin-record-actions"><button className="button button-small" onClick={() => act("run-queue", {})}>Run scoring now</button>
         <form onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); act("verify-link", { email: f.get("email"), purpose: f.get("purpose") }); }} className="admin-record-actions">
           <input name="email" type="email" placeholder="account email" required /><select name="purpose"><option value="verify">Verification link</option><option value="reset">Password reset link</option></select><button className="text-link">Issue link</button></form></div>
@@ -110,11 +110,11 @@ export default function PortalPanel() {
     <section className="admin-records"><h2>Clients</h2>
       <p className="admin-help">Set up a client account yourself. This works while public registration is closed. You get a one-time link for the client&apos;s owner, valid for 7 days. If email is configured, the owner is also emailed.</p>
       <button className="text-link" onClick={() => setOpen(open === "invite" ? null : "invite")}>{open === "invite" ? "Cancel" : "Invite a client"}</button>
-      {open === "invite" && <InviteClient plans={o.plans} selfService={!!o.selfService} act={async (a, b) => { const ok = await act(a, b); if (ok) setOpen(null); return ok; }} />}
+      {open === "invite" && <InviteClient act={async (a, b) => { const ok = await act(a, b); if (ok) setOpen(null); return ok; }} />}
     </section>
 
     <section className="admin-records"><h2>Managed searches <span>{o.clientWork?.managed.length ?? 0}</span></h2>
-      <p className="admin-help">Jobs where the client asked Jobboard300 to recruit. Submitting a candidate needs their consent to share. It uses no unlock quota; the fee is on placement.</p>
+      <p className="admin-help">Jobs where the client asked Jobboard300 to recruit. Submitting a candidate needs their consent to share. The fee is on placement.</p>
       {(o.clientWork?.managed ?? []).length === 0 ? <p>None.</p> : o.clientWork!.managed.map(j => <ManagedSearch key={String(j.id)} jd={j} act={act} />)}
     </section>
 
@@ -130,13 +130,13 @@ export default function PortalPanel() {
         <p className="admin-help">{Number(c.enquiries) > 0 ? `Came from ${c.enquiries} website enquiry(ies). ` : ""}<label>Email Kit organisation <select value={String(c.email_kit_org_id ?? "")} onChange={e => act("client-outreach-link", { companyId: c.id, orgId: e.target.value })}><option value="">Not linked</option>{c.email_kit_org_id && !(o.outreachOrgs ?? []).some(g => g.id === c.email_kit_org_id) && <option value={String(c.email_kit_org_id)}>{c.outreach_org || "Linked organisation"}</option>}{(o.outreachOrgs ?? []).map(g => <option key={g.id} value={g.id}>{g.name || g.id}</option>)}</select></label></p>
         {c.status === "applied" && <>
           <button className="text-link" onClick={() => setOpen(open === c.id ? null : String(c.id))}>{open === c.id ? "Cancel" : "Approve with matching parameters"}</button>
-          {open === c.id && <form className="admin-form" onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); act("company-activate", { companyId: c.id, params: paramsFrom(f), plan: f.get("plan") ?? "free" }).then(() => setOpen(null)); }}>
-            <ParamsFields />{o.selfService && <label>Starting plan<select name="plan">{o.plans.map(p => <option key={String(p.code)} value={String(p.code)}>{p.name} ({p.unlock_quota} unlocks, {p.validity_days} days{p.price_inr ? `, ₹${p.price_inr} + GST` : ""})</option>)}</select></label>}
+          {open === c.id && <form className="admin-form" onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); act("company-activate", { companyId: c.id, params: paramsFrom(f) }).then(() => setOpen(null)); }}>
+            <ParamsFields />
             <button className="button button-small">Approve company</button></form>}
         </>}
         {c.status === "active" && <div className="admin-record-actions">
-          {o.selfService && <select defaultValue="" onChange={e => e.target.value && act("plan-assign", { companyId: c.id, plan: e.target.value }, `Assign the ${e.target.value} plan? Record the invoice separately (payments are a stub).`)}><option value="">Assign plan…</option>{o.plans.filter(p => !p.is_free).map(p => <option key={String(p.code)} value={String(p.code)}>{p.name}</option>)}</select>}
-          {o.selfService && <button className="text-link" onClick={() => { const d = window.prompt("Adjust unlock quota by (e.g. 10 or -5):"); const n = d && window.prompt("Reason:"); if (d && n) act("quota-adjust", { companyId: c.id, delta: Number(d), note: n }); }}>Adjust quota</button>}
+          
+          
           <button className="text-link" onClick={() => setOpen(open === `p${c.id}` ? null : `p${c.id}`)}>Change parameters</button>
           <button className="text-link" onClick={() => { const fp = window.prompt("Placement fee, % of annual salary (7.5 to 8.33):", String(c.fee_percent ?? 8.33)); if (fp === null) return; const g = window.prompt("Replacement guarantee (days):", String(c.guarantee_days ?? 60)); if (g === null) return; const n = window.prompt("Months Jobboard300 will not approach people placed here about other jobs:", String(c.non_solicit_months ?? 12)); if (n === null) return; const t = window.prompt("Other fee terms:", String(c.fee_terms ?? "")); if (t !== null) act("client-terms", { companyId: c.id, feePercent: Number(fp), guaranteeDays: Number(g), nonSolicitMonths: Number(n), feeTerms: t }); }}>Client terms</button>
           <button className="delete-link" onClick={() => act("company-status", { companyId: c.id, status: "suspended" }, "Suspend this company? Its users lose access to the portal.")}>Suspend</button>
@@ -146,11 +146,6 @@ export default function PortalPanel() {
       </div></article>)}
     </section>
 
-    <section className="admin-records"><h2>Parameter change requests <span>{o.paramRequests.length}</span></h2>
-      {o.paramRequests.length === 0 ? <p>None.</p> : o.paramRequests.map(r => <article className="admin-detail" key={String(r.id)}><div><b>{r.display_name}</b> · version {r.version}
-        <p><b>Requested:</b> <code>{String(r.params)}</code></p><p><b>Current:</b> <code>{String(r.current)}</code></p>
-        <div className="admin-record-actions"><button className="button button-small" onClick={() => act("params-decide", { requestId: r.id, approve: true })}>Approve</button><button className="delete-link" onClick={() => { const n = window.prompt("Reason for rejecting:"); if (n) act("params-decide", { requestId: r.id, approve: false, note: n }); }}>Reject</button></div></div></article>)}
-    </section>
 
     <section className="admin-records"><h2>Jobs awaiting approval <span>{o.pendingJds.length}</span></h2>
       {o.pendingJds.length === 0 ? <p>None.</p> : o.pendingJds.map(j => { const r = JSON.parse(String(j.requirements)); return <article className="admin-detail" key={String(j.id)}><div><b>{j.title}</b> · {j.display_name}
@@ -174,7 +169,7 @@ export default function PortalPanel() {
     <section className="admin-records"><h2>Possible duplicates <span>{o.duplicates.length}</span></h2>
       <p className="admin-help">Until you resolve a CV duplicate, only the earlier record can be shown to companies. Showing up to 50, CV duplicates first.</p>
       {o.duplicates.map(d => { const [keep, drop] = String(d.a_created) <= String(d.b_created) ? [d.a_id, d.b_id] : [d.b_id, d.a_id]; const keepName = keep === d.a_id ? d.a_name : d.b_name, dropName = keep === d.a_id ? d.b_name : d.a_name; return <article key={String(d.id)}><div><b>{d.kind === "cv" ? "Same or near-identical CV" : "Same contact details"} · {String(d.signal).replace(/_/g, " ")}</b><p>{keepName || "Candidate"} (earlier) and {dropName || "Candidate"} (later) · {String(d.created_at).slice(0, 10)}</p></div>
-        <div className="admin-record-actions"><button className="text-link" onClick={() => act("merge", { survivorId: keep, duplicateId: drop }, `Merge ${dropName || "the later record"} into ${keepName || "the earlier record"}? Releases and unlocks follow the earlier record.`)}>Merge into earlier</button><button className="text-link" onClick={() => act("duplicate-dismiss", { flagId: d.id })}>Not a duplicate</button></div></article>; })}
+        <div className="admin-record-actions"><button className="text-link" onClick={() => act("merge", { survivorId: keep, duplicateId: drop }, `Merge ${dropName || "the later record"} into ${keepName || "the earlier record"}? Pipeline history follows the earlier record.`)}>Merge into earlier</button><button className="text-link" onClick={() => act("duplicate-dismiss", { flagId: d.id })}>Not a duplicate</button></div></article>; })}
     </section>
 
     <section className="admin-records"><h2>Abuse flags <span>{o.flags.length}</span></h2>
@@ -182,7 +177,7 @@ export default function PortalPanel() {
         <div className="admin-record-actions"><button className="delete-link" onClick={() => act("flag-resolve", { flagId: f.id, suspend: true }, "Suspend this account and sign it out?")}>Suspend account</button><button className="text-link" onClick={() => act("flag-resolve", { flagId: f.id, suspend: false })}>Dismiss</button></div></article>)}
     </section>
 
-    <section className="admin-records"><h2>Release and unlock log</h2>
+    <section className="admin-records"><h2>Candidates shared with clients</h2>
       <table className="pj-table"><thead><tr><th>When</th><th>Event</th><th>Company</th><th>Job</th><th>Candidate ref</th><th>Score</th><th>Revoked</th></tr></thead>
         <tbody>{o.log.map((l, i) => <tr key={i}><td>{String(l.at).slice(0, 16).replace("T", " ")}</td><td>{l.kind}</td><td>{l.company}</td><td>{l.jd}</td><td>{l.candidate}</td><td>{l.score === null ? "" : Math.round(Number(l.score))}</td><td>{l.revoked_at ? String(l.revoked_at).slice(0, 10) : ""}</td></tr>)}</tbody></table>
     </section>

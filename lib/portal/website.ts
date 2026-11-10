@@ -24,7 +24,7 @@
 
 import { audit, newId, nowIso, sha256Hex, type Db } from "./db";
 import { consentActive, recordConsent, withdrawSharing } from "./consent";
-import { createCandidate, deleteCandidateData, mergeCandidates, normEmail, normPhone } from "./candidate";
+import { contactEmail, contactPhone, createCandidate, deleteCandidateData, mergeCandidates, normEmail, normPhone } from "./candidate";
 import { notifyCandidate } from "./notify";
 import { recordRoleApplication } from "./vacancy";
 import { enqueue } from "./company";
@@ -110,8 +110,8 @@ export async function syncWebsiteProfile(db: Db, applicationId: string, details:
       WHERE s.kind = 'website_application' AND s.ref_id = ? AND c.account_id IS NULL AND c.status NOT IN ('merged','deleted')`).bind(applicationId).first<{ id: string }>();
   if (!row) return false;
   const phone = normPhone(details.phone);
-  await db.prepare("UPDATE candidates SET display_name = ?, current_city = ?, dedupe_email_hash = ?, dedupe_phone_hash = ? WHERE id = ?")
-    .bind(details.fullName.trim().slice(0, 120), details.location.trim().slice(0, 80), await sha256Hex(normEmail(details.email)), phone.length === 10 ? await sha256Hex(phone) : "", row.id).run();
+  await db.prepare("UPDATE candidates SET display_name = ?, current_city = ?, email = ?, phone = ?, dedupe_email_hash = ?, dedupe_phone_hash = ? WHERE id = ?")
+    .bind(details.fullName.trim().slice(0, 120), details.location.trim().slice(0, 80), contactEmail(details.email), contactPhone(details.phone), await sha256Hex(normEmail(details.email)), phone.length === 10 ? await sha256Hex(phone) : "", row.id).run();
   await audit(db, actor, "candidate.website_corrected", "candidate", row.id, `application ${applicationId}`);
   return true;
 }

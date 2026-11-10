@@ -6,10 +6,6 @@
 // submits each candidate, and the client can see that person only while the
 // hiring process for them is open. How candidates are selected stays internal:
 // clients never see scores, rankings, match counts or the reasons behind them.
-//
-// The older self-service mode (clients browse anonymised matches and unlock
-// profiles against a quota) stays in the code behind CLIENT_SELF_SERVICE=true
-// and is off unless the owner turns it on.
 
 export const FEE = { minPct: 7.5, maxPct: 8.33, defaultPct: 8.33, guaranteeDays: 60 } as const;
 
@@ -21,7 +17,6 @@ export const ACCESS_STAGES = ["submitted", "shortlisted", "interview", "offered"
 /** Stages from which the client also gets the candidate's contact details. Before that, Jobboard300 arranges every interview. */
 export const CONTACT_STAGES = ["offered", "offer_accepted"] as const;
 
-export const selfService = (flag: string | undefined) => flag === "true";
 
 export function feePercent(value: unknown): number {
   const n = Math.round(Number(value ?? FEE.defaultPct) * 100) / 100;

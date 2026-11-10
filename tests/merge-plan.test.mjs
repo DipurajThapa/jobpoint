@@ -27,16 +27,16 @@ test("the data inventory counts every table in the plan and exposes numbers only
   assert.equal(line("6", "Employer enquiries").rows, 1);
   assert.equal(line("6", "Clients").rows, 2);
   const text = inventoryLib.inventoryText(inv);
-  assert.match(text, /Merge 6: Employers/);
+  assert.match(text, /6\. Employers/);
   for (const secret of [w.asha.email, w.asha.name, w.asha.phone, "rina@alpha-steel.example", "Alpha Steel"]) assert.ok(!JSON.stringify(inv).includes(secret) && !text.includes(secret), `inventory leaks ${secret}`);
 });
 
-test("a table that a later merge removes is reported, not an error", async () => {
+test("a table the inventory cannot read is reported, not an error", async () => {
   const w = await world();
-  w.db.raw.exec("DROP TABLE retired_service_enrolments");
+  w.db.raw.exec("DROP TABLE placements");
   const inv = await inventoryLib.dataInventory(w.db);
-  assert.equal(inv.groups.find(g => g.merge === "5").lines.find(l => l.table === "retired_service_enrolments").rows, null);
-  assert.match(inventoryLib.inventoryText(inv), /Service enrolments: table removed/);
+  assert.equal(inv.groups.find(g => g.merge === "2").lines.find(l => l.table === "placements").rows, null);
+  assert.match(inventoryLib.inventoryText(inv), /Placements: table removed/);
 });
 
 test("the inventory is for administrators only and changes nothing", async () => {
@@ -197,7 +197,7 @@ test("merge 7: views are logged in the audit table and stay out of the activity 
 });
 
 // ---- Merges 4 and 5: one test system, one orders table ----
-test("merges 4 and 5: retired tables keep their rows under a new name, and Fast Track orders become orders", () => {
+test("merges 4 and 5: the old test and services tables are gone, and Fast Track orders become orders", () => {
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   const first = "0017_one_test_system.sql";
@@ -216,14 +216,14 @@ test("merges 4 and 5: retired tables keep their rows under a new name, and Fast 
   for (const f of migrationFiles.filter(f => f >= first)) applyFile(db, f);
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name);
   for (const old of ["assessments", "assessment_items", "assessment_attempts", "assessment_responses", "services", "service_orders", "service_enrolments", "payment_intents", "fast_track_orders"]) assert.ok(!tables.includes(old), `${old} still exists`);
-  for (const kept of ["retired_assessments", "retired_assessment_items", "retired_assessment_attempts", "retired_assessment_responses", "retired_services", "retired_service_orders", "retired_service_enrolments", "retired_payment_intents"])
-    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ${kept}`).get().n, 1, `${kept} lost its row`);
-  assert.equal(db.prepare("SELECT score FROM retired_assessment_attempts WHERE id = 'at-1'").get().score, 0.8);
+  // 0020 drops the retired tables for good (the owner confirmed there is no live data).
+  assert.deepEqual(tables.filter(t => t.startsWith("retired_")), []);
+  for (const gone of ["plans", "company_subscriptions", "quota_ledger"]) assert.ok(!tables.includes(gone), `${gone} still exists`);
   assert.deepEqual({ ...db.prepare("SELECT id, kind, reference, amount_inr, status FROM orders").get() }, { id: "ft-1", kind: "fast_track", reference: "FT-1", amount_inr: 1499, status: "paid" });
   assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
-  // Removing the person still removes their rows in the retired tables and their orders.
+  // Removing the person still removes their orders.
   db.exec("DELETE FROM candidates WHERE id = 'cand-1'");
-  for (const t of ["retired_assessment_attempts", "retired_assessment_responses", "retired_service_orders", "retired_service_enrolments", "orders"]) assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n, 0, `${t} kept the person's row`);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM orders").get().n, 0);
 });
 
 test("merge 4: the old test routes are gone and matching reads adaptive results", async () => {
@@ -453,6 +453,91 @@ test("merge 2: the old stage list is read-only and CV screening is gone", async 
   assert.equal((await patch({ notes: "new note" })).status, 200);
   assert.deepEqual({ ...w.db.raw.prepare("SELECT status, recruiter_notes FROM applications WHERE id = 'app-h1'").get() }, { status: "qualified", recruiter_notes: "new note" });
   const tables = w.db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name);
-  assert.ok(tables.includes("retired_ats_screenings") && !tables.includes("ats_screenings"));
+  assert.ok(!tables.some(t => t.includes("ats_screenings") || t.includes("ats_job_profiles")));
   await assert.rejects(import(resolve(root, "app/api/admin/ats/route.ts")));
+});
+
+// ---- Contact details on the candidate record, and merge 3 (self-service removed) ----
+test("a candidate record carries the person's email and phone, from the portal and from the website", async () => {
+  const w = await world();
+  // Portal sign-up.
+  assert.deepEqual({ ...w.db.raw.prepare("SELECT email, phone FROM candidates WHERE id = ?").get(w.asha.id) }, { email: w.asha.email, phone: w.asha.phone });
+  // Website application: stored as typed (trimmed, lower-case email), while the match code still ignores dots and +tags.
+  const site = await mods.website.linkWebsiteApplication(w.db, w.BUCKET, webApp("app-k1", "  Kiran.Bose+jobs@Gmail.com ", { fullName: "Kiran Bose", phone: "+91 98300 12345" }), null);
+  assert.deepEqual({ ...w.db.raw.prepare("SELECT email, phone FROM candidates WHERE id = ?").get(site.candidateId) }, { email: "kiran.bose+jobs@gmail.com", phone: "+91 98300 12345" });
+  // A correction in the owner console reaches the record.
+  await w.db.prepare("INSERT INTO applications (id, full_name, email, phone, location, experience, consent) VALUES ('app-k1', 'Kiran Bose', 'kiran.bose+jobs@gmail.com', '+91 98300 12345', 'Kolkata', 'x', 1)").run();
+  await mods.website.syncWebsiteProfile(w.db, "app-k1", { fullName: "Kiran Bose", email: "kiran@new.example", phone: "9830054321", location: "Howrah" }, "owner");
+  assert.deepEqual({ ...w.db.raw.prepare("SELECT email, phone FROM candidates WHERE id = ?").get(site.candidateId) }, { email: "kiran@new.example", phone: "9830054321" });
+});
+
+test("staff get the record's contact details, even when the person has no readable CV", async () => {
+  const w = await world();
+  const role = (await postRole({ status: "published", companyId: w.A.id })).json.id;
+  const lata = await websiteApplicant(w, "app-l1", "Lata Roy", "lata.roy@person.example", { jobId: role, share: true });
+  await w.db.prepare("UPDATE candidates SET phone = '9830011223' WHERE id = ?").bind(lata).run();
+  const staff = { id: "boss", admin: true };
+  await makeStaff(w.db, "boss", { admin: true });
+  const staffLib = await import(resolve(root, "lib/portal/staff.ts"));
+  const out = await staffLib.staffContact(w.db, staff, { jdId: role, candidateId: lata });
+  assert.deepEqual(out, { name: "Lata Roy", phone: "9830011223", email: "lata.roy@person.example" });
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM audit_events WHERE kind = 'access' AND action = 'contact_view' AND detail = ?").get(lata).n, 1, "the view was not logged");
+});
+
+test("deleting a person clears the email and phone from their record", async () => {
+  const w = await world();
+  await mods.candidate.deleteCandidateData(w.db, w.asha.id, "admin");
+  assert.deepEqual({ ...w.db.raw.prepare("SELECT status, email, phone, display_name FROM candidates WHERE id = ?").get(w.asha.id) }, { status: "deleted", email: "", phone: "", display_name: "" });
+  assert.deepEqual({ ...w.db.raw.prepare("SELECT email, phone FROM candidates WHERE id = ?").get(w.bikram.id) }, { email: w.bikram.email, phone: w.bikram.phone });
+});
+
+test("migration 0020 fills email and phone for existing records and removes plans and quotas", () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec("PRAGMA foreign_keys = ON");
+  const last = "0020_contact_details_and_cleanup.sql";
+  for (const f of migrationFiles.filter(f => f < last)) applyFile(db, f);
+  const at = "2026-11-01T10:00:00.000Z";
+  db.exec(`INSERT INTO portal_accounts (id, kind, email, phone, status, created_at) VALUES ('acc-1', 'candidate', 'asha@person.example', '9830011111', 'active', '${at}');
+    INSERT INTO candidates (id, account_id, display_name, last_active_at, created_at) VALUES ('cand-portal', 'acc-1', 'Asha', '${at}', '${at}'), ('cand-web', NULL, 'Bikram', '${at}', '${at}'), ('cand-gone', NULL, '', '${at}', '${at}');
+    UPDATE candidates SET status = 'deleted' WHERE id = 'cand-gone';
+    INSERT INTO applications (id, full_name, email, phone, location, experience, consent, created_at) VALUES ('app-old', 'Bikram', 'old@person.example', '9830000001', 'K', 'x', 1, '2026-10-01 10:00:00'), ('app-new', 'Bikram', 'bikram@person.example', '9830022222', 'K', 'x', 1, '2026-11-01 10:00:00'), ('app-gone', 'Gone', 'gone@person.example', '9830033333', 'K', 'x', 1, '2026-11-01 10:00:00');
+    INSERT INTO candidate_sources (id, candidate_id, kind, ref_id, created_at) VALUES ('s1', 'cand-web', 'website_application', 'app-old', '${at}'), ('s2', 'cand-web', 'website_application', 'app-new', '${at}'), ('s3', 'cand-gone', 'website_application', 'app-gone', '${at}');
+    INSERT INTO companies (id, legal_name, display_name, created_at) VALUES ('co-1', 'Alpha Pvt Ltd', 'Alpha', '${at}');
+    INSERT INTO jds (id, company_id, title, raw_text, requirements, status, service, created_by, created_at, updated_at) VALUES ('jd-1', 'co-1', 'T', 'x', '{}', 'live', 'self', 'u', '${at}', '${at}');
+    INSERT INTO company_parameters (id, company_id, version, params, status, requested_by, created_at) VALUES ('p1', 'co-1', 1, '{}', 'approved', 'a', '${at}'), ('p2', 'co-1', 2, '{}', 'requested', 'u', '${at}');`);
+  applyFile(db, last);
+  const row = id => ({ ...db.prepare("SELECT email, phone FROM candidates WHERE id = ?").get(id) });
+  assert.deepEqual(row("cand-portal"), { email: "asha@person.example", phone: "9830011111" });
+  assert.deepEqual(row("cand-web"), { email: "bikram@person.example", phone: "9830022222" }, "the latest website application should supply the contact details");
+  assert.deepEqual(row("cand-gone"), { email: "", phone: "" }, "a deleted record was given contact details back");
+  assert.equal(db.prepare("SELECT service FROM jds WHERE id = 'jd-1'").get().service, "managed");
+  assert.deepEqual(db.prepare("SELECT id, status FROM company_parameters ORDER BY id").all().map(r => ({ ...r })), [{ id: "p1", status: "approved" }, { id: "p2", status: "rejected" }]);
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name);
+  for (const gone of ["plans", "company_subscriptions", "quota_ledger"]) assert.ok(!tables.includes(gone), `${gone} still exists`);
+  for (const kept of ["releases", "unlocks", "company_parameters"]) assert.ok(tables.includes(kept), `${kept} was dropped`);
+  assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+});
+
+test("merge 3: a client is set up without a plan, scoring shows the client nothing, and a recruiter's submission still works", async () => {
+  const w = await world();
+  // The standard world invited two clients and submitted one candidate to each, with no plans table at all.
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM pipeline").get().n, 2);
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM releases WHERE revoked_at IS NULL").get().n, 2);
+  // Draining the scoring queue adds matches but never a release.
+  await mods.company.enqueue(w.db, "jd", w.A.jdId, "test").run();
+  const out = await queueLib.drainQueue(w.db, SECRET, 400);
+  assert.ok(!("releases" in out));
+  assert.ok(w.db.raw.prepare("SELECT COUNT(*) AS n FROM matches WHERE jd_id = ?").get(w.A.jdId).n >= 1);
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM releases WHERE revoked_at IS NULL").get().n, 2);
+  // The client's dashboard carries no quota, plans or match counts.
+  const { portalCookie } = await import("./helpers/world.mjs");
+  const dash = await call(await route("portal/company/[action]"), "GET", "/api/portal/company/dashboard", { cookie: await portalCookie(w.A.email), action: "dashboard" });
+  assert.equal(dash.status, 200, dash.text);
+  for (const key of ["quota", "pendingRequest", "selfService"]) assert.ok(!(key in dash.json), `the dashboard still returns ${key}`);
+  // The owner console has no plan or quota actions.
+  const owner = await route("admin/portal/[action]");
+  for (const action of ["plan-assign", "quota-adjust", "params-decide"]) assert.ok((await call(owner, "POST", `/api/admin/portal/${action}`, { action, headers: OWNER, body: { companyId: w.A.id, plan: "starter", delta: 5, note: "x" } })).status >= 400, action);
+  const overview = await call(owner, "GET", "/api/admin/portal/overview", { action: "overview", headers: OWNER });
+  assert.equal(overview.status, 200, overview.text);
+  for (const key of ["plans", "paramRequests", "selfService"]) assert.ok(!(key in overview.json), `the overview still returns ${key}`);
 });

@@ -3,12 +3,8 @@
 // no query that lets a company search the candidate database.
 
 import { parseJson, PortalError, type Db } from "./db";
-import { ACTIVE_CONSENT_SQL } from "./consent";
 import { currentParams } from "./company";
-import { quotaStatus } from "./quota";
 import { primaryProfile } from "./candidate";
-import { buildPreview, type Preview } from "./preview";
-import { adaptiveEvidence } from "./adaptive";
 import { formatLpa } from "./india";
 import { roleFamilyById } from "./roles";
 import type { PortalRequirements } from "./jd";
@@ -58,35 +54,11 @@ export async function companyDashboard(db: Db, companyId: string) {
   const company = await db.prepare("SELECT id, display_name, legal_name, status, city FROM companies WHERE id = ?").bind(companyId).first<{ id: string; display_name: string; legal_name: string; status: string; city: string }>();
   if (!company) throw new PortalError("NOT_FOUND", "Company not found.", 404);
   const params = await currentParams(db, companyId);
-  const pending = await db.prepare("SELECT version, created_at FROM company_parameters WHERE company_id = ? AND status = 'requested'").bind(companyId).first();
   const { results: jds } = await db.prepare(`SELECT j.id, j.title, j.status, j.decision_note, j.updated_at,
       (SELECT COUNT(*) FROM releases r WHERE r.jd_id = j.id AND r.revoked_at IS NULL) AS released,
       (SELECT COUNT(*) FROM unlocks u WHERE u.first_jd_id = j.id) AS unlocked
       FROM jds j WHERE j.company_id = ? AND j.status != 'closed' ORDER BY j.updated_at DESC`).bind(companyId).all();
-  return { company, params, pendingRequest: pending, quota: await quotaStatus(db, companyId), jds };
-}
-
-export type CompanyMatch = Preview & { unlocked: boolean; releasedAt: string; lowerBound: number };
-
-/** Company view for one JD: released candidates only, anonymised until unlocked. */
-export async function companyMatches(db: Db, companyId: string, jdId: string): Promise<{ jd: { id: string; title: string; status: string }; matches: CompanyMatch[] }> {
-  const jd = await db.prepare("SELECT id, title, status FROM jds WHERE id = ? AND company_id = ?").bind(jdId, companyId).first<{ id: string; title: string; status: string }>();
-  if (!jd) throw new PortalError("NOT_FOUND", "JD not found.", 404);
-  const { results } = await db.prepare(`SELECT r.candidate_id, r.candidate_ref, r.released_at, m.score, m.lower_bound, m.explanation,
-      EXISTS (SELECT 1 FROM unlocks u WHERE u.company_id = r.company_id AND u.candidate_id = r.candidate_id AND u.access_revoked_at IS NULL) AS unlocked
-      FROM releases r JOIN matches m ON m.jd_id = r.jd_id AND m.candidate_id = r.candidate_id
-      WHERE r.jd_id = ? AND r.company_id = ? AND r.revoked_at IS NULL AND ${ACTIVE_CONSENT_SQL("r.candidate_id", "share_with_companies")}
-      ORDER BY m.lower_bound DESC, m.score DESC`).bind(jdId, companyId).all<{ candidate_id: string; candidate_ref: string; released_at: string; score: number; lower_bound: number; explanation: string; unlocked: number }>();
-  const matches: CompanyMatch[] = [];
-  for (const r of results) {
-    const p = await primaryProfile(db, r.candidate_id);
-    if (!p) continue;
-    const e = parseJson<Stored>(r.explanation, null as unknown as Stored);
-    // Skills confirmed by an adaptive test.
-    const assessed = Object.values(await adaptiveEvidence(db, r.candidate_id)).map(x => x.label.replace(/: verified by test$/, ""));
-    matches.push({ ...buildPreview(p.profile, r.candidate_ref, r.score, { summary: e.summary, meets: e.meets, misses: e.misses, why: e.why }, assessed), unlocked: !!r.unlocked, releasedAt: r.released_at, lowerBound: r.lower_bound });
-  }
-  return { jd, matches };
+  return { company, params, jds };
 }
 
 /**
@@ -113,9 +85,8 @@ export async function unlockedCandidate(db: Db, companyId: string, ref: string, 
 
 export async function adminOverview(db: Db) {
   const q = (sql: string) => db.prepare(sql).all().then(r => r.results);
-  const [companies, paramRequests, pendingJds, reviews, duplicates, flags, log, queue] = await Promise.all([
+  const [companies, pendingJds, reviews, duplicates, flags, log, queue] = await Promise.all([
     q("SELECT c.id, c.display_name, c.legal_name, c.city, c.status, c.created_at, c.guarantee_days, c.non_solicit_months, c.fee_terms, c.fee_percent, c.email_kit_org_id, (SELECT COALESCE(json_extract(data, '$.name'), '') FROM email_kit_records WHERE tbl = 'orgs' AND id = c.email_kit_org_id) AS outreach_org, (SELECT COUNT(*) FROM employer_enquiries e WHERE e.company_id = c.id) AS enquiries, (SELECT email FROM company_users cu JOIN portal_accounts a ON a.id = cu.account_id WHERE cu.company_id = c.id AND cu.role = 'owner' LIMIT 1) AS owner_email FROM companies c ORDER BY CASE c.status WHEN 'applied' THEN 0 ELSE 1 END, c.created_at DESC LIMIT 200"),
-    q("SELECT p.id, p.company_id, c.display_name, p.version, p.params, p.created_at, (SELECT params FROM company_parameters x WHERE x.company_id = p.company_id AND x.status = 'approved') AS current FROM company_parameters p JOIN companies c ON c.id = p.company_id WHERE p.status = 'requested' ORDER BY p.created_at"),
     q("SELECT j.id, j.title, j.company_id, c.display_name, j.requirements, j.raw_text, j.updated_at FROM jds j JOIN companies c ON c.id = j.company_id WHERE j.status = 'pending' ORDER BY j.updated_at"),
     q("SELECT k.id, k.display_name, v.file_name, v.created_at FROM candidates k JOIN cvs v ON v.candidate_id = k.id AND v.is_primary = 1 WHERE v.parse_status = 'needs_review' ORDER BY v.created_at"),
     q(`SELECT d.id, d.kind, d.a_id, d.b_id, d.signal, d.created_at, a.display_name AS a_name, b.display_name AS b_name, a.created_at AS a_created, b.created_at AS b_created
@@ -126,6 +97,5 @@ export async function adminOverview(db: Db) {
        ORDER BY at DESC LIMIT 300`),
     db.prepare("SELECT COUNT(*) AS n FROM score_queue").first<{ n: number }>(),
   ]);
-  const { results: plans } = await db.prepare("SELECT code, name, unlock_quota, validity_days, price_inr, is_free FROM plans WHERE active = 1 ORDER BY unlock_quota").all();
-  return { companies, paramRequests, pendingJds, reviews, duplicates, flags, log, queue: queue?.n ?? 0, plans };
+  return { companies, pendingJds, reviews, duplicates, flags, log, queue: queue?.n ?? 0 };
 }

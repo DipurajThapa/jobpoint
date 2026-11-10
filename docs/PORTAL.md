@@ -1,5 +1,7 @@
 # Job portal (Phase 1): how it works, how to run it, what is still open
 
+> **Updated 10 Nov 2026.** Self-service mode (automatic anonymous release, unlocking against a quota, plans) has been removed, the first test system and the services catalogue are gone, and a candidate record now stores the person's email and phone. See `WORKFLOWS_AND_MERGE_PLAN.md` for the current shape. Parts of this page that describe those features are historical.
+
 Built 9 November 2026 on branch `claude/relaxed-planck-7ozou6`. The original proposal is [PORTAL_PHASE1_PLAN.md](PORTAL_PHASE1_PLAN.md). The research behind the decisions is in [research/portal-india-hr-legal-2026-11-09.md](research/portal-india-hr-legal-2026-11-09.md) (Indian portals, HR conventions, DPDP, email/SMS, assessments, anti-bypass) and [research/portal-matching-design-2026-11-09.md](research/portal-matching-design-2026-11-09.md) (matching, score fusion, psychometrics, anti-gaming, with sources).
 
 **Registration is closed in production** until the owner sets `PORTAL_OPEN=true`, which should happen only after legal sign-off (see [Before going live](#before-going-live)).
@@ -231,7 +233,7 @@ Policy lives in `lib/portal/policy.ts`; migration `0010_placement_model.sql`.
 - **Temporary access.** `unlockedCandidate(..., temporary)` requires an open pipeline entry on a job that is not closed; otherwise `ACCESS_ENDED`. Contact details are blanked, and the download is a re-rendered PDF with contacts removed, until the offer stage.
 - **Black box.** The client dashboard carries no match counts, scores, reasons or matching rules. A live job's requirements can change three times in 30 days (`EDIT_LIMIT`).
 - **Client list.** Candidates hide from employers by typed name (`hidden_company_names`); the company list is never returned to candidates.
-- **Older self-service mode.** `CLIENT_SELF_SERVICE=true` turns browsing and unlocking back on. Locally: `CLIENT_SELF_SERVICE=true npm run dev`. `check-portal-e2e.mjs` covers that mode and must be run with it on; `check-recruiting-e2e.mjs` covers the default mode and must be run with it off.
+- **Self-service mode is removed (10 Nov 2026).** Clients do not browse, unlock or buy profiles; there are no plans or quotas. A recruiter submits each candidate. Sections of this page that describe automatic release, unlocking, plans or quota describe the earlier design.
 
 - **Three at a time for staff.** Recruiters and team managers see the three best undecided candidates for a job, without scores (`staffCandidates`, migration `0011_shortlist_passes.sql`). Submitting one, or passing with a reason, brings up the next; passes are capped at 15 per job per day. A recruiter can submit only a candidate currently shown. The admin sees the full ranked list, the scores and each pass reason: that record, with pipeline outcomes, is what matching is tuned from.
 - **Early exits.** A candidate who left a placement inside the replacement period is marked for staff on every later shortlist (derived from `placements.status`). Clients and candidates do not see the mark.

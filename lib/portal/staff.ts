@@ -153,13 +153,14 @@ export async function staffContact(db: Db, staff: Staff, input: { jdId: string; 
       throw new PortalError("CONTACT_LIMIT", `You have opened ${limit} candidates' contact details today, which is the daily limit. Ask the administrator if you need more.`, 429);
     }
   }
-  const row = await db.prepare(`SELECT k.display_name, p.data FROM candidates k JOIN cvs v ON v.candidate_id = k.id AND v.is_primary = 1
-      JOIN cv_profiles p ON p.cv_id = v.id WHERE k.id = ? AND k.status = 'active' ORDER BY p.version DESC LIMIT 1`).bind(input.candidateId).first<{ display_name: string; data: string }>();
+  // The contact details on the person's record; the CV's own are the fallback for records made before they were kept there.
+  const row = await db.prepare(`SELECT k.display_name, k.email, k.phone, p.data FROM candidates k LEFT JOIN cvs v ON v.candidate_id = k.id AND v.is_primary = 1
+      LEFT JOIN cv_profiles p ON p.cv_id = v.id WHERE k.id = ? AND k.status = 'active' ORDER BY p.version DESC LIMIT 1`).bind(input.candidateId).first<{ display_name: string; email: string; phone: string; data: string | null }>();
   if (!row) throw new PortalError("NOT_FOUND", "Candidate not found.", 404);
   let contact: { email?: string; phone?: string } = {};
-  try { contact = (JSON.parse(row.data) as { contact?: { email?: string; phone?: string } }).contact ?? {}; } catch { /* unreadable profile */ }
+  try { contact = (JSON.parse(row.data ?? "{}") as { contact?: { email?: string; phone?: string } }).contact ?? {}; } catch { /* unreadable profile */ }
   await db.prepare("INSERT INTO audit_events (id, kind, target_type, target_id, actor_kind, actor_id, action, jd_id, detail, created_at) VALUES (?, 'access', 'access', ?, 'staff', ?, 'contact_view', ?, ?, ?)").bind(newId(), input.jdId ?? "", staff.id, input.jdId, input.candidateId, nowIso()).run();
-  return { name: row.display_name, phone: contact.phone ?? "", email: contact.email ?? "" };
+  return { name: row.display_name, phone: row.phone || contact.phone || "", email: row.email || contact.email || "" };
 }
 
 export async function staffSubmit(db: Db, secret: string, staff: Staff, input: { jdId: string; candidateId: string; note: string }) {

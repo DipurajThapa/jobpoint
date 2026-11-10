@@ -71,10 +71,6 @@ export default defineConfig(async ({ command }) => {
         inspectorPort: false,
         config: {
           ...localBindingConfig,
-          // Local checks of the older self-service mode: CLIENT_SELF_SERVICE=true npm run dev
-          ...(command === "serve" && process.env.CLIENT_SELF_SERVICE
-            ? { vars: { CLIENT_SELF_SERVICE: process.env.CLIENT_SELF_SERVICE } }
-            : {}),
           ...(command === "serve"
             ? {
                 services: [
