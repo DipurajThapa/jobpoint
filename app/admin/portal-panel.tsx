@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Row = Record<string, string | number | null>;
-type Overview = { companies: Row[]; paramRequests: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; plans: Row[]; heldAttempts?: Row[]; clientWork?: { managed: Row[]; placements: Row[] } };
+type Overview = { websiteUnlinked?: number; companies: Row[]; paramRequests: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; plans: Row[]; heldAttempts?: Row[]; clientWork?: { managed: Row[]; placements: Row[] } };
 const ROLE_FAMILIES = ["accounts-finance", "sales-bd", "customer-support", "operations-supply", "hr-admin", "software-it", "marketing", "manufacturing-engineering", "healthcare", "education", "hospitality-retail", "field-services"];
 const SENIORITY = ["fresher", "junior", "mid", "senior", "lead"];
 
@@ -73,9 +73,10 @@ function ManagedSearch({ jd, act }: { jd: Row; act: (action: string, body: objec
     <button className="text-link" onClick={() => list ? setList(null) : load()}>{list ? "Hide candidates" : "Find candidates to submit"}</button>
     {error && <p className="admin-help">{error}</p>}
     {list && (list.length === 0 ? <p className="admin-help">No scored candidates for this job yet. Run scoring, or source candidates and ask them to upload a CV.</p> : list.map(c => <div className="admin-submit" key={String(c.candidate_id)}>
-      <p><b>{c.display_name || "Candidate"}</b> · {c.current_city || "city not stated"} · score {Math.round(Number(c.score))} (floor {Math.round(Number(c.lower_bound))}) · {Number(c.hard_pass) ? "meets the hard filters" : "misses a hard filter"}{Number(c.in_pipeline) ? " · already submitted" : ""}</p>
+      <p><b>{c.display_name || "Candidate"}</b> <span className="pill">{c.source === "website" ? "Website applicant" : "Portal"}</span> · {c.current_city || "city not stated"} · score {Math.round(Number(c.score))} (floor {Math.round(Number(c.lower_bound))}) · {Number(c.hard_pass) ? "meets the hard filters" : "misses a hard filter"}{Number(c.in_pipeline) ? " · already submitted" : ""}</p>
       <p className="admin-help">{c.explanation}</p>
-      {!Number(c.in_pipeline) && <form className="admin-record-actions" onSubmit={async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const note = new FormData(e.currentTarget).get("note"); if (await act("submit-candidate", { companyId: jd.company_id, jdId: jd.id, candidateId: c.candidate_id, note })) load(); }}>
+      {!Number(c.in_pipeline) && !Number(c.can_share) && <p className="admin-help">Matched, but this person has not agreed to their CV being shared with employers. Ask them first; record their consent before submitting.</p>}
+      {!Number(c.in_pipeline) && Number(c.can_share) > 0 && <form className="admin-record-actions" onSubmit={async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const note = new FormData(e.currentTarget).get("note"); if (await act("submit-candidate", { companyId: jd.company_id, jdId: jd.id, candidateId: c.candidate_id, note })) load(); }}>
         <input name="note" required maxLength={2000} placeholder="Recruiter note: why this candidate, notice, CTC, availability" style={{ minWidth: "min(420px, 100%)" }} /><button className="button button-small">Submit to client</button></form>}
     </div>))}
   </div></article>;
@@ -98,6 +99,11 @@ export default function PortalPanel() {
       <div className="admin-record-actions"><button className="button button-small" onClick={() => act("run-queue", {})}>Run scoring now</button>
         <form onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); act("verify-link", { email: f.get("email"), purpose: f.get("purpose") }); }} className="admin-record-actions">
           <input name="email" type="email" placeholder="account email" required /><select name="purpose"><option value="verify">Verification link</option><option value="reset">Password reset link</option></select><button className="text-link">Issue link</button></form></div>
+    </section>
+
+    <section className="admin-records"><h2>One candidate list</h2>
+      <p className="admin-help">New website applications join the candidate list automatically. Their CV is read, and they are matched to clients&apos; jobs only if they ticked &ldquo;Contact me about other suitable roles&rdquo;. They can be submitted to a client only if they agreed to recruiter-reviewed sharing. {o.websiteUnlinked ? `${o.websiteUnlinked} earlier website application(s) are not in the list yet.` : "Every website application is in the list."}</p>
+      {!!o.websiteUnlinked && <button className="button button-small" onClick={() => act("link-website-applications", {})}>Add earlier website applications (25 at a time)</button>}
     </section>
 
     <section className="admin-records"><h2>Clients</h2>

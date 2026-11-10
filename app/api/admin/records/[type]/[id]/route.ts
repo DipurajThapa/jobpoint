@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { isOwnerRequest } from "@/lib/admin";
 import { clean, errorJson, json, sameOrigin, validEmail } from "@/lib/http";
+import { portalDb } from "@/lib/portal/session";
+import { unlinkWebsiteApplication, withdrawWebsiteConsents } from "@/lib/portal/website";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +45,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ type:
           .bind(status, notes, fullName, email, phone, location, experience, desiredRole, skills, education, availability, withdrawing ? 0 : current.share_consent, withdrawing ? 0 : current.future_consent, id),
         audit(request, withdrawing ? "consent.withdrawn" : profile ? "profile.corrected" : body.notes === undefined ? "stage.changed" : "notes.updated", "application", id),
       ]);
-      return json({ message: "Application updated." });
+      // The same person in the shared candidate list stops being matched or shared too.
+      if (withdrawing) await withdrawWebsiteConsents(portalDb(), id, request.headers.get("oai-authenticated-user-id") ?? "owner");
+      return json({ message: withdrawing ? "Consents withdrawn here and in the candidate list." : "Application updated." });
     }
     if (type === "enquiries" && employerStages.includes(clean(body.status, 30))) {
       const existing = await env.DB!.prepare("SELECT id FROM employer_enquiries WHERE id = ?").bind(id).first();
@@ -68,6 +72,9 @@ export async function DELETE(request: Request, context: { params: Promise<{ type
       if (!record) return errorJson("Application not found.", 404);
       if (record.resume_key && !env.BUCKET) return errorJson("File storage is unavailable; deletion has not completed.", 503);
       if (record.resume_key) await env.BUCKET!.delete(record.resume_key);
+      // If this application was the person's only link to the shared candidate list, their candidate record goes too.
+      const linked = await unlinkWebsiteApplication(portalDb(), id, request.headers.get("oai-authenticated-user-id") ?? "owner");
+      for (const key of linked.r2Keys) await env.BUCKET!.delete(key);
       await env.DB!.batch([
         // Screening results hold the parsed CV, so they go with the application.
         env.DB!.prepare("DELETE FROM ats_screenings WHERE application_id = ?").bind(id),

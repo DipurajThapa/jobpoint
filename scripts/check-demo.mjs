@@ -64,9 +64,17 @@ function request(method = 'POST', headers = {}) {
   Object.defineProperty(req, 'formData', { value: forbidden });
   return req;
 }
+const demo = await actual('lib/demo.ts');
+const live = demo.namespace.DEMO_MODE === false;
 for (const path of ['applications', 'employer-enquiries', 'privacy-requests']) {
   const mod = await actual(`app/api/${path}/route.ts`);
   for (const contentType of ['application/json', 'multipart/form-data; boundary=demo']) {
+    if (live) {
+      // Live intake: a cross-site submission is refused before any body, storage or rate-limit access.
+      const response = await mod.namespace.POST(request('POST', { 'content-type': contentType, origin: 'https://evil.test' }));
+      assert.equal(response.status, 403, `${path} refuses cross-site submissions`); checks++;
+      continue;
+    }
     const response = await mod.namespace.POST(request('POST', { 'content-type': contentType }));
     assert.equal(response.status, 503);
     assert.equal((await response.json()).code, 'DEMO_READ_ONLY');
@@ -101,7 +109,10 @@ const robotsText = await (await robots.namespace.GET(request('GET'))).text();
 assert.match(robotsText, /Disallow: \/admin/);
 assert.match(robotsText, /Disallow: \/api\//);
 assert.doesNotMatch(robotsText, /Disallow: \/\n/); checks++;
-const sitemap = await actual('app/sitemap.xml/route.ts');
-assert.doesNotMatch(await (await sitemap.namespace.GET(request('GET'))).text(), /<url>/); checks++;
+if (live) { assert.match(robotsText, /Sitemap: https:\/\/demo\.test\/sitemap\.xml/); checks++; }
+else {
+  const sitemap = await actual('app/sitemap.xml/route.ts');
+  assert.doesNotMatch(await (await sitemap.namespace.GET(request('GET'))).text(), /<url>/); checks++;
+}
 assert.equal(forbiddenCalls, 0);
-console.log(`PASS: ${checks} demo intake, admin authorization and crawler checks; no body parsing or storage calls.`);
+console.log(`PASS: ${checks} ${live ? 'live intake (cross-site refusal)' : 'demo intake'}, admin authorization and crawler checks; no body parsing or storage calls.`);

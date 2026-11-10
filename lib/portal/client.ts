@@ -12,7 +12,7 @@
 // was withdrawn are shown without any personal detail.
 
 import { audit, candidateRef, newId, now, nowIso, parseJson, PortalError, type Db } from "./db";
-import { consentActive } from "./consent";
+import { ACTIVE_CONSENT_SQL, consentActive } from "./consent";
 import { issuePortalToken } from "./accounts";
 import { activateCompany, currentParams } from "./company";
 
@@ -217,7 +217,8 @@ export async function submitByRecruiter(db: Db, secret: string, input: { company
   const cand = await db.prepare("SELECT status, hidden_company_ids FROM candidates WHERE id = ?").bind(candidateId).first<{ status: string; hidden_company_ids: string }>();
   if (!cand || cand.status !== "active") throw new PortalError("NOT_FOUND", "Candidate not found or not active.", 404);
   if (parseJson<string[]>(cand.hidden_company_ids, []).includes(companyId)) throw new PortalError("HIDDEN", "The candidate has hidden their profile from this company.", 403);
-  if (!await consentActive(db, candidateId, "share_with_companies")) throw new PortalError("NO_CONSENT", "The candidate has not consented to sharing with companies.", 403);
+  // Portal sharing consent, or the website's recruiter-reviewed sharing consent (this is a recruiter-reviewed submission).
+  if (!await consentActive(db, candidateId, "share_with_companies") && !await consentActive(db, candidateId, "recruiter_sharing")) throw new PortalError("NO_CONSENT", "The candidate has not consented to their CV being shared with employers.", 403);
   if (!input.note.trim()) throw new PortalError("NOTE", "Add a recruiter note for the client: why this candidate, availability, CTC and notice.");
   const ref = await candidateRef(secret, companyId, candidateId);
   const unlock = await db.prepare("SELECT access_revoked_at FROM unlocks WHERE company_id = ? AND candidate_id = ?").bind(companyId, candidateId).first<{ access_revoked_at: string | null }>();
@@ -431,7 +432,9 @@ export async function submissionCandidates(db: Db, jdId: string) {
   const jd = await db.prepare("SELECT company_id FROM jds WHERE id = ?").bind(jdId).first<{ company_id: string }>();
   if (!jd) throw new PortalError("NOT_FOUND", "Job not found.", 404);
   const { results } = await db.prepare(`SELECT m.candidate_id, k.display_name, k.current_city, m.score, m.lower_bound, m.hard_pass, m.explanation,
-      EXISTS (SELECT 1 FROM pipeline p WHERE p.jd_id = m.jd_id AND p.candidate_id = m.candidate_id) AS in_pipeline
+      EXISTS (SELECT 1 FROM pipeline p WHERE p.jd_id = m.jd_id AND p.candidate_id = m.candidate_id) AS in_pipeline,
+      CASE WHEN k.account_id IS NOT NULL THEN 'portal' ELSE 'website' END AS source,
+      (${ACTIVE_CONSENT_SQL("m.candidate_id", "share_with_companies")} OR ${ACTIVE_CONSENT_SQL("m.candidate_id", "recruiter_sharing")}) AS can_share
     FROM matches m JOIN candidates k ON k.id = m.candidate_id WHERE m.jd_id = ? AND k.status = 'active' ORDER BY m.hard_pass DESC, m.lower_bound DESC LIMIT 40`).bind(jdId).all<{ explanation: string }>();
   return results.map(r => ({ ...r, explanation: parseJson<{ summary?: string }>(r.explanation, {}).summary ?? "" }));
 }
