@@ -1,5 +1,5 @@
 // Watermarked CV copies for companies. Every unlocked copy carries a visible
-// stamp on every page ("Unlocked by <company> · <date> · Trace <id>") and the
+// stamp on every page ("Shared with <company> · <date> · Trace <id>") and the
 // trace ID in the PDF metadata, so a leaked copy identifies its source.
 // PDF originals are stamped; DOCX CVs (and PDFs that cannot be edited) are
 // rendered as a clean PDF from the parsed profile and the extracted text.
@@ -11,7 +11,7 @@ import { formatLpa } from "./india";
 const latin = (s: string) => s.replace(/₹/g, "Rs. ").replace(/[‘’]/g, "'").replace(/[“”]/g, "\"").replace(/[–—]/g, "-").replace(/•/g, "-").replace(/[^\x09\x0a\x0d\x20-\x7e\xa0-\xff]/g, "?");
 
 export type Stamp = { company: string; traceId: string; date: string };
-const stampText = (s: Stamp) => latin(`Unlocked by ${s.company} on ${s.date} via Jobboard300 - Trace ${s.traceId} - Confidential: for this hiring purpose only`);
+const stampText = (s: Stamp) => latin(`Shared with ${s.company} on ${s.date} via Jobboard300 - Trace ${s.traceId} - Confidential: for this hiring purpose only`);
 
 export async function watermarkPdf(original: Uint8Array, stamp: Stamp): Promise<Uint8Array | null> {
   const { PDFDocument, StandardFonts, rgb, degrees } = await import("pdf-lib");

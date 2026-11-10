@@ -26,7 +26,6 @@ export const EMPLOYER_PAGE: Landing = {
   extra: { eyebrow: "ALSO AVAILABLE", title: ["Extra checks,", "when you want them."], intro: "Add these to a role when it needs them. We agree them with you before we start.", cards: [
     { icon: "psychology", title: "Aptitude and soft-skills test", text: "Our own test of aptitude, attitude and interpersonal skills, sent only to the candidates in your process." },
     { icon: "quiz", title: "Your own test", text: "Give us your questions and answers. We build the test, add to it where useful and run it for your shortlisted candidates." },
-    { icon: "groups", title: "Contract and temporary staffing", text: "Short-term and project hires when a permanent role is not the right fit." },
     { icon: "dashboard", title: "A private hiring workspace", text: "Track candidates, interviews, offers and joining dates for every open role in one place." },
   ] },
   faqs: [

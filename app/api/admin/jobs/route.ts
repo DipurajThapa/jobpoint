@@ -3,7 +3,8 @@ import { getDb } from "@/db";
 import { jobs } from "@/db/schema";
 import { env } from "cloudflare:workers";
 import { adminActor, isOwnerRequest } from "@/lib/admin";
-import { portalDb } from "@/lib/portal/session";
+import { portalDb, portalSecret } from "@/lib/portal/session";
+import { drainQueue } from "@/lib/portal/queue";
 import { backfillVacancies, HOUSE_CLIENT_ID, vacancyForRole } from "@/lib/portal/vacancy";
 import { clean, errorJson, json, sameOrigin } from "@/lib/http";
 
@@ -41,6 +42,8 @@ export async function POST(request: Request) {
     const status = body.status === "published" ? "published" : "draft";
     try { await vacancyForRole(portalDb(), { id, title, location, workMode: clean(body.workMode, 40) || "On-site", description, requirements, status }, adminActor(request), clean(body.companyId, 60) || null); }
     catch (error) { await getDb().delete(jobs).where(eq(jobs.id, id)); return errorJson(error instanceof Error && "code" in error ? error.message : "The job could not be saved.", 400); }
+    // Rank the candidates for the new role now, so the recruiter does not open an empty shortlist.
+    try { await drainQueue(portalDb(), portalSecret(), 400); } catch (error) { console.error("scoring after role save failed", id, error instanceof Error ? error.message : error); }
     return json({ id, message: "Job saved." }, 201);
   } catch { return errorJson("The job could not be saved.", 503); }
 }

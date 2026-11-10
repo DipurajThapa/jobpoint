@@ -15,10 +15,9 @@ export default async function Home() {
     "@context": "https://schema.org", "@type": "EmploymentAgency", "@id": `${url}/#agency`, name: "Jobboard300", alternateName: ["Job Board 300", "Jobboard300 job board"], url, logo: `${url}/images/jobboard300-logo.png`, image: `${url}/images/career-conversation.webp`,
     description: "Jobboard300 is a job board and recruitment consultancy based in Kolkata, India, for IT and other office-based (white-collar) roles. Candidates register a CV and apply free of charge; employers hire recruiter-screened candidates and pay 7.5% to 8.33% of annual salary only on a successful placement.",
     address: { "@type": "PostalAddress", addressLocality: "Kolkata", addressCountry: "IN" },
-    knowsAbout: ["IT recruitment", "Non-IT recruitment", "Software developer hiring", "Finance and accounts hiring", "Sales hiring", "Operations and HR hiring", "Contract staffing", "CV screening"],
+    knowsAbout: ["IT recruitment", "Non-IT recruitment", "Software developer hiring", "Finance and accounts hiring", "Sales hiring", "Operations and HR hiring", "Permanent recruitment", "CV screening"],
     makesOffer: [
       { "@type": "Offer", itemOffered: { "@type": "Service", name: "Permanent recruitment", description: "Recruiter-screened shortlists for IT and non-IT white-collar roles. The fee is 7.5% to 8.33% of annual salary, charged only on a successful placement, with one free replacement if the hire leaves within 60 days." } },
-      { "@type": "Offer", itemOffered: { "@type": "Service", name: "Contract and temporary staffing", description: "Short-term and project hires." } },
       { "@type": "Offer", price: "0", priceCurrency: "INR", itemOffered: { "@type": "Service", name: "CV registration and job applications for candidates", description: "Candidates register a CV and apply for jobs free of charge." } },
     ],
   };

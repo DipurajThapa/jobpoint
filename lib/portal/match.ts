@@ -110,7 +110,8 @@ export function hardFilters(p: PortalProfile, req: PortalRequirements, params: C
   if (!f.remote && f.cities.length) {
     const here = [i.currentCity, ...i.preferredCities].filter(Boolean);
     const local = f.cities.some(c => here.some(h => sameLabourMarket(h, c)));
-    if (!local && !(f.allowRelocation && i.willingToRelocate === true)) failed.push(`Location: not in ${f.cities.join(" or ")}${f.allowRelocation ? " and not willing to relocate" : ""}.`);
+    // A CV that names no city is "not known", not "elsewhere": the recruiter asks. Only a known, different place fails.
+    if (here.length && !local && !(f.allowRelocation && i.willingToRelocate === true)) failed.push(`Location: not in ${f.cities.join(" or ")}${f.allowRelocation ? " and not willing to relocate" : ""}.`);
   }
   if (f.minYears !== null && i.yearsExperience + 0.25 < f.minYears) failed.push(`Experience: ${i.yearsExperience} years, needs at least ${f.minYears}.`);
   const workOnly = params?.mandatoryFilters?.includes("work_evidence_for_mandatory_skills");

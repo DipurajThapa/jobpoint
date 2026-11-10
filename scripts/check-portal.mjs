@@ -519,7 +519,7 @@ await check("CV intake and applications message the candidate, naming what is mi
   assert.equal((await kinds(db, cand)).at(-1), "application.received");
 });
 
-await check("WhatsApp sender: the client's team number first, admin as fallback, admin override wins; nothing is sent without a provider", async () => {
+await check("WhatsApp sender: the client's team number first, admin as fallback, admin override wins; nothing is queued without the candidate's consent or sent without a provider", async () => {
   const t = await staffSetup();
   const cand = await makeCandidate(t.db, "Queue Candidate");
   const last = async () => t.db.prepare("SELECT sender_scope, status, status_detail FROM messages WHERE channel != 'inbox' ORDER BY rowid DESC LIMIT 1").first();
@@ -534,6 +534,9 @@ await check("WhatsApp sender: the client's team number first, admin as fallback,
   await staffMod.setStaffMessaging(t.db, t.mgrK, "team:kolkata", { number: "+91 98300 12345", enabled: true });
   assert.deepEqual(await notify.resolveSender(t.db, t.compK.id), { scope: "team:kolkata", number: "+919830012345" }, "the team's own number takes priority");
   assert.equal((await notify.resolveSender(t.db, t.compF.id)).scope, "admin", "another team falls back to admin");
+  await notify.notifyCandidate(t.db, cand, "test", "T", "B", t.compK.id);
+  assert.deepEqual([(await last()).status, (await last()).status_detail], ["skipped", "no WhatsApp consent from the candidate"], "without the candidate's WhatsApp consent nothing is queued, even with a number set up");
+  await notify.setWhatsappConsent(t.db, cand, true, "test");
   await notify.notifyCandidate(t.db, cand, "test", "T", "B", t.compK.id);
   assert.deepEqual([(await last()).status, (await last()).sender_scope], ["queued", "team:kolkata"]);
   await staffMod.setStaffMessaging(t.db, t.admin, "admin", { number: "+91 90000 00001", enabled: true, override: true });

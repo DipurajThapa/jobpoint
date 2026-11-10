@@ -9,11 +9,16 @@ import { portalDb } from "@/lib/portal/session";
 import { linkWebsiteApplication } from "@/lib/portal/website";
 import { applicationAckText, confirmation, sendApplicationAck } from "@/lib/public-forms";
 import { resolveSender } from "@/lib/portal/notify";
+import { drainQueue } from "@/lib/portal/queue";
+import { cleanAttribution } from "@/lib/attribution";
+import { portalSecret } from "@/lib/portal/session";
 import { WEBSITE_FORM, WEBSITE_FORM_VERSION } from "@/lib/portal/notice";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
 const maxResumeBytes = 5 * 1024 * 1024;
+/** True when the database refused a column it does not have yet (code deployed before its migration). */
+const missingColumn = (error: unknown) => /no such column|has no column named/i.test(`${(error as Error)?.message ?? error} ${String((error as { cause?: unknown })?.cause ?? "")}`);
 
 export async function POST(request: Request) {
   if (DEMO_MODE) return demoSubmissionResponse();
@@ -63,13 +68,25 @@ export async function POST(request: Request) {
       cvBytes = bytes;
     }
     const id = crypto.randomUUID();
-    try { await db.insert(applications).values({ id, jobId, fullName, email, phone, location, experience, desiredRole, skills, education, availability, message, resumeKey, resumeName, resumeType, resumeSize, consent: true, shareConsent, futureConsent, whatsappConsent, termsVersion: CANDIDATE_TERMS_VERSION, privacyVersion: WEBSITE_FORM_VERSION, consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); }
+    const save = () => db.insert(applications).values({ id, jobId, fullName, email, phone, location, experience, desiredRole, skills, education, availability, message, resumeKey, resumeName, resumeType, resumeSize, consent: true, shareConsent, futureConsent, whatsappConsent, ...cleanAttribution(name => form.get(name)), termsVersion: CANDIDATE_TERMS_VERSION, privacyVersion: WEBSITE_FORM_VERSION, consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    try {
+      try { await save(); }
+      catch (error) {
+        // The code went live before the database change (the new column is missing): keep the application, without the new field.
+        if (!missingColumn(error)) throw error;
+        console.error("applications: database change 0021 is not applied yet; saved without the WhatsApp choice", id);
+        await env.DB!.prepare("INSERT INTO applications (id, job_id, full_name, email, phone, location, experience, desired_role, skills, education, availability, message, resume_key, resume_name, resume_type, resume_size, consent, share_consent, future_consent, terms_version, privacy_version, consent_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)")
+          .bind(id, jobId, fullName, email, phone, location, experience, desiredRole, skills, education, availability, message, resumeKey, resumeName, resumeType, resumeSize, shareConsent ? 1 : 0, futureConsent ? 1 : 0, CANDIDATE_TERMS_VERSION, WEBSITE_FORM_VERSION, new Date().toISOString(), new Date().toISOString()).run();
+      }
+    }
     catch (e) { if (resumeKey && env.BUCKET) await env.BUCKET.delete(resumeKey); throw e; }
     // One candidate list: the applicant also joins the shared candidate records, within what they ticked.
     // A failure here never loses the application; the admin can add it later from the Job portal tab.
     let candidateId: string | null = null;
     try { candidateId = (await linkWebsiteApplication(portalDb(), env.BUCKET ?? null, { id, jobId, fullName, email, phone, location, shareConsent, futureConsent, privacyVersion: WEBSITE_FORM_VERSION, resumeName }, cvBytes)).candidateId; }
     catch (error) { console.error("candidate list link failed", id, error instanceof Error ? error.message : error); }
+    // Score the applicant now, so the recruiter sees them without anyone pressing "Run scoring now".
+    try { await drainQueue(portalDb(), portalSecret(), 300); } catch (error) { console.error("scoring after application failed", id, error instanceof Error ? error.message : error); }
     const reference = `JP-${id.slice(0, 13).replaceAll("-", "").toUpperCase()}`;
     // Acknowledge by email, and on WhatsApp only if the box was ticked. Neither can fail the application.
     const roleTitle = jobId ? (await env.DB!.prepare("SELECT title FROM jobs WHERE id = ?").bind(jobId).first<{ title: string }>())?.title ?? null : null;

@@ -89,7 +89,7 @@ await step("F2.1", "an employer sends a short enquiry (no job description) and a
   if (!callSlot) throw new Error("no call times are offered");
   const day = new Date(Date.parse(callSlot) + 5.5 * 3_600_000).getUTCDay(), hour = new Date(Date.parse(callSlot) + 5.5 * 3_600_000).getUTCHours();
   if (day === 0 || hour < 10 || hour >= 18) throw new Error(`a call time outside Monday to Saturday, 10:00 to 18:00 India time was offered: ${callSlot}`);
-  const r = await anon.post("/api/employer-enquiries", { ...ENQ, meetingAt: callSlot });
+  const r = await anon.post("/api/employer-enquiries", { ...ENQ, meetingAt: callSlot, source: "LinkedIn", medium: "social", campaign: "Durgapur-Accounts", referrer: "www.linkedin.com", landing: "/employers" });
   if (r.status !== 201 || !/^HE-/.test(r.body?.reference ?? "")) throw new Error(`${r.status} ${r.text.slice(0, 200)}`);
 }, { severity: "blocker" });
 {
@@ -98,6 +98,7 @@ await step("F2.1", "an employer sends a short enquiry (no job description) and a
   check("F2.2", "the enquiry row holds every field that was typed", !!e && e.contact_name === ENQ.contactName && e.company === ENQ.company && e.phone === ENQ.phone && e.details === ENQ.details && e.status === "new" && !!e.terms_version && Number(e.whatsapp_consent) === 1 && e.meeting_at === callSlot && e.meeting_status === "requested", { severity: "blocker", detail: JSON.stringify(e ?? null).slice(0, 300) });
   const list = await owner.get("/api/admin/records");
   const seen = list.body?.enquiries?.find(q => q.id === enquiryId);
+  check("F2.2a", "where the enquiry came from (campaign tags, referring site, first page) is stored with it", e?.source === "linkedin" && e.medium === "social" && e.campaign === "durgapur-accounts" && e.referrer === "www.linkedin.com" && e.landing === "/employers", { severity: "medium", detail: JSON.stringify({ source: e?.source, medium: e?.medium, campaign: e?.campaign, referrer: e?.referrer, landing: e?.landing }) });
   check("F2.3", "the owner console lists the enquiry with the same details", !!seen && seen.company === ENQ.company && seen.details === ENQ.details && seen.meetingAt === callSlot && seen.whatsappConsent === true, { severity: "high" });
   check("F2.4", "an anonymous visitor cannot read enquiries", (await anon.get("/api/admin/records")).status === 401, { severity: "blocker", title: "Enquiry and candidate records are readable without signing in" });
   const bad = await anon.post("/api/employer-enquiries", { ...ENQ, email: "not-an-email" });
@@ -250,7 +251,7 @@ await step("F5.9", "the owner posts and publishes a public role for the same cli
 }
 async function websiteApply(cv, fields) {
   const name = nameOf(cv);
-  const base = { fullName: name, email: fields.email, phone: "+91 90000 41001", declaration: "yes", consent: "yes", whatsappConsent: "yes", resume: pdfFile(`${cv.key}.pdf`, await pdfFromText(browser, textOf(cv))) };
+  const base = { fullName: name, email: fields.email, phone: "+91 90000 41001", declaration: "yes", consent: "yes", whatsappConsent: "yes", source: "naukri", campaign: "nov-accounts", resume: pdfFile(`${cv.key}.pdf`, await pdfFromText(browser, textOf(cv))) };
   const r = await anon.form("/api/applications", { ...base, ...fields });
   return { r, name, email: fields.email };
 }
@@ -263,6 +264,7 @@ if (webApp) {
   const a = row("SELECT * FROM applications WHERE email = ?", webApp.email);
   webApp.appId = a?.id;
   check("F5.15", "the application row holds what was typed, the consents and the terms version", !!a && a.full_name === webApp.name && a.job_id === roleId && a.phone === "+91 90000 41001" && Number(a.whatsapp_consent) === 1 && Number(a.share_consent) === 1 && Number(a.consent) === 1 && !!a.terms_version && !!a.resume_key, { severity: "blocker", detail: JSON.stringify({ job: a?.job_id, share: a?.share_consent, terms: a?.terms_version, resume: !!a?.resume_key }) });
+  check("F5.15c", "where the applicant came from is stored with the application", a?.source === "naukri" && a.campaign === "nov-accounts", { severity: "medium", detail: JSON.stringify({ source: a?.source, campaign: a?.campaign }) });
   check("F5.15a", "the short form (name, email, phone, CV, one agreement tick) is accepted, and the city is read from the CV", webApp.r.status === 201 && !!webApp.r.body?.title && (row("SELECT k.current_city FROM candidates k JOIN candidate_sources s ON s.candidate_id = k.id WHERE s.ref_id = ?", a?.id ?? "")?.current_city ?? "") !== "", { severity: "high", detail: JSON.stringify({ title: webApp.r.body?.title, city: row("SELECT k.current_city FROM candidates k JOIN candidate_sources s ON s.candidate_id = k.id WHERE s.ref_id = ?", a?.id ?? "")?.current_city }) });
   const acks = rows("SELECT m.channel, m.status FROM messages m JOIN candidate_sources s ON s.candidate_id = m.recipient_id WHERE s.ref_id = ? AND m.kind = 'application.received'", a?.id ?? "").map(m => `${m.channel}:${m.status}`);
   check("F5.15b", "the acknowledgement is recorded: an email, and a WhatsApp message because the box was ticked", acks.some(x => x.startsWith("email:")) && acks.some(x => x.startsWith("whatsapp:")) && !!row("SELECT k.whatsapp_consent_at FROM candidates k JOIN candidate_sources s ON s.candidate_id = k.id WHERE s.ref_id = ?", a?.id ?? "")?.whatsapp_consent_at, { severity: "high", detail: acks.join(", ") });

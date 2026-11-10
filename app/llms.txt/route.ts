@@ -34,7 +34,7 @@ export async function GET() {
 - Page for employers: ${origin}/employers
 - To start: a short enquiry (name, company, work email, phone and a message). No job description is needed. A 30-minute call with a consultant can be requested from the next day, Monday to Saturday, 10 am to 6 pm India time (not 1 pm to 2 pm); a consultant confirms the time or offers another.
 - Before candidates are submitted: a signed recruitment services agreement
-- Services: permanent recruitment, contract and temporary staffing
+- Service: permanent recruitment (contract and temporary staffing are not offered)
 - Fee: 7.5% to 8.33% of the hire's annual salary, payable only when the hire joins
 - Replacement: one free replacement if the hire leaves within 60 days of joining
 - Terms for employers: ${origin}/terms/employers

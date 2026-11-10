@@ -74,6 +74,8 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 
 Candidate multipart fields: `fullName`, `email`, `phone`, `resume` (PDF or DOCX) and `agree=yes` (18 or older, use of the details, terms for job seekers); optional `jobId`, `location`, `shareConsent=yes`, `futureConsent=yes` and `whatsappConsent=yes`. General registration requires `futureConsent=yes` (the form sends it). Experience, skills, education and city are read from the CV. Employer JSON fields: `contactName`, `company`, `email`, `phone`, `details` (what they are looking for, in their own words), `consent:"yes"`; optional `meetingAt` (one of the times from `GET /api/employer-enquiries`) and `whatsappConsent:"yes"`. Both forms include an anti-spam `website` honeypot.
 
+Both forms also record where the person came from: the `utm_source`, `utm_medium` and `utm_campaign` tags on the link they followed, the referring site (host name only) and the first page opened (`lib/attribution.ts`, migration `0022`). The owner console shows it on each card and totals enquiries and clients won per source. To trace a post, add the tags to its link, for example `/employers?utm_source=linkedin&utm_campaign=durgapur-accounts`.
+
 After either form the page shows a short confirmation and the details go by email (when `MAIL_API_KEY` and `MAIL_FROM` are set; the outcome is recorded either way). WhatsApp is used only when the person ticked that box, and messages are queued until a provider is connected. Calls with a consultant are 30-minute slots, Monday to Saturday, 10:00 to 18:00 India time (`lib/public-forms.ts`); the owner confirms, holds or cancels each one under **Employer enquiries**.
 
 ## Submission and access behavior
@@ -117,6 +119,10 @@ npm run audit
 ```
 
 This resets the local database, runs all three and writes `docs/audit/RESULTS_<date>.md`. Raw records and screenshots go to `test-results/audit/`. The findings, the fix order and what was not tested are in [docs/audit/AUDIT_REPORT_2026-11-10.md](docs/audit/AUDIT_REPORT_2026-11-10.md). The same three roles are defined as Claude Code agents in `.claude/agents/` (quality-auditor, functional-auditor, uat-auditor).
+
+## Releasing
+
+Apply new files in `drizzle/` before the new code serves traffic. If the order is ever wrong, both public forms still save what was sent, without the newest fields; check with `node scripts/check-deploy-order.mjs` (needs `npm run dev`). Set `PUBLIC_SITE_URL` to the site's own address when it moves to its own domain: links in emails, the sitemap and `llms.txt` follow it.
 
 ## Demo verification
 

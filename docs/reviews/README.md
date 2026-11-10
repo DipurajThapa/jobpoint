@@ -12,6 +12,7 @@ Eight reviews by the three review agents in `.claude/agents/`. Each one read the
 | Owner and administrator | ux-six-sigma-reviewer | [UX_6_OWNER_ADMIN](UX_6_OWNER_ADMIN_2026-11-10.md) |
 | Content: SEO, GEO, AEO, marketing, sales | content-growth-editor | [CONTENT_SEO_GEO_AEO](CONTENT_SEO_GEO_AEO_2026-11-10.md) |
 | Technical SEO and GEO | technical-seo-auditor | [TECHNICAL_SEO_GEO](TECHNICAL_SEO_GEO_2026-11-10.md) |
+| CV screening and filtering (11 Nov) | written directly | [ATS_MATCHING_REVIEW](ATS_MATCHING_REVIEW_2026-11-11.md) |
 
 Each UX review follows the same order: the path as it is (screens, clicks, fields), the findings ranked by cost, the proposals with what could break and how to prove it did not, and what to leave alone.
 

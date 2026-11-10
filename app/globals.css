@@ -95,3 +95,4 @@ html{scroll-padding-top:104px}.header{height:88px}.brand img{width:200px;height:
 .form-confirmation p{margin:0;color:var(--navy)}
 .form-confirmation-icon{color:#14603e;display:flex}
 .form-confirmation-icon .material-symbols-rounded{font-size:36px}
+.admin-sources{border-collapse:collapse;margin:8px 0 18px;font-size:14px}.admin-sources caption{text-align:left;font-weight:700;color:var(--navy);padding-bottom:6px}.admin-sources th,.admin-sources td{text-align:left;padding:5px 18px 5px 0;border-bottom:1px solid var(--line)}

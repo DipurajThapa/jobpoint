@@ -7,6 +7,10 @@ import CandidateFields from "./candidate-fields";
 import DemoFormNotice from "./demo-form-notice";
 import FormConfirmation from "./form-confirmation";
 import Icon from "./icon";
+import { attributionFields } from "@/lib/attribution";
+
+/** Adds where the visitor came from (campaign tags, referring site) to a form about to be sent. */
+function withArrival(data: FormData) { for (const [name, value] of Object.entries(attributionFields())) if (value) data.set(name, String(value)); return data; }
 
 type Props = { type: "candidate" | "employer"; onClose: () => void };
 
@@ -49,7 +53,7 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
       const candidate = type === "candidate";
       const response = await fetch(candidate ? "/api/applications" : "/api/employer-enquiries", {
         method: "POST",
-        body: candidate ? new FormData(form) : JSON.stringify(Object.fromEntries(new FormData(form).entries())),
+        body: candidate ? withArrival(new FormData(form)) : JSON.stringify({ ...attributionFields(), ...Object.fromEntries(new FormData(form).entries()) }),
         headers: candidate ? undefined : { "content-type": "application/json" },
       });
       const data = await response.json().catch(() => ({})) as { error?: string; title?: string; message?: string };

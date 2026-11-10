@@ -36,7 +36,7 @@ export default function CandidateApp() {
     <main className="pj-main">
       {notice && <p className={`pj-notice ${notice.bad ? "bad" : "good"}`} role="status">{notice.text}</p>}
       {profile?.status === "needs_review" && <p className="pj-notice">We could not read your CV automatically. A Jobboard300 reviewer will check it shortly; nothing has been lost.</p>}
-      {profile?.profile && <p className="pj-notice">{profile.sharing ? "Your CV is on file. When a role fits, Jobboard300 shares an anonymous summary with the employer, and a recruiter contacts you before anything else happens." : "Your CV is on file, but sharing with employers is off, so no employer can see your profile. You can turn it on below."}</p>}
+      {profile?.profile && <p className="pj-notice">{profile.sharing ? "Your CV is on file and sharing is on. When a role fits, a Jobboard300 recruiter may put you forward to the employer and will tell you here." : "Your CV is on file, but sharing with employers is off, so no employer can see your profile. You can turn it on below."}</p>}
       <Inbox />
       <Tests say={say} />
       <Cv data={profile} reload={loadProfile} say={say} />
@@ -156,9 +156,9 @@ function Privacy({ data, reload, say }: { data: { sharing: boolean } | null; rel
   return <>
     <section className="pj-card"><h2>Sharing with employers</h2>
       <p>{CONSENT_NOTICE.share_with_companies}</p>
-      <p><b>Status:</b> {data?.sharing ? "On — matching employers can see your anonymous summary." : "Off — no employer can see your profile."}</p>
+      <p><b>Status:</b> {data?.sharing ? "On — a recruiter may put you forward to an employer for a role that fits." : "Off — no employer can see your profile."}</p>
       <div className="pj-row">{data?.sharing ? <button className="pj-btn danger" onClick={() => act("/api/portal/candidate/consent", { purpose: "share_with_companies", grant: false })}>Stop sharing now</button> : <button className="pj-btn" onClick={() => act("/api/portal/candidate/consent", { purpose: "share_with_companies", grant: true })}>Allow sharing</button>}</div>
-      {info && <p className="pj-muted">Your anonymous summary is currently shown to {info.sharing.previewCompanies} employer(s).{info.sharing.unlockedBy.length ? ` Unlocked by: ${info.sharing.unlockedBy.map(u => `${u.company} (${u.unlocked_at.slice(0, 10)}${u.access_revoked_at ? ", access revoked" : ""})`).join("; ")}.` : " No employer has unlocked your full CV."}</p>}
+      {info && <p className="pj-muted">{info.sharing.unlockedBy.length ? `Your profile has been shared with: ${info.sharing.unlockedBy.map(u => `${u.company} (${u.unlocked_at.slice(0, 10)}${u.access_revoked_at ? ", access ended" : ""})`).join("; ")}.` : "Your profile has not been shared with any employer yet."}</p>}
     </section>
     <section className="pj-card"><h2>Hide my profile from specific companies</h2>
       <p className="pj-muted">Type the name of any employer that must never receive your profile, such as your current one. We do not show which companies hire through Jobboard300.</p>

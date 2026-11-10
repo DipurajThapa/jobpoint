@@ -5,6 +5,7 @@ import DemoFormNotice from "@/components/demo-form-notice";
 import CandidateFields from "@/components/candidate-fields";
 import FormConfirmation from "@/components/form-confirmation";
 import { useState } from "react";
+import { attributionFields } from "@/lib/attribution";
 import type { FormEvent } from "react";
 
 type Result = { error?: string; title?: string; message?: string };
@@ -16,7 +17,9 @@ export default function ApplicationForm({ jobId }: { jobId: string }) {
     if (DEMO_MODE) { setError(DEMO_MESSAGE); return; }
     setBusy(true); setError("");
     try {
-      const response = await fetch("/api/applications", { method: "POST", body: new FormData(e.currentTarget) });
+      const data0 = new FormData(e.currentTarget);
+      for (const [name, value] of Object.entries(attributionFields())) if (value) data0.set(name, String(value));
+      const response = await fetch("/api/applications", { method: "POST", body: data0 });
       const data = await response.json().catch(() => ({})) as Result;
       if (!response.ok) throw new Error(data.error || "We could not send your application. Please try again.");
       setDone({ title: data.title ?? "Thank you. Your CV is with us.", message: data.message ?? "" });

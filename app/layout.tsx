@@ -1,4 +1,5 @@
 import { DEMO_MODE } from "@/lib/demo";
+import Arrival from "@/components/arrival";
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -37,7 +38,7 @@ export default function RootLayout({
         <link rel="stylesheet" href={textFontUrl} />
         <link rel="stylesheet" href={iconFontUrl} />
       </head>
-      <body className="antialiased">{DEMO_MODE && <div className="demo-banner"><div className="container"><strong>Website demo</strong><span>Explore the design. Submissions and CV uploads are disabled.</span></div></div>}{children}</body>
+      <body className="antialiased"><Arrival />{DEMO_MODE && <div className="demo-banner"><div className="container"><strong>Website demo</strong><span>Explore the design. Submissions and CV uploads are disabled.</span></div></div>}{children}</body>
     </html>
   );
 }
