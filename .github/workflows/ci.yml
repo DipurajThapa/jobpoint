@@ -18,5 +18,5 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
-      - run: npm run check:portal
-      - run: npm run check:ats
+      # The older check:portal and check:ats scripts build PDF fixtures with Playwright,
+      # which is not a project dependency, so they are run locally (npm run test:all).
