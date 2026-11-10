@@ -50,11 +50,18 @@ export async function messagingFor(db: Db, scopes: string[]) {
 /** One inbox message for the candidate, plus its place on the WhatsApp queue. */
 export async function notifyCandidate(db: Db, candidateId: string, kind: string, title: string, body: string, companyId: string | null = null) {
   const sender = await resolveSender(db, companyId), at = nowIso();
+  // WhatsApp only with the person's own consent (given on a website form or at CV upload).
+  const agreed = !!(await db.prepare("SELECT whatsapp_consent_at FROM candidates WHERE id = ?").bind(candidateId).first<{ whatsapp_consent_at: string | null }>())?.whatsapp_consent_at;
   await db.batch([
     db.prepare("INSERT INTO messages (id, recipient_kind, recipient_id, channel, kind, title, body, created_at) VALUES (?, 'candidate', ?, 'inbox', ?, ?, ?, ?)").bind(newId(), candidateId, kind, title.slice(0, 160), body.slice(0, 1200), at),
     db.prepare("INSERT INTO messages (id, channel, recipient_kind, recipient_id, sender_scope, kind, body, status, status_detail, created_at) VALUES (?, 'whatsapp', 'candidate', ?, ?, ?, ?, ?, ?, ?)")
-      .bind(newId(), candidateId, sender?.scope ?? "", kind, `${title}\n${body}`.slice(0, 1200), sender ? "queued" : "skipped", sender ? "waiting for a WhatsApp provider" : "no WhatsApp number configured", at),
+      .bind(newId(), candidateId, sender?.scope ?? "", kind, `${title}\n${body}`.slice(0, 1200), agreed && sender ? "queued" : "skipped", !agreed ? "no WhatsApp consent from the candidate" : sender ? "waiting for a WhatsApp provider" : "no WhatsApp number configured", at),
   ]);
+}
+
+/** Record (or withdraw) a candidate's consent to WhatsApp updates. */
+export async function setWhatsappConsent(db: Db, candidateId: string, agreed: boolean) {
+  await db.prepare("UPDATE candidates SET whatsapp_consent_at = CASE WHEN ? = 1 THEN COALESCE(whatsapp_consent_at, ?) ELSE NULL END WHERE id = ?").bind(agreed ? 1 : 0, nowIso(), candidateId).run();
 }
 
 export async function notifyCompany(db: Db, companyId: string, kind: string, title: string, body: string) {

@@ -4,6 +4,37 @@ import Link from "next/link";
 import Image from "next/image";
 import { DEMO_MODE } from "@/lib/demo";
 
+/**
+ * The same footer on every public page: one column for job seekers, one for
+ * employers, one about the company, then the legal links. Candidates and
+ * clients share one sign-in; Jobboard300 staff have their own.
+ */
 export default function PublicFooter({ onCandidate, onEmployer }: { onCandidate?: () => void; onEmployer?: () => void }) {
-  return <footer className="footer"><div className="container footer-top"><div><Image src="/images/jobboard300-logo-on-dark.png" alt="Jobboard300" width={499} height={81} /><p>Jobboard300 is a job board and recruitment consultancy for IT and non-IT professional roles.</p></div><div className="footer-links"><div><b>Explore</b><Link href="/#about">About Jobboard300</Link><Link href="/#services">Recruitment services</Link><Link href="/#jobs">Find jobs</Link><Link href="/#faq">FAQs</Link></div><div><b>Get in touch</b>{onCandidate ? <button onClick={onCandidate}>{DEMO_MODE ? "Preview CV form" : "Register your CV"}</button> : <Link href="/#candidates">{DEMO_MODE ? "Preview CV form" : "Register your CV"}</Link>}{onEmployer ? <button onClick={onEmployer}>{DEMO_MODE ? "Preview enquiry form" : "Hire talent"}</button> : <Link href="/#employers">{DEMO_MODE ? "Preview enquiry form" : "Hire talent"}</Link>}<Link href="/#contact">Contact Jobboard300</Link><Link href="/admin">Recruiter sign-in</Link></div></div></div><div className="container footer-bottom"><span>© {new Date().getFullYear()} Jobboard300</span><span>Kolkata, India</span><nav aria-label="Legal navigation"><Link href="/privacy">Privacy</Link><Link href="/terms">Terms of use</Link><Link href="/compliance">Privacy safeguards</Link></nav></div></footer>;
+  const cv = DEMO_MODE ? "Preview CV form" : "Upload your CV", enquiry = DEMO_MODE ? "Preview enquiry form" : "Send a hiring enquiry";
+  return <footer className="footer"><div className="container footer-top">
+    <div><Image src="/images/jobboard300-logo-on-dark.png" alt="Jobboard300" width={499} height={81} /><p>Jobboard300 is a job board and recruitment consultancy for IT and other office-based roles, based in Kolkata.</p></div>
+    <div className="footer-links">
+      <div><b>Job seekers</b>
+        <Link href="/#jobs">Find jobs</Link>
+        {onCandidate ? <button onClick={onCandidate}>{cv}</button> : <Link href="/job-seekers">{cv}</Link>}
+        <Link href="/job-seekers">How it works for job seekers</Link>
+        <Link href="/terms/job-seekers">Terms for job seekers</Link>
+        <Link href="/portal/sign-in">Candidate sign-in</Link>
+      </div>
+      <div><b>Employers</b>
+        <Link href="/employers">Hire through Jobboard300</Link>
+        {onEmployer ? <button onClick={onEmployer}>{enquiry}</button> : <Link href="/employers">{enquiry}</Link>}
+        <Link href="/employers#page-terms">Fee and terms</Link>
+        <Link href="/terms/employers">Terms for employers</Link>
+        <Link href="/portal/sign-in">Client sign-in</Link>
+      </div>
+      <div><b>Jobboard300</b>
+        <Link href="/#about">About us</Link>
+        <Link href="/#services">Recruitment services</Link>
+        <Link href="/#faq">FAQs</Link>
+        <Link href="/#contact">Contact</Link>
+        <Link href="/platform/sign-in">Staff sign-in</Link>
+      </div>
+    </div>
+  </div><div className="container footer-bottom"><span>© {new Date().getFullYear()} Jobboard300</span><span>Kolkata, India</span><nav aria-label="Legal navigation"><Link href="/privacy">Privacy notice</Link><Link href="/privacy#privacy-request">Your data requests</Link><Link href="/terms">Terms of use</Link><Link href="/compliance">Privacy safeguards</Link></nav></div></footer>;
 }

@@ -37,7 +37,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ type:
       const skills = profile ? clean(profile.skills, 500) : current.skills;
       const education = profile ? clean(profile.education, 160) : current.education;
       const availability = profile ? clean(profile.availability, 100) : current.availability;
-      if (!fullName || !validEmail(email) || phone.replace(/\D/g, "").length < 7 || !location || !experience) return errorJson("Name, valid email, phone, location and experience are required.");
+      if (!fullName || !validEmail(email) || phone.replace(/\D/g, "").length < 7) return errorJson("Name, valid email and phone are required.");
       const withdrawing = body.withdrawOptionalConsents === true;
       await env.DB!.batch([
         env.DB!.prepare("UPDATE applications SET status = ?, recruiter_notes = ?, full_name = ?, email = ?, phone = ?, location = ?, experience = ?, desired_role = ?, skills = ?, education = ?, availability = ?, share_consent = ?, future_consent = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
@@ -49,6 +49,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ type:
       // The same person in the shared candidate list stops being matched or shared too.
       if (withdrawing) await withdrawWebsiteConsents(portalDb(), id, adminActor(request));
       return json({ message: withdrawing ? "Consents withdrawn here and in the candidate list." : "Application updated." });
+    }
+    if (type === "enquiries" && ["confirmed", "done", "cancelled"].includes(clean(body.meetingStatus, 20))) {
+      // The call the employer asked for: confirmed, held or cancelled (a cancelled slot is free again).
+      const r = await env.DB!.prepare("UPDATE employer_enquiries SET meeting_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND meeting_at IS NOT NULL").bind(clean(body.meetingStatus, 20), id).run();
+      if (!r.meta.changes) return errorJson("This enquiry has no call request.", 404);
+      await audit(request, `call.${clean(body.meetingStatus, 20)}`, "employer_enquiry", id).run();
+      return json({ message: `Call marked ${clean(body.meetingStatus, 20)}.` });
     }
     if (type === "enquiries" && employerStages.includes(clean(body.status, 30))) {
       const existing = await env.DB!.prepare("SELECT id FROM employer_enquiries WHERE id = ?").bind(id).first();

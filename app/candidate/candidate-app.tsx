@@ -122,6 +122,7 @@ function Cv({ data, reload, say }: { data: { profile: Profile | null; status: st
         <label className="pj-row"><input type="checkbox" name="consentProfile" value="yes" required /> <span><b>Required.</b> {CONSENT_NOTICE.profile_processing}</span></label>
         <label className="pj-row"><input type="checkbox" name="consentShare" value="yes" defaultChecked /> <span><b>Recommended.</b> {CONSENT_NOTICE.share_with_companies}</span></label>
         <label className="pj-row"><input type="checkbox" name="consentOffers" value="yes" /> <span>{CONSENT_NOTICE.service_offers}</span></label>
+        <label className="pj-row"><input type="checkbox" name="consentWhatsapp" value="yes" /> <span>Send me updates on WhatsApp at my mobile number, as well as in my inbox. Leave unticked for no WhatsApp messages.</span></label>
         <button className="pj-btn" disabled={busy}>{busy ? "Reading your CV…" : "Upload CV"}</button>
       </form>
     </section>

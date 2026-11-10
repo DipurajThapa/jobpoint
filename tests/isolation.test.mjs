@@ -28,6 +28,7 @@ function routeFiles(dir = resolve(root, "app/api"), out = []) {
 // Routes that are meant to work without signing in. Anything not listed here must refuse an anonymous caller.
 const PUBLIC = new Set([
   "jobs GET", "applications POST", "employer-enquiries POST", "privacy-requests POST",
+  "employer-enquiries GET", // free times for a call with a consultant: times only, no personal data
   "portal/auth/[action] POST", "portal/public/[action] GET", "portal/public/[action] POST",
   "platform/auth/sign-in POST", "platform/auth/sign-out POST", "platform/auth/accept POST",
 ]);

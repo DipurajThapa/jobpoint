@@ -6,7 +6,7 @@ export const EMPLOYER_PAGE: Landing = {
   eyebrow: "FOR EMPLOYERS",
   title: ["A screened shortlist.", "Pay only on placement."],
   intro: "Send Jobboard300 the role. A recruiter screens candidates against your requirements, submits those who meet them and arranges the interviews. You pay only when the person you choose joins.",
-  cta: "Send a hiring requirement",
+  cta: "Send a hiring enquiry",
   secondary: { label: "See the terms", href: "#page-terms" },
   image: { src: "/images/candidate-meeting.webp", alt: "A hiring manager and a Jobboard300 recruiter reviewing a role together" },
   proof: ["IT AND NON-IT ROLES", "Fee of 7.5% to 8.33% on placement", "One free replacement within 60 days", "NO CHARGE FOR A SHORTLIST"],

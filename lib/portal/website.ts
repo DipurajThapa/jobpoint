@@ -91,6 +91,9 @@ export async function linkWebsiteApplication(db: Db, bucket: Bucket, app: Websit
     try { cv = (await ingestCv(db, bucket, candidateId, { bytes: cvBytes, fileName: app.resumeName, knownName: app.fullName, knownLocation: app.location })).status as "parsed" | "needs_review"; }
     catch { cv = "unreadable"; }
   }
+  // The form no longer asks for a city: take it from the CV when the record has none.
+  if (cv === "parsed") await db.prepare(`UPDATE candidates SET current_city = COALESCE((SELECT json_extract(p.data, '$.india.currentCity') FROM cvs v JOIN cv_profiles p ON p.cv_id = v.id
+      WHERE v.candidate_id = candidates.id AND v.is_primary = 1 ORDER BY p.version DESC LIMIT 1), '') WHERE id = ? AND current_city = ''`).bind(candidateId).run().catch(() => undefined);
   const matching = await consentActive(db, candidateId, "profile_processing");
   // One vacancy record: an application to a website role is an application to that client job.
   const applied = !!app.jobId && await recordRoleApplication(db, candidateId, app.jobId, app.id);

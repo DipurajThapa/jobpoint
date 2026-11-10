@@ -41,7 +41,9 @@ for (const [path, source] of sources) {
     if (anchor) {
       assert.ok(ids.has(anchor), `Unknown anchor ${href} in ${path}`);
       const target = ids.get(anchor);
-      assert.ok(route === '/' ? target === 'app/home-client.tsx' : target.startsWith(route === '/privacy' ? 'app/privacy/' : `app${route}/`), `Anchor ${href} points to ${target}`);
+      // The employer and job-seeker pages are drawn by one shared component, which holds their anchors.
+      const shared = ['/employers', '/job-seekers'].includes(route) && target === 'components/landing-page.tsx';
+      assert.ok(shared || (route === '/' ? target === 'app/home-client.tsx' : target.startsWith(route === '/privacy' ? 'app/privacy/' : `app${route}/`)), `Anchor ${href} points to ${target}`);
     }
     checked++;
   }
