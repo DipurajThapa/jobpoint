@@ -6,7 +6,7 @@
 import { nowIso, parseJson, type Db } from "./db";
 import { ACTIVE_CONSENT_SQL } from "./consent";
 import { currentParams } from "./company";
-import { companyEvidence, skillEvidence } from "./assessment";
+import { adaptiveEvidence } from "./adaptive";
 import { scoreMatch, type MatchResult } from "./match";
 import { runReleases } from "./release";
 import type { PortalProfile } from "./profile";
@@ -38,7 +38,7 @@ export function storedResult(r: MatchResult) {
 
 async function scorePairs(db: Db, cands: Cand[], jds: Jd[]) {
   const paramsCache = new Map<string, Awaited<ReturnType<typeof currentParams>>>();
-  const skillCache = new Map<string, Awaited<ReturnType<typeof skillEvidence>>>();
+  const skillCache = new Map<string, Awaited<ReturnType<typeof adaptiveEvidence>>>();
   const statements = [];
   for (const jd of jds) {
     if (!paramsCache.has(jd.company_id)) paramsCache.set(jd.company_id, await currentParams(db, jd.company_id));
@@ -47,8 +47,8 @@ async function scorePairs(db: Db, cands: Cand[], jds: Jd[]) {
     for (const c of cands) {
       const profile = parseJson<PortalProfile>(c.data, null as unknown as PortalProfile);
       if (!profile?.india) continue;
-      if (!skillCache.has(c.id)) skillCache.set(c.id, await skillEvidence(db, c.id));
-      const result = scoreMatch(profile, req, params, { skillScores: skillCache.get(c.id), company: await companyEvidence(db, c.id, jd.id) });
+      if (!skillCache.has(c.id)) skillCache.set(c.id, await adaptiveEvidence(db, c.id));
+      const result = scoreMatch(profile, req, params, { skillScores: skillCache.get(c.id) });
       statements.push(db.prepare(`INSERT INTO matches (jd_id, candidate_id, cv_id, profile_version, score, lower_bound, hard_pass, failed_filters, explanation, engine_version, scored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(jd_id, candidate_id) DO UPDATE SET cv_id = excluded.cv_id, profile_version = excluded.profile_version, score = excluded.score, lower_bound = excluded.lower_bound, hard_pass = excluded.hard_pass, failed_filters = excluded.failed_filters, explanation = excluded.explanation, engine_version = excluded.engine_version, scored_at = excluded.scored_at`)
         .bind(jd.id, c.id, c.cv_id, c.version, result.score, result.lowerBound, result.hardPass ? 1 : 0, JSON.stringify(result.failedFilters), storedResult(result), result.engineVersion, nowIso()));

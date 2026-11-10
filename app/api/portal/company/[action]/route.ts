@@ -5,7 +5,6 @@ import { unlockCandidate } from "@/lib/portal/quota";
 import { companyDashboard, companyMatches, unlockedCandidate } from "@/lib/portal/views";
 import { detectScraping, guard } from "@/lib/portal/access";
 import { renderCvPdf, watermarkPdf } from "@/lib/portal/watermark";
-import { createAssessment } from "@/lib/portal/assessment";
 import { revokeJdReleases } from "@/lib/portal/release";
 import { audit, newId, nowIso, PortalError } from "@/lib/portal/db";
 import { extractText } from "@/lib/ats/extract";
@@ -141,13 +140,6 @@ export async function POST(request: Request, context: Ctx) {
         db.prepare("INSERT INTO portal_application_events (id, application_id, status, actor, at) VALUES (?, ?, ?, ?, ?)").bind(newId(), app.id, status, `company:${account.id}`, nowIso()),
       ]);
       return json({ message: "Stage updated. The candidate can see it." });
-    }
-    if (action === "assessment-create") {
-      const jdId = s(body.jdId, 60);
-      const jd = await db.prepare("SELECT requirements FROM jds WHERE id = ? AND company_id = ?").bind(jdId, companyId).first();
-      if (!jd) return fail("JD not found.", 404);
-      const id = await createAssessment(db, { ownerKind: "company", companyId, jdId, skillId: s(body.skillId, 60), title: s(body.title, 160), description: s(body.description, 1000), itemsPerForm: Number(body.itemsPerForm ?? 10), timeLimitSec: Number(body.timeLimitSec ?? 900), items: Array.isArray(body.items) ? body.items as never : [] }, account.id);
-      return json({ id, message: "Assessment sent to Jobboard300 for review. It applies once approved." }, 201);
     }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }

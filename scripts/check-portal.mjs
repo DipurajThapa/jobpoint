@@ -26,7 +26,6 @@ const access = await mod("access.ts");
 const accounts = await mod("accounts.ts");
 const profileMod = await mod("profile.ts");
 const match = await mod("match.ts");
-const assess = await mod("assessment.ts");
 const jdMod = await mod("jd.ts");
 const queue = await mod("queue.ts");
 const client = await mod("client.ts");
@@ -449,63 +448,6 @@ await check("Explanations never contain employer names, institutions or contacts
 });
 
 // ---------- Assessments ----------
-await check("Pooled score of record resists retaking until lucky", () => {
-  const at = new Date("2026-11-09T00:00:00Z");
-  const day = d => new Date(at.getTime() - d * 86_400_000).toISOString();
-  const pooled = assess.scoreOfRecord([{ score: 0.5, sem: 0.1, submitted_at: day(60) }, { score: 0.52, sem: 0.1, submitted_at: day(30) }, { score: 0.9, sem: 0.1, submitted_at: day(0) }], at);
-  assert.ok(pooled.x < 0.7, `a single lucky attempt is diluted: ${pooled.x}`);
-  assert.ok(pooled.e < 0.1, "more attempts narrow the error");
-  const improved = assess.scoreOfRecord([{ score: 0.4, sem: 0.1, submitted_at: day(400) }, { score: 0.85, sem: 0.1, submitted_at: day(0) }], at);
-  assert.ok(improved.x > 0.7, `genuine improvement over a long gap counts: ${improved.x}`);
-  // Monte Carlo: "retake until above the bar" inflates far less under pooling than under best-of.
-  let bestInfl = 0, pooledInfl = 0; const N = 2000;
-  for (let i = 0; i < N; i++) {
-    const tries = []; for (let k = 0; k < 3; k++) { const z = Math.sqrt(-2 * Math.log(Math.random() || 1e-9)) * Math.cos(2 * Math.PI * Math.random()); tries.push({ score: 0.6 + 0.08 * z, sem: 0.08, submitted_at: day(60 - 30 * k) }); if (tries[k].score >= 0.7) break; }
-    bestInfl += Math.max(...tries.map(t => t.score)) - 0.6; pooledInfl += assess.scoreOfRecord(tries, at).x - 0.6;
-  }
-  assert.ok(pooledInfl / N < 0.5 * bestInfl / N, `pooled ${(pooledInfl / N).toFixed(3)} vs best ${(bestInfl / N).toFixed(3)}`);
-});
-await check("Assessment attempts: randomised forms, cooldown, yearly cap, rapid guesses, integrity hold", async () => {
-  const db = await setup();
-  const cand = await makeCandidate(db, "Test Taker");
-  const items = Array.from({ length: 30 }, (_, i) => ({ stem: `Q${i}: In Tally, which voucher records a sale ${i}?`, options: ["Sales", "Receipt", "Payment", "Contra"], answerIndex: 0, difficulty: i % 3 === 0 ? 0.8 : i % 3 === 1 ? 0.5 : 0.3 }));
-  const aid = await assess.createAssessment(db, { ownerKind: "platform", skillId: "tally", title: "Tally basics", itemsPerForm: 10, timeLimitSec: 600, items }, "admin");
-  const { attemptId } = await assess.startAttempt(db, cand, aid);
-  const q = await assess.attemptQuestions(db, attemptId, cand);
-  assert.equal(q.questions.length, 10);
-  assert.ok(!JSON.stringify(q).includes("answer"), "no answers sent to the browser");
-  const answers = q.questions.map((qq, i) => ({ itemId: qq.itemId, choice: qq.options.indexOf("Sales"), ms: i < 2 ? 800 : 9000 }));
-  const res = await assess.submitAttempt(db, attemptId, cand, answers, { hidden: 0, pastes: 0 });
-  assert.equal(Math.round(res.score * 10), 8, "two rapid guesses count as wrong");
-  await rejects(assess.startAttempt(db, cand, aid), "COOLDOWN");
-  tick(31 * 86_400_000);
-  const second = await assess.startAttempt(db, cand, aid);
-  const q2 = await assess.attemptQuestions(db, second.attemptId, cand);
-  const overlap = q2.questions.filter(x => q.questions.some(y => y.itemId === x.itemId)).length;
-  assert.ok(overlap <= 2, `retake reuses few items (${overlap}/10)`);
-  const held = await assess.submitAttempt(db, second.attemptId, cand, q2.questions.map(x => ({ itemId: x.itemId, choice: 0, ms: 9000 })), { hidden: 6, pastes: 2 });
-  assert.equal(held.onHold, true);
-  const ev = await assess.skillEvidence(db, cand);
-  assert.ok(ev.tally && ev.tally.label.includes("80%"), "held attempt not used; first attempt is the score of record");
-  await assess.decideHeldAttempt(db, second.attemptId, false, "admin");
-  assert.ok((await assess.skillEvidence(db, cand)).tally.label.includes("80%"), "voided attempt never counts");
-  await rejects(assess.decideHeldAttempt(db, second.attemptId, true, "admin"), "NOT_FOUND");
-  tick(31 * 86_400_000);
-  await assess.startAttempt(db, cand, aid);
-  tick(31 * 86_400_000);
-  await rejects(assess.startAttempt(db, cand, aid), "ATTEMPT_LIMIT");
-  tick(-93 * 86_400_000);
-});
-await check("Company assessments need admin approval and cannot ask about protected traits", async () => {
-  const db = await setup();
-  const bad = [{ stem: "What is your religion and marital status?", options: ["A", "B"], answerIndex: 0 }, ...Array.from({ length: 6 }, (_, i) => ({ stem: `GST rate question ${i}`, options: ["5%", "18%"], answerIndex: 1 }))];
-  await rejects(assess.createAssessment(db, { ownerKind: "company", companyId: "c", jdId: "j", skillId: "gst", title: "GST", itemsPerForm: 5, timeLimitSec: 300, items: bad }, "u"), "INVALID_ASSESSMENT");
-  const id = await assess.createAssessment(db, { ownerKind: "company", companyId: "c", jdId: "j", skillId: "gst", title: "GST", itemsPerForm: 5, timeLimitSec: 300, items: bad.slice(1) }, "u");
-  const cand = await makeCandidate(db, "Some One");
-  await rejects(assess.startAttempt(db, cand, id), "NOT_AVAILABLE");
-  await assess.decideAssessment(db, id, true, "admin");
-  assert.ok((await assess.startAttempt(db, cand, id)).attemptId);
-});
 await check("Queue scores every live JD and releases automatically within parameters", async () => {
   const db = await setup();
   const comp = await makeCompany(db);
@@ -523,26 +465,6 @@ await check("Queue scores every live JD and releases automatically within parame
 
 
 // ---------- Future services data model ----------
-await check("Services catalogue, orders and enrolments link to the candidate; payments are a stub", async () => {
-  const db = await setup();
-  const { seedServices } = await mod("plans.ts");
-  await seedServices(db);
-  const svc = await db.prepare("SELECT id, active FROM services WHERE code = 'spoken-english'").first();
-  assert.equal(svc.active, 0, "seeded inactive: no service screens in Phase 1");
-  const cand = await makeCandidate(db, "Service Buyer");
-  await db.batch([
-    db.prepare("INSERT INTO payment_intents (id, payer_kind, payer_id, purpose, ref_id, amount_inr, created_at) VALUES ('pi1', 'candidate', ?, 'service_order', 'o1', 4999, ?)").bind(cand, clock.toISOString()),
-    db.prepare("INSERT INTO service_orders (id, candidate_id, service_id, status, amount_inr, payment_intent_id, created_at, updated_at) VALUES ('o1', ?, ?, 'awaiting_payment', 4999, 'pi1', ?, ?)").bind(cand, svc.id, clock.toISOString(), clock.toISOString()),
-    db.prepare("INSERT INTO service_enrolments (id, order_id, candidate_id, batch_code, created_at) VALUES ('e1', 'o1', ?, 'SE-2027-01', ?)").bind(cand, clock.toISOString()),
-  ]);
-  assert.equal((await db.prepare("SELECT status FROM payment_intents WHERE id = 'pi1'").first()).status, "stub");
-  const { r2Keys } = await candidate.deleteCandidateData(db, cand, "candidate");
-  assert.ok(r2Keys.length >= 1);
-  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM service_orders WHERE candidate_id = ?").bind(cand).first()).n, 0, "orders and enrolments go with account deletion");
-  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM service_enrolments").first()).n, 0);
-  const stub = await db.prepare("SELECT status, display_name, dedupe_email_hash FROM candidates WHERE id = ?").bind(cand).first();
-  assert.deepEqual([stub.status, stub.display_name, stub.dedupe_email_hash], ["deleted", "", ""], "only a content-free stub remains");
-});
 
 // ---------- client workspace ----------
 const INVITE = { displayName: "Example Infotech", legalName: "Example Infotech Pvt Ltd", city: "Kolkata", ownerEmail: "owner@example-infotech.test", ownerName: "Owner", guaranteeDays: 90, nonSolicitMonths: 12, feeTerms: "8.33% of fixed CTC", params: PARAMS, plan: "free" };

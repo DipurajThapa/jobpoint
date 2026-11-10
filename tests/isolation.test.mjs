@@ -15,7 +15,7 @@ const candidate = await route("portal/candidate/[action]");
 const recruiting = await route("platform/recruiting/[action]");
 
 const COMPANY_GETS = ["dashboard", "pipeline", "team", "matches", "candidate", "download", "jd"];
-const CANDIDATE_GETS = ["jobs", "tests", "test", "applications", "inbox", "profile", "export", "attempt", "companies", "assessments"];
+const CANDIDATE_GETS = ["jobs", "tests", "test", "applications", "inbox", "profile", "export", "companies"];
 
 function routeFiles(dir = resolve(root, "app/api"), out = []) {
   for (const name of readdirSync(dir)) {
@@ -135,7 +135,6 @@ test("company A cannot change anything of company B's, and B's data is untouched
     placement: await w.db.prepare("SELECT status, left_on FROM placements WHERE id = 'pl-b'").first(),
     team: (await w.db.prepare("SELECT account_id FROM company_users WHERE company_id = ?").bind(w.B.id).all()).results,
     owner: await w.db.prepare("SELECT status, email FROM portal_accounts WHERE id = ?").bind(w.B.userId).first(),
-    assessments: (await w.db.prepare("SELECT COUNT(*) AS n FROM assessments").first()).n,
   });
   const before = await snapshot();
   const cookie = await portalCookie(w.A.email);
@@ -152,7 +151,6 @@ test("company A cannot change anything of company B's, and B's data is untouched
     ["jd-service", { jdId: w.B.jdId, service: "managed", openings: 9 }],
     ["team-remove", { memberId: w.B.userId }],
     ["team-reinvite", { memberId: w.B.userId }],
-    ["assessment-create", { jdId: w.B.jdId, title: "x", items: [] }],
   ];
   for (const [action, body] of attempts) {
     const res = await post(action, body);

@@ -1,14 +1,13 @@
 import { env } from "cloudflare:workers";
 import { adminActor, isOwnerRequest } from "@/lib/admin";
 import { portalDb, portalSecret, json, fail, failFrom, sameOrigin } from "@/lib/portal/session";
-import { activateCompany, decideJd, decideParamRequest, enqueue, requestParamChange } from "@/lib/portal/company";
+import { activateCompany, decideJd, decideParamRequest, requestParamChange } from "@/lib/portal/company";
 import { adjustQuota, assignPlan, upsertPlans } from "@/lib/portal/quota";
 import { mergeCandidates, primaryProfile, purgeExpiredStubs, resolveReview } from "@/lib/portal/candidate";
 import { drainQueue } from "@/lib/portal/queue";
 import { adminOverview } from "@/lib/portal/views";
 import { selfService } from "@/lib/portal/policy";
-import { decideAssessment, decideHeldAttempt } from "@/lib/portal/assessment";
-import { DEFAULT_PLANS, seedServices } from "@/lib/portal/plans";
+import { DEFAULT_PLANS } from "@/lib/portal/plans";
 import { audit } from "@/lib/portal/db";
 import { adminClientWork, inviteClient, linkClientToOutreach, linkEnquiryToClient, outreachOrgs, setJdService, submissionCandidates, submitByRecruiter, updateClientTerms } from "@/lib/portal/client";
 import { sendMail } from "@/lib/portal/mailer";
@@ -28,7 +27,7 @@ export async function GET(request: Request, context: Ctx) {
   try {
     if (action === "overview") {
       const plans = await db.prepare("SELECT COUNT(*) AS n FROM plans").first<{ n: number }>();
-      if (!plans?.n) { await upsertPlans(db, DEFAULT_PLANS); await seedServices(db); }
+      if (!plans?.n) await upsertPlans(db, DEFAULT_PLANS);
       return json({ ...await adminOverview(db), selfService: selfService(env.CLIENT_SELF_SERVICE), clientWork: await adminClientWork(db), websiteUnlinked: await countUnlinkedWebsiteApplications(db), outreachOrgs: await outreachOrgs(db) });
     }
     if (action === "submission-candidates") return json({ candidates: await submissionCandidates(db, new URL(request.url).searchParams.get("jd") ?? "") });
@@ -106,13 +105,6 @@ export async function POST(request: Request, context: Ctx) {
       case "quota-adjust": await adjustQuota(db, s(b.companyId, 60), Number(b.delta), s(b.note, 300), admin); return json({ message: "Quota adjusted." });
       case "params-decide": { const out = await decideParamRequest(db, s(b.requestId, 60), b.approve === true, admin, s(b.note, 500)); return done(b.approve === true ? `Parameters approved.${out.paused.length ? ` ${out.paused.length} live JD(s) paused.` : ""}` : "Request rejected."); }
       case "jd-decide": await decideJd(db, s(b.jdId, 60), b.approve === true, admin, s(b.note, 500)); return done(b.approve === true ? "JD is live. Matching CVs will be released automatically." : "JD rejected.");
-      case "assessment-decide": await decideAssessment(db, s(b.assessmentId, 60), b.approve === true, admin); return json({ message: "Assessment decision saved." });
-      case "attempt-review": {
-        const candidateId = await decideHeldAttempt(db, s(b.attemptId, 60), b.accept === true, admin);
-        await enqueue(db, "candidate", candidateId, "assessment").run();
-        await drainQueue(db, portalSecret(), 300);
-        return json({ message: b.accept === true ? "Attempt cleared; it now counts." : "Attempt voided; it does not count." });
-      }
       case "review-resolve": {
         const id = s(b.candidateId, 60), p = await primaryProfile(db, id);
         if (!p) return fail("Candidate not found.", 404);

@@ -193,27 +193,27 @@ export async function requestFastTrack(db: Db, candidateId: string) {
   if (await isFastTrack(db, candidateId)) throw new PortalError("ALREADY", "You are already on Fast Track.", 409);
   const offer = await fastTrackOffer(db);
   if (!offer.priceInr) throw new PortalError("NOT_OPEN", "Fast Track is not open for payment yet.", 409);
-  const open = await db.prepare("SELECT id, reference, amount_inr FROM fast_track_orders WHERE candidate_id = ? AND status = 'awaiting_payment'").bind(candidateId).first<{ id: string; reference: string; amount_inr: number }>();
+  const open = await db.prepare("SELECT id, reference, amount_inr FROM orders WHERE kind = 'fast_track' AND candidate_id = ? AND status = 'awaiting_payment'").bind(candidateId).first<{ id: string; reference: string; amount_inr: number }>();
   if (open) return { ...open, payNote: offer.payNote, created: false };
   const id = newId(), reference = `FT-${newId().replace(/-/g, "").slice(0, 8).toUpperCase()}`;
-  await db.prepare("INSERT INTO fast_track_orders (id, candidate_id, reference, amount_inr, created_at) VALUES (?, ?, ?, ?, ?)").bind(id, candidateId, reference, offer.priceInr, nowIso()).run();
+  await db.prepare("INSERT INTO orders (id, candidate_id, reference, amount_inr, created_at) VALUES (?, ?, ?, ?, ?)").bind(id, candidateId, reference, offer.priceInr, nowIso()).run();
   await audit(db, `candidate:${candidateId}`, "fast_track.requested", "fast_track_order", id, reference);
   return { id, reference, amount_inr: offer.priceInr, payNote: offer.payNote, created: true };
 }
 
 export async function fastTrackOrders(db: Db) {
-  return (await db.prepare(`SELECT o.id, o.reference, o.amount_inr, o.status, o.created_at, o.paid_at, o.note, k.display_name FROM fast_track_orders o JOIN candidates k ON k.id = o.candidate_id ORDER BY CASE o.status WHEN 'awaiting_payment' THEN 0 ELSE 1 END, o.created_at DESC LIMIT 200`).all()).results;
+  return (await db.prepare(`SELECT o.id, o.reference, o.amount_inr, o.status, o.created_at, o.paid_at, o.note, k.display_name FROM orders o JOIN candidates k ON k.id = o.candidate_id ORDER BY CASE o.status WHEN 'awaiting_payment' THEN 0 ELSE 1 END, o.created_at DESC LIMIT 200`).all()).results;
 }
 
 /** The admin confirms payment was received (or cancels the order). Confirmation is what marks the candidate Fast Track. */
 export async function decideFastTrackOrder(db: Db, orderId: string, paid: boolean, note: string, admin: string) {
-  const o = await db.prepare("SELECT candidate_id, status, reference FROM fast_track_orders WHERE id = ?").bind(orderId).first<{ candidate_id: string; status: string; reference: string }>();
+  const o = await db.prepare("SELECT candidate_id, status, reference FROM orders WHERE kind = 'fast_track' AND id = ?").bind(orderId).first<{ candidate_id: string; status: string; reference: string }>();
   if (!o) throw new PortalError("NOT_FOUND", "Order not found.", 404);
   if (o.status !== "awaiting_payment") throw new PortalError("DECIDED", "This order was already decided.", 409);
   if (paid && note.trim().length < 3) throw new PortalError("NOTE", "Record how the payment was received (for example the UPI or bank reference).");
   const at = nowIso();
   await db.batch([
-    db.prepare("UPDATE fast_track_orders SET status = ?, paid_at = ?, confirmed_by = ?, note = ? WHERE id = ? AND status = 'awaiting_payment'").bind(paid ? "paid" : "cancelled", paid ? at : null, admin, note.trim().slice(0, 300), orderId),
+    db.prepare("UPDATE orders SET status = ?, paid_at = ?, confirmed_by = ?, note = ? WHERE id = ? AND status = 'awaiting_payment'").bind(paid ? "paid" : "cancelled", paid ? at : null, admin, note.trim().slice(0, 300), orderId),
     ...(paid ? [db.prepare("UPDATE candidates SET fast_track_at = ? WHERE id = ? AND fast_track_at IS NULL").bind(at, o.candidate_id)] : []),
   ]);
   await audit(db, admin, paid ? "fast_track.paid" : "fast_track.cancelled", "fast_track_order", orderId, o.reference);
@@ -339,7 +339,7 @@ export async function resultFor(db: Db, testId: string, candidateId: string) {
 /** The candidate's test page: Fast Track status, technical tests suited to their skills first, invitations and past results. */
 export async function candidateTests(db: Db, candidateId: string, profileSkills: string[]) {
   const fastTrack = await isFastTrack(db, candidateId), offer = await fastTrackOffer(db);
-  const order = await db.prepare("SELECT reference, amount_inr FROM fast_track_orders WHERE candidate_id = ? AND status = 'awaiting_payment'").bind(candidateId).first();
+  const order = await db.prepare("SELECT reference, amount_inr FROM orders WHERE kind = 'fast_track' AND candidate_id = ? AND status = 'awaiting_payment'").bind(candidateId).first();
   const skills = new Set(profileSkills.map(s => s.toLowerCase()));
   const { results: banks } = await db.prepare("SELECT id, title, skill_id FROM question_banks WHERE kind = 'technical' AND status = 'active' ORDER BY title").all<{ id: string; title: string; skill_id: string }>();
   const { results: tests } = await db.prepare(`SELECT t.id, t.bank_id, t.status, t.final_level, t.band, t.weak_topics, t.completed_at, t.deadline_at, b.title, b.kind FROM adaptive_tests t JOIN question_banks b ON b.id = t.bank_id WHERE t.candidate_id = ? ORDER BY t.created_at DESC LIMIT 50`)

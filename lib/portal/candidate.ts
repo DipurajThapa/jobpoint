@@ -123,7 +123,7 @@ export async function mergeCandidates(db: Db, survivorId: string, duplicateId: s
     db.prepare("UPDATE OR IGNORE unlocks SET candidate_id = ? WHERE candidate_id = ?").bind(survivorId, duplicateId),
     db.prepare("UPDATE OR IGNORE portal_applications SET candidate_id = ? WHERE candidate_id = ?").bind(survivorId, duplicateId),
     // The hiring history follows the person: pipeline, placements, tests, commitments, messages and sources.
-    ...["pipeline", "placements", "adaptive_tests", "candidate_commitments", "candidate_sources", "fast_track_orders", "shortlist_passes"]
+    ...["pipeline", "placements", "adaptive_tests", "candidate_commitments", "candidate_sources", "orders", "shortlist_passes"]
       .map(table => db.prepare(`UPDATE OR IGNORE ${table} SET candidate_id = ? WHERE candidate_id = ?`).bind(survivorId, duplicateId)),
     db.prepare("UPDATE messages SET recipient_id = ? WHERE recipient_kind = 'candidate' AND recipient_id = ?").bind(survivorId, duplicateId),
     db.prepare("UPDATE candidates SET fast_track_at = COALESCE(fast_track_at, (SELECT fast_track_at FROM candidates WHERE id = ?)) WHERE id = ?").bind(duplicateId, survivorId),
@@ -142,8 +142,10 @@ export async function mergeCandidates(db: Db, survivorId: string, duplicateId: s
  */
 export const CANDIDATE_DATA: Record<string, "erase" | "keep"> = {
   cvs: "erase", matches: "erase", pipeline: "erase", portal_applications: "erase",
-  assessment_attempts: "erase", service_orders: "erase", service_enrolments: "erase", adaptive_tests: "erase",
-  candidate_commitments: "erase", fast_track_orders: "erase", shortlist_passes: "erase", candidate_sources: "erase",
+  adaptive_tests: "erase", orders: "erase",
+  // Retired by merges 4 and 5: no longer written, still erased with the person.
+  retired_assessment_attempts: "erase", retired_service_orders: "erase", retired_service_enrolments: "erase",
+  candidate_commitments: "erase", shortlist_passes: "erase", candidate_sources: "erase",
   candidate_consents: "keep", // the consent ledger must be kept for at least a year (DPDP Rules)
   unlocks: "keep",            // the record of which companies received the CV
   releases: "keep",           // as above (already revoked)
@@ -195,7 +197,7 @@ export async function deleteCandidateData(db: Db, candidateId: string, actor: st
     db.prepare("DELETE FROM score_queue WHERE kind = 'candidate' AND ref_id = ?").bind(candidateId),
     db.prepare("DELETE FROM duplicate_flags WHERE a_id = ? OR b_id = ?").bind(candidateId, candidateId),
     db.prepare("DELETE FROM abuse_flags WHERE subject_kind = 'candidate' AND subject_id = ?").bind(candidateId),
-    db.prepare("DELETE FROM payment_intents WHERE payer_kind = 'candidate' AND payer_id = ?").bind(candidateId),
+    db.prepare("DELETE FROM retired_payment_intents WHERE payer_kind = 'candidate' AND payer_id = ?").bind(candidateId),
     db.prepare("UPDATE candidates SET status = 'deleted', account_id = NULL, display_name = '', current_city = '', preferred_cities = '[]', hidden_company_ids = '[]', hidden_company_names = '[]', dedupe_email_hash = '', dedupe_phone_hash = '', merged_into = NULL, fast_track_at = NULL, last_active_at = ? WHERE id = ?").bind(at, candidateId),
     ...(account?.account_id ? [db.prepare("UPDATE portal_accounts SET status = 'deleted', email = 'deleted-' || id || '@invalid', phone = '', password_hash = NULL WHERE id = ?").bind(account.account_id), db.prepare("DELETE FROM portal_sessions WHERE account_id = ?").bind(account.account_id), db.prepare("DELETE FROM portal_tokens WHERE account_id = ?").bind(account.account_id)] : []),
   ]);
