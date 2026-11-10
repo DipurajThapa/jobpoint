@@ -10,6 +10,8 @@ export type PlatformTool = {
   description: string;
   href: string;
   icon: string; // Material Symbols Rounded name
+  /** Level pre-selected when inviting someone. Omit for "no access", the safe default. */
+  inviteDefault?: AccessLevel;
   levels: Record<AccessLevel, string>;
 };
 
@@ -20,10 +22,23 @@ export const TOOLS: PlatformTool[] = [
     description: "Prepare employer outreach and follow-ups, keep client conversation history, and respect Do not contact restrictions.",
     href: "/platform/email-kit",
     icon: "forward_to_inbox",
+    inviteDefault: "edit",
     levels: {
       view: "Read records and drafts. Cannot change anything.",
       edit: "Daily outreach: draft, record sends and replies, manage contacts.",
       manage: "Also follow-up rules, backup restore and bulk deletion.",
+    },
+  },
+  {
+    key: "recruiting",
+    name: "Recruiting",
+    description: "Work your assigned clients and jobs: ranked candidates, submissions, stage updates and interviews.",
+    href: "/platform/recruiting",
+    icon: "group_search",
+    levels: {
+      view: "See assigned clients, jobs and candidates. Cannot change anything.",
+      edit: "Recruiter: submit candidates, update stages and schedule interviews for assigned work.",
+      manage: "Same as Edit. Team managers are set per team by an administrator.",
     },
   },
 ];

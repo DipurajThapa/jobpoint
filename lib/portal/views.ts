@@ -11,6 +11,7 @@ import { buildPreview, type Preview } from "./preview";
 import { formatLpa } from "./india";
 import { roleFamilyById } from "./roles";
 import type { PortalRequirements } from "./jd";
+import { ACCESS_STAGES, CONTACT_STAGES } from "./policy";
 
 type Stored = { summary: string; meets: string[]; misses: string[]; why: string; band: string; gaps: string[]; sd: number; nearThreshold: boolean; failedFilters: string[] };
 
@@ -86,21 +87,32 @@ export async function companyMatches(db: Db, companyId: string, jdId: string): P
   return { jd, matches };
 }
 
-/** Full CV and contacts: only for a candidate this company has unlocked, with consent still active. */
-export async function unlockedCandidate(db: Db, companyId: string, ref: string) {
+/**
+ * Full CV: only for a candidate this company has been given, with consent still active.
+ * With `temporary` (the placement-fee model) access lasts only while a hiring process
+ * for this person is open with the company, and contact details stay hidden until offer.
+ */
+export async function unlockedCandidate(db: Db, companyId: string, ref: string, temporary = false) {
   const u = await db.prepare(`SELECT u.candidate_id, u.trace_id, u.unlocked_at, u.access_revoked_at FROM unlocks u WHERE u.company_id = ? AND u.candidate_ref = ?`).bind(companyId, ref).first<{ candidate_id: string; trace_id: string; unlocked_at: string; access_revoked_at: string | null }>();
   if (!u) throw new PortalError("NOT_UNLOCKED", "Unlock this profile to see the full CV.", 403);
   if (u.access_revoked_at) throw new PortalError("CONSENT_WITHDRAWN", `The candidate withdrew consent on ${u.access_revoked_at.slice(0, 10)}. Delete any copy you downloaded.`, 410);
   const p = await primaryProfile(db, u.candidate_id);
   if (!p) throw new PortalError("NOT_FOUND", "The CV is no longer available.", 404);
+  let contactsHidden = false;
+  if (temporary) {
+    const { results: open } = await db.prepare(`SELECT p.stage FROM pipeline p JOIN jds j ON j.id = p.jd_id WHERE p.company_id = ? AND p.candidate_id = ? AND j.status != 'closed' AND p.stage IN (${ACCESS_STAGES.map(() => "?").join(",")})`).bind(companyId, u.candidate_id, ...ACCESS_STAGES).all<{ stage: string }>();
+    if (!open.length) throw new PortalError("ACCESS_ENDED", "This profile is available only while the hiring process for this candidate is open.", 403);
+    contactsHidden = !open.some(o => (CONTACT_STAGES as readonly string[]).includes(o.stage));
+    if (contactsHidden) p.profile = { ...p.profile, contact: { ...p.profile.contact, email: "", phone: "", links: [] } };
+  }
   const { results: apps } = await db.prepare("SELECT a.id, a.status, j.title FROM portal_applications a JOIN jds j ON j.id = a.jd_id WHERE a.candidate_id = ? AND j.company_id = ?").bind(u.candidate_id, companyId).all();
-  return { candidateId: u.candidate_id, traceId: u.trace_id, unlockedAt: u.unlocked_at, profile: p.profile, cv: { r2Key: p.r2Key, fileName: p.fileName }, applications: apps };
+  return { contactsHidden, candidateId: u.candidate_id, traceId: u.trace_id, unlockedAt: u.unlocked_at, profile: p.profile, cv: { r2Key: p.r2Key, fileName: p.fileName }, applications: apps };
 }
 
 export async function adminOverview(db: Db) {
   const q = (sql: string) => db.prepare(sql).all().then(r => r.results);
   const [companies, paramRequests, pendingJds, reviews, duplicates, flags, log, queue, heldAttempts] = await Promise.all([
-    q("SELECT c.id, c.display_name, c.legal_name, c.city, c.status, c.created_at, c.guarantee_days, c.non_solicit_months, c.fee_terms, (SELECT email FROM company_users cu JOIN portal_accounts a ON a.id = cu.account_id WHERE cu.company_id = c.id AND cu.role = 'owner' LIMIT 1) AS owner_email FROM companies c ORDER BY CASE c.status WHEN 'applied' THEN 0 ELSE 1 END, c.created_at DESC LIMIT 200"),
+    q("SELECT c.id, c.display_name, c.legal_name, c.city, c.status, c.created_at, c.guarantee_days, c.non_solicit_months, c.fee_terms, c.fee_percent, (SELECT email FROM company_users cu JOIN portal_accounts a ON a.id = cu.account_id WHERE cu.company_id = c.id AND cu.role = 'owner' LIMIT 1) AS owner_email FROM companies c ORDER BY CASE c.status WHEN 'applied' THEN 0 ELSE 1 END, c.created_at DESC LIMIT 200"),
     q("SELECT p.id, p.company_id, c.display_name, p.version, p.params, p.created_at, (SELECT params FROM company_parameters x WHERE x.company_id = p.company_id AND x.status = 'approved') AS current FROM company_parameters p JOIN companies c ON c.id = p.company_id WHERE p.status = 'requested' ORDER BY p.created_at"),
     q("SELECT j.id, j.title, j.company_id, c.display_name, j.requirements, j.raw_text, j.updated_at FROM jds j JOIN companies c ON c.id = j.company_id WHERE j.status = 'pending' ORDER BY j.updated_at"),
     q("SELECT k.id, k.display_name, v.file_name, v.created_at FROM candidates k JOIN cvs v ON v.candidate_id = k.id AND v.is_primary = 1 WHERE v.parse_status = 'needs_review' ORDER BY v.created_at"),

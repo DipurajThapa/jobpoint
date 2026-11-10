@@ -14,5 +14,7 @@ declare namespace Cloudflare {
     MAIL_API_URL?: string;
     /** "true" opens portal registration in production (after legal sign-off). */
     PORTAL_OPEN?: string;
+    /** "true" turns the older self-service mode back on (clients browse anonymised matches and unlock profiles). Off by default: placement-fee model. */
+    CLIENT_SELF_SERVICE?: string;
   }
 }

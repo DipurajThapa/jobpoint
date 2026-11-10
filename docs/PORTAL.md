@@ -42,6 +42,21 @@ Every application made on the public website joins the same candidate records as
 - If the admin deletes the person's last website application, and they have no portal account, their candidate record is erased.
 - Applications made before this change can be added from the admin's **Job portal** tab, 25 at a time.
 
+### Staff roles and the Recruiting tool (added 10 November 2026)
+
+Jobboard300 staff work in the Working Platform's **Recruiting** tool (`/platform/recruiting`), not the owner console (`lib/portal/staff.ts`, migration `0008_staff_assignment.sql`).
+
+| Role | How it is set | Sees | Can assign |
+|---|---|---|---|
+| Admin | Working Platform administrator | Every client and job | Clients to teams, jobs to recruiters, team managers |
+| Team manager | Flag on a team member, set by an admin. A franchise is a team with its own manager. | The team's clients and all their jobs | Jobs to members of their own team |
+| Recruiter | Team member with the Recruiting tool | The team's clients; jobs unassigned or assigned to them | Nothing |
+
+- A client belongs to at most one team, so nobody outside it can read or fulfil its jobs. Out-of-scope records are reported as "not found".
+- Staff with Edit access can submit candidates to managed searches, update pipeline stages with a note, and schedule interviews (phone, video link, in person). History records which staff member acted.
+- New tools default to "no access" on invitations. Admins add people to teams under Operations.
+- Not built yet: a team manager inviting their own staff (an admin does it), and AI interviews.
+
 ## 2. Architecture
 
 - Same app and Worker as the consultancy site. New areas: `/candidate`, `/company`, `/portal/*` (sign-in, register, verify, forgot, reset) and the **Job portal** tab in `/admin`.
@@ -194,6 +209,31 @@ The research treats a company that unlocks a CV as most likely a **separate data
   Payment is a stub: assigning a paid plan records a `payment_intents` row with status `stub`.
 - **Future services** (CV writing, LinkedIn optimisation, spoken English, Tally and GST training) are seeded inactive. The tables `services`, `service_orders`, `service_enrolments` and `payment_intents` are ready, with no screens.
 - SMS OTP is not built. Commercial SMS in India needs TRAI DLT registration first (about two weeks).
+
+## 7a. Notifications, inbox and WhatsApp set-up
+
+Every update writes a message, in `lib/portal/notify.ts` (migration `0009_notifications.sql`).
+
+- **Candidate inbox** (`candidate_messages`, shown on "My CV and privacy"): CV received / incomplete (lists what is missing) / needs review, application received, submitted to a client, profile opened, CV downloaded, each stage change, interview scheduled (India time and link), offer, hire, not selected. Messages state the **outcome only**: never the interviewer's feedback, a rating or a score.
+- **Client updates** (`company_notices`, shown on the client dashboard until marked read): new submission, stage changes made by Jobboard300 staff, interviews scheduled.
+- **Weekly summary**: the queue run adds one counts-only summary per candidate per 7 days (times seen, opened, downloaded).
+- **WhatsApp** is provider-ready but sends nothing yet. Each candidate message also writes a row to `outbound_messages` (`queued` when a sender number is set up, otherwise `skipped`). To go live, a sender reads the `queued` rows, calls the provider API and marks them sent; nothing else changes.
+- **Whose number is used** (`messaging_settings`, `resolveSender`): the client's team number first; the admin's number when the team has none; the admin's number for everyone when the admin turns on "override". Team managers set their own team's number in Recruiting → WhatsApp set-up; only the admin sets the main number and the override.
+- **Team managers** invite recruiters into their own team (Recruiting tool only, one-time 72-hour link) and remove them. They cannot invite into, or see, another team.
+- Deleting a candidate deletes their inbox and queued messages.
+
+## 7b. Placement-fee model and client access (default)
+
+Policy lives in `lib/portal/policy.ts`; migration `0010_placement_model.sql`.
+
+- **Commercials.** No CV quotas are sold. Each client has `fee_percent` (7.5 to 8.33, default 8.33) and a replacement guarantee (default 60 days). On joining, the placement stores the fee percentage and the fee in rupees (annual CTC × percentage).
+- **Managed only.** Every job is recruited by Jobboard300. The client API refuses `matches`, `unlock`, `pipeline-add`, `application-status`, `params-request` and switching a job to self-service (`MANAGED_ONLY`).
+- **Temporary access.** `unlockedCandidate(..., temporary)` requires an open pipeline entry on a job that is not closed; otherwise `ACCESS_ENDED`. Contact details are blanked, and the download is a re-rendered PDF with contacts removed, until the offer stage.
+- **Black box.** The client dashboard carries no match counts, scores, reasons or matching rules. A live job's requirements can change three times in 30 days (`EDIT_LIMIT`).
+- **Client list.** Candidates hide from employers by typed name (`hidden_company_names`); the company list is never returned to candidates.
+- **Older self-service mode.** `CLIENT_SELF_SERVICE=true` turns browsing and unlocking back on. Locally: `CLIENT_SELF_SERVICE=true npm run dev`. `check-portal-e2e.mjs` covers that mode and must be run with it on; `check-recruiting-e2e.mjs` covers the default mode and must be run with it off.
+
+See `docs/SECURITY.md` for the access table and the breach response plan.
 
 ## 8. Checks
 

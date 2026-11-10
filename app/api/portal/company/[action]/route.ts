@@ -11,6 +11,11 @@ import { audit, newId, nowIso, PortalError } from "@/lib/portal/db";
 import { extractText } from "@/lib/ats/extract";
 import { addToPipeline, clientOverview, inviteMember, moveStage, pipelineView, recordInterview, reissueInvite, removeMember, reportPlacementExit, scheduleInterview, setJdService, teamList, REASONS, STAGE_LABEL } from "@/lib/portal/client";
 import { sendMail } from "@/lib/portal/mailer";
+import { companyNotices, markNoticesRead, notifyCandidate } from "@/lib/portal/notify";
+import { redactContacts, selfService } from "@/lib/portal/policy";
+
+// Placement-fee model (default): clients do not browse, unlock or add candidates themselves.
+const managedOnly = () => fail("Jobboard300 recruiters shortlist and submit candidates for your jobs. You will see each candidate in your pipeline.", 403, "MANAGED_ONLY");
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ action: string }> };
@@ -22,10 +27,20 @@ export async function GET(request: Request, context: Ctx) {
   const { action } = await context.params;
   const db = portalDb(), companyId = account.companyId!, url = new URL(request.url), ip = await ipHash(request);
   try {
-    if (action === "dashboard") return json({ ...await companyDashboard(db, companyId), overview: await clientOverview(db, companyId), role: account.companyRole });
-    if (action === "pipeline") return json({ pipeline: await pipelineView(db, companyId, url.searchParams.get("jd") || undefined), reasons: REASONS, labels: STAGE_LABEL });
+    const self = selfService(env.CLIENT_SELF_SERVICE);
+    if (action === "dashboard") {
+      const dash = await companyDashboard(db, companyId), overview = await clientOverview(db, companyId);
+      const terms = await db.prepare("SELECT fee_percent, guarantee_days FROM companies WHERE id = ?").bind(companyId).first<{ fee_percent: number; guarantee_days: number }>();
+      // No match counts in the placement-fee model: they would show how requirement changes move the matching.
+      if (!self) { dash.jds = dash.jds.map(j => ({ ...j, released: 0, unlocked: 0 })); overview.jobs = overview.jobs.map(j => ({ ...j, released: 0 })); }
+      // The matching rules (minimum score, filters, release caps) are internal in the placement-fee model.
+      const params = self || !dash.params ? dash.params : { version: 0, params: { maxLiveJds: dash.params.params.maxLiveJds } };
+      return json({ ...dash, params, pendingRequest: self ? dash.pendingRequest : null, quota: self ? dash.quota : { remaining: 0, unlockedTotal: 0, plans: [] }, overview, role: account.companyRole, notices: await companyNotices(db, companyId), selfService: self, terms: { feePercent: terms?.fee_percent, guaranteeDays: terms?.guarantee_days } });
+    }
+    if (action === "pipeline") return json({ pipeline: await pipelineView(db, companyId, url.searchParams.get("jd") || undefined, !self), reasons: REASONS, labels: STAGE_LABEL });
     if (action === "team") return json({ team: await teamList(db, companyId), you: account.id, owner: account.companyRole === "owner" });
     if (action === "matches") {
+      if (!self) return managedOnly();
       const jdId = url.searchParams.get("jd") ?? "";
       if (!await guard(db, { userId: account.id, companyId, action: "list", jdId, ipHash: ip })) return fail("You are browsing too fast. Wait a while and try again.", 429, "RATE_LIMIT");
       await detectScraping(db, account.id, companyId);
@@ -35,13 +50,13 @@ export async function GET(request: Request, context: Ctx) {
     if (action === "candidate") {
       const ref = url.searchParams.get("ref") ?? "";
       if (!await guard(db, { userId: account.id, companyId, action: "view_full", candidateRef: ref, ipHash: ip })) return fail("You are viewing profiles too fast. Wait a while and try again.", 429, "RATE_LIMIT");
-      const out = await unlockedCandidate(db, companyId, ref);
-      return json({ traceId: out.traceId, unlockedAt: out.unlockedAt, profile: out.profile, applications: out.applications });
+      const out = await unlockedCandidate(db, companyId, ref, !self);
+      return json({ traceId: out.traceId, unlockedAt: out.unlockedAt, profile: out.profile, applications: out.applications, contactsHidden: out.contactsHidden });
     }
     if (action === "download") {
       const ref = url.searchParams.get("ref") ?? "";
       if (!await guard(db, { userId: account.id, companyId, action: "download", candidateRef: ref, ipHash: ip })) return fail("Too many downloads. Wait a while and try again.", 429, "RATE_LIMIT");
-      const out = await unlockedCandidate(db, companyId, ref);
+      const out = await unlockedCandidate(db, companyId, ref, !self);
       const company = await db.prepare("SELECT display_name FROM companies WHERE id = ?").bind(companyId).first<{ display_name: string }>();
       const stamp = { company: company?.display_name ?? "Company", traceId: out.traceId, date: nowIso().slice(0, 10) };
       const object = env.BUCKET ? await env.BUCKET.get(out.cv.r2Key) : null;
@@ -49,14 +64,17 @@ export async function GET(request: Request, context: Ctx) {
       const bytes = new Uint8Array(await object.arrayBuffer());
       const isPdf = out.cv.fileName.toLowerCase().endsWith(".pdf");
       // DOCX originals are never handed out: a stamped PDF rendering is produced instead.
-      const pdf = (isPdf ? await watermarkPdf(bytes, stamp) : null) ?? await renderCvPdf(out.profile, (await extractText(bytes, isPdf ? "pdf" : "docx")).text, stamp);
+      // Before offer stage the copy is a re-rendered CV with contact details removed; the original file is not handed out.
+      const pdf = out.contactsHidden ? await renderCvPdf(out.profile, redactContacts((await extractText(bytes, isPdf ? "pdf" : "docx")).text), stamp)
+        : (isPdf ? await watermarkPdf(bytes, stamp) : null) ?? await renderCvPdf(out.profile, (await extractText(bytes, isPdf ? "pdf" : "docx")).text, stamp);
       await audit(db, account.id, "cv.downloaded", "candidate_ref", ref, `trace ${out.traceId}`);
+      await notifyCandidate(db, out.candidateId, "cv.downloaded", "An employer downloaded your CV", "An employer considering you for a role downloaded a copy of your CV. Each copy carries a watermark that identifies who downloaded it.", companyId);
       return new Response(pdf as Uint8Array<ArrayBuffer>, { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="cv-${ref}.pdf"`, "cache-control": "private, no-store", "x-content-type-options": "nosniff" } });
     }
     if (action === "jd") {
       const jd = await db.prepare("SELECT id, title, raw_text, requirements, status, decision_note, params_version FROM jds WHERE id = ? AND company_id = ?").bind(url.searchParams.get("id") ?? "", companyId).first();
       if (!jd) return fail("JD not found.", 404);
-      return json({ jd, params: await currentParams(db, companyId) });
+      return json({ jd, params: self ? await currentParams(db, companyId) : null });
     }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }
@@ -70,11 +88,15 @@ export async function POST(request: Request, context: Ctx) {
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const s = (v: unknown, max = 200) => typeof v === "string" ? v.slice(0, max) : "";
+    const self = selfService(env.CLIENT_SELF_SERVICE);
+    if (!self && (["unlock", "pipeline-add", "application-status"].includes(action) || (action === "jd-service" && body.service !== "managed"))) return managedOnly();
+    if (!self && action === "params-request") return fail("Ask your Jobboard300 recruiter to change how candidates are shortlisted for you.", 403, "MANAGED_ONLY");
     if (action === "jd-create") {
       const out = await createJd(db, companyId, account.id, { title: s(body.title, 160), text: s(body.text, 12_000), location: s(body.location, 120), workMode: s(body.workMode, 20) });
-      await setJdService(db, companyId, out.id, s(body.service, 10) || "self", Number(body.openings ?? 1) || 1, account.id);
+      await setJdService(db, companyId, out.id, self ? s(body.service, 10) || "self" : "managed", Number(body.openings ?? 1) || 1, account.id);
       return json(out, 201);
     }
+    if (action === "notices-read") { await markNoticesRead(db, companyId); return json({ message: "ok" }); }
     if (action === "jd-service") { await setJdService(db, companyId, s(body.jdId, 60), s(body.service, 10), Number(body.openings ?? 1), account.id); return json({ message: body.service === "managed" ? "Jobboard300 will recruit for this job and submit candidates here." : "Saved." }); }
     if (action === "pipeline-add") { const out = await addToPipeline(db, companyId, account.id, s(body.ref, 40), s(body.jdId, 60)); return json({ ...out, message: out.created ? "Added to your pipeline as shortlisted." : "Already in your pipeline for this job." }, out.created ? 201 : 200); }
     if (action === "pipeline-stage") {
@@ -99,7 +121,7 @@ export async function POST(request: Request, context: Ctx) {
       const r = await db.prepare("UPDATE jds SET status = 'closed', updated_at = ? WHERE id = ? AND company_id = ?").bind(nowIso(), jdId, companyId).run();
       if (!r.meta.changes) return fail("JD not found.", 404);
       await revokeJdReleases(db, jdId, "jd_closed");
-      return json({ message: "JD closed. Unlocked profiles stay available to you." });
+      return json({ message: self ? "JD closed. Unlocked profiles stay available to you." : "Job closed." });
     }
     if (action === "params-request") return json({ id: await requestParamChange(db, companyId, body.params, account.id), message: "Request sent. Your current parameters stay in force until Jobboard300 approves the change." }, 201);
     if (action === "unlock") {

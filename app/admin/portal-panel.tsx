@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Row = Record<string, string | number | null>;
-type Overview = { websiteUnlinked?: number; companies: Row[]; paramRequests: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; plans: Row[]; heldAttempts?: Row[]; clientWork?: { managed: Row[]; placements: Row[] } };
+type Overview = { selfService?: boolean; websiteUnlinked?: number; companies: Row[]; paramRequests: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; plans: Row[]; heldAttempts?: Row[]; clientWork?: { managed: Row[]; placements: Row[] } };
 const ROLE_FAMILIES = ["accounts-finance", "sales-bd", "customer-support", "operations-supply", "hr-admin", "software-it", "marketing", "manufacturing-engineering", "healthcare", "education", "hospitality-retail", "field-services"];
 const SENIORITY = ["fresher", "junior", "mid", "senior", "lead"];
 
@@ -46,20 +46,21 @@ function ParamsFields() {
   </div>;
 }
 
-function InviteClient({ plans, act }: { plans: Row[]; act: (action: string, body: object) => Promise<boolean> }) {
+function InviteClient({ plans, selfService, act }: { plans: Row[]; selfService: boolean; act: (action: string, body: object) => Promise<boolean> }) {
   return <form className="admin-form" onSubmit={async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const form = e.currentTarget, f = new FormData(form);
-    const ok = await act("client-invite", { displayName: f.get("displayName"), legalName: f.get("legalName"), city: f.get("city"), website: f.get("website"), gstin: f.get("gstin"), ownerName: f.get("ownerName"), ownerEmail: f.get("ownerEmail"), guaranteeDays: Number(f.get("guaranteeDays")), nonSolicitMonths: Number(f.get("nonSolicitMonths")), feeTerms: f.get("feeTerms"), params: paramsFrom(f), plan: f.get("plan") });
+    const ok = await act("client-invite", { displayName: f.get("displayName"), legalName: f.get("legalName"), city: f.get("city"), website: f.get("website"), gstin: f.get("gstin"), ownerName: f.get("ownerName"), ownerEmail: f.get("ownerEmail"), guaranteeDays: Number(f.get("guaranteeDays")), nonSolicitMonths: Number(f.get("nonSolicitMonths")), feeTerms: f.get("feeTerms"), feePercent: Number(f.get("feePercent")), params: paramsFrom(f), plan: f.get("plan") ?? "free" });
     if (ok) form.reset(); }}>
     <div className="form-grid">
       <label>Company name<input name="displayName" required maxLength={120} /></label><label>Registered legal name<input name="legalName" required maxLength={160} /></label>
       <label>City<input name="city" maxLength={80} /></label><label>Website<input name="website" maxLength={200} /></label><label>GSTIN<input name="gstin" maxLength={15} /></label>
       <label>Owner&apos;s name<input name="ownerName" maxLength={120} /></label><label>Owner&apos;s work email<input name="ownerEmail" type="email" required maxLength={254} /></label>
-      <label>Replacement guarantee (days)<input name="guaranteeDays" type="number" min={0} max={365} defaultValue={90} required /></label>
+      <label>Placement fee (% of annual salary)<input name="feePercent" type="number" min={7.5} max={8.33} step={0.01} defaultValue={8.33} required /></label>
+      <label>Replacement guarantee (days)<input name="guaranteeDays" type="number" min={0} max={365} defaultValue={60} required /></label>
       <label>Non-solicitation of placed people (months)<input name="nonSolicitMonths" type="number" min={0} max={36} defaultValue={12} required /></label>
-      <label className="full-field">Fee terms (shown to you only)<input name="feeTerms" maxLength={300} placeholder="e.g. 8.33% of annual fixed CTC, payable within 30 days of joining" /></label>
+      <label className="full-field">Other fee terms (shown to you only)<input name="feeTerms" maxLength={300} placeholder="e.g. payable within 30 days of joining" /></label>
     </div>
     <ParamsFields />
-    <label>Starting plan<select name="plan">{plans.map(p => <option key={String(p.code)} value={String(p.code)}>{p.name} ({p.unlock_quota} unlocks, {p.validity_days} days)</option>)}</select></label>
+    {selfService && <label>Starting plan<select name="plan">{plans.map(p => <option key={String(p.code)} value={String(p.code)}>{p.name} ({p.unlock_quota} unlocks, {p.validity_days} days)</option>)}</select></label>}
     <button className="button button-small">Create client and get sign-in link</button>
   </form>;
 }
@@ -109,7 +110,7 @@ export default function PortalPanel() {
     <section className="admin-records"><h2>Clients</h2>
       <p className="admin-help">Set up a client account yourself. This works while public registration is closed. You get a one-time link for the client&apos;s owner, valid for 7 days. If email is configured, the owner is also emailed.</p>
       <button className="text-link" onClick={() => setOpen(open === "invite" ? null : "invite")}>{open === "invite" ? "Cancel" : "Invite a client"}</button>
-      {open === "invite" && <InviteClient plans={o.plans} act={async (a, b) => { const ok = await act(a, b); if (ok) setOpen(null); return ok; }} />}
+      {open === "invite" && <InviteClient plans={o.plans} selfService={!!o.selfService} act={async (a, b) => { const ok = await act(a, b); if (ok) setOpen(null); return ok; }} />}
     </section>
 
     <section className="admin-records"><h2>Managed searches <span>{o.clientWork?.managed.length ?? 0}</span></h2>
@@ -118,25 +119,25 @@ export default function PortalPanel() {
     </section>
 
     <section className="admin-records"><h2>Placements <span>{o.clientWork?.placements.length ?? 0}</span></h2>
-      {(o.clientWork?.placements ?? []).length === 0 ? <p>None yet.</p> : <table className="pj-table"><thead><tr><th>Client</th><th>Role</th><th>Joined</th><th>CTC</th><th>Guarantee until</th><th>No job approaches until</th><th>Fee terms</th><th>Status</th></tr></thead>
-        <tbody>{o.clientWork!.placements.map(p => <tr key={String(p.id)}><td>{p.company}</td><td>{p.title}</td><td>{p.joined_on}</td><td>{p.ctc_inr ? `₹${(Number(p.ctc_inr) / 100000).toFixed(1)} LPA` : ""}</td><td>{p.guarantee_ends_on}</td><td>{p.non_solicit_until}</td><td>{p.fee_terms}</td>
+      {(o.clientWork?.placements ?? []).length === 0 ? <p>None yet.</p> : <table className="pj-table"><thead><tr><th>Client</th><th>Role</th><th>Joined</th><th>CTC</th><th>Guarantee until</th><th>No job approaches until</th><th>Fee</th><th>Status</th></tr></thead>
+        <tbody>{o.clientWork!.placements.map(p => <tr key={String(p.id)}><td>{p.company}</td><td>{p.title}</td><td>{p.joined_on}</td><td>{p.ctc_inr ? `₹${(Number(p.ctc_inr) / 100000).toFixed(1)} LPA` : ""}</td><td>{p.guarantee_ends_on}</td><td>{p.non_solicit_until}</td><td>{p.fee_inr ? `₹${Number(p.fee_inr).toLocaleString("en-IN")} (${p.fee_percent}%)` : p.fee_percent ? `${p.fee_percent}%` : ""}{p.fee_terms ? ` · ${p.fee_terms}` : ""}</td>
           <td><select value={String(p.status)} onChange={e => act("placement-status", { placementId: p.id, status: e.target.value })}>{["active", "left_in_guarantee", "replaced", "left"].map(s => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select>{p.left_on ? ` · left ${p.left_on}` : ""}{p.note ? ` · ${p.note}` : ""}</td></tr>)}</tbody></table>}
     </section>
 
     <section className="admin-records"><h2>Companies <span>{o.companies.length}</span></h2>
       {o.companies.map(c => <article className="admin-detail" key={String(c.id)}><div>
-        <b>{c.display_name}</b> <span className="pill">{c.status}</span><p>{c.legal_name} · {c.city} · {c.owner_email} · guarantee {c.guarantee_days ?? 90} days · non-solicit {c.non_solicit_months ?? 12} months{c.fee_terms ? ` · ${c.fee_terms}` : ""}</p>
+        <b>{c.display_name}</b> <span className="pill">{c.status}</span><p>{c.legal_name} · {c.city} · {c.owner_email} · fee {c.fee_percent ?? 8.33}% · guarantee {c.guarantee_days ?? 60} days · non-solicit {c.non_solicit_months ?? 12} months{c.fee_terms ? ` · ${c.fee_terms}` : ""}</p>
         {c.status === "applied" && <>
           <button className="text-link" onClick={() => setOpen(open === c.id ? null : String(c.id))}>{open === c.id ? "Cancel" : "Approve with matching parameters"}</button>
-          {open === c.id && <form className="admin-form" onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); act("company-activate", { companyId: c.id, params: paramsFrom(f), plan: f.get("plan") }).then(() => setOpen(null)); }}>
-            <ParamsFields /><label>Starting plan<select name="plan">{o.plans.map(p => <option key={String(p.code)} value={String(p.code)}>{p.name} ({p.unlock_quota} unlocks, {p.validity_days} days{p.price_inr ? `, ₹${p.price_inr} + GST` : ""})</option>)}</select></label>
+          {open === c.id && <form className="admin-form" onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); act("company-activate", { companyId: c.id, params: paramsFrom(f), plan: f.get("plan") ?? "free" }).then(() => setOpen(null)); }}>
+            <ParamsFields />{o.selfService && <label>Starting plan<select name="plan">{o.plans.map(p => <option key={String(p.code)} value={String(p.code)}>{p.name} ({p.unlock_quota} unlocks, {p.validity_days} days{p.price_inr ? `, ₹${p.price_inr} + GST` : ""})</option>)}</select></label>}
             <button className="button button-small">Approve company</button></form>}
         </>}
         {c.status === "active" && <div className="admin-record-actions">
-          <select defaultValue="" onChange={e => e.target.value && act("plan-assign", { companyId: c.id, plan: e.target.value }, `Assign the ${e.target.value} plan? Record the invoice separately (payments are a stub).`)}><option value="">Assign plan…</option>{o.plans.filter(p => !p.is_free).map(p => <option key={String(p.code)} value={String(p.code)}>{p.name}</option>)}</select>
-          <button className="text-link" onClick={() => { const d = window.prompt("Adjust unlock quota by (e.g. 10 or -5):"); const n = d && window.prompt("Reason:"); if (d && n) act("quota-adjust", { companyId: c.id, delta: Number(d), note: n }); }}>Adjust quota</button>
+          {o.selfService && <select defaultValue="" onChange={e => e.target.value && act("plan-assign", { companyId: c.id, plan: e.target.value }, `Assign the ${e.target.value} plan? Record the invoice separately (payments are a stub).`)}><option value="">Assign plan…</option>{o.plans.filter(p => !p.is_free).map(p => <option key={String(p.code)} value={String(p.code)}>{p.name}</option>)}</select>}
+          {o.selfService && <button className="text-link" onClick={() => { const d = window.prompt("Adjust unlock quota by (e.g. 10 or -5):"); const n = d && window.prompt("Reason:"); if (d && n) act("quota-adjust", { companyId: c.id, delta: Number(d), note: n }); }}>Adjust quota</button>}
           <button className="text-link" onClick={() => setOpen(open === `p${c.id}` ? null : `p${c.id}`)}>Change parameters</button>
-          <button className="text-link" onClick={() => { const g = window.prompt("Replacement guarantee (days):", String(c.guarantee_days ?? 90)); if (g === null) return; const n = window.prompt("Months Jobboard300 will not approach people placed here about other jobs:", String(c.non_solicit_months ?? 12)); if (n === null) return; const t = window.prompt("Fee terms:", String(c.fee_terms ?? "")); if (t !== null) act("client-terms", { companyId: c.id, guaranteeDays: Number(g), nonSolicitMonths: Number(n), feeTerms: t }); }}>Client terms</button>
+          <button className="text-link" onClick={() => { const fp = window.prompt("Placement fee, % of annual salary (7.5 to 8.33):", String(c.fee_percent ?? 8.33)); if (fp === null) return; const g = window.prompt("Replacement guarantee (days):", String(c.guarantee_days ?? 60)); if (g === null) return; const n = window.prompt("Months Jobboard300 will not approach people placed here about other jobs:", String(c.non_solicit_months ?? 12)); if (n === null) return; const t = window.prompt("Other fee terms:", String(c.fee_terms ?? "")); if (t !== null) act("client-terms", { companyId: c.id, feePercent: Number(fp), guaranteeDays: Number(g), nonSolicitMonths: Number(n), feeTerms: t }); }}>Client terms</button>
           <button className="delete-link" onClick={() => act("company-status", { companyId: c.id, status: "suspended" }, "Suspend this company? Its users lose access to the portal.")}>Suspend</button>
           {open === `p${c.id}` && <form className="admin-form" onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); act("company-params", { companyId: c.id, params: paramsFrom(new FormData(e.currentTarget)) }).then(() => setOpen(null)); }}><ParamsFields /><button className="button button-small">Save parameters</button></form>}
         </div>}

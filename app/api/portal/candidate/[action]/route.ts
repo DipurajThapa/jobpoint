@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { candidateInbox, markInboxRead, resolveSender } from "@/lib/portal/notify";
 import { portalDb, portalSecret, json, fail, failFrom, requireApi, ipHash } from "@/lib/portal/session";
 import { recordConsent, withdrawSharing, consentActive } from "@/lib/portal/consent";
 import { applyToJd, correctProfile, deleteCandidateData, primaryProfile } from "@/lib/portal/candidate";
@@ -11,6 +12,7 @@ import { enqueue } from "@/lib/portal/company";
 import { CvReadError, MAX_CV_BYTES } from "@/lib/ats/pipeline";
 import { sendMail } from "@/lib/portal/mailer";
 import { audit, nowIso, parseJson } from "@/lib/portal/db";
+import { nameKey } from "@/lib/portal/policy";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ action: string }> };
@@ -26,6 +28,7 @@ export async function GET(request: Request, context: Ctx) {
       return json({ jobs: await candidateJobs(db, id, { city: url.searchParams.get("city") ?? undefined, role: url.searchParams.get("role") ?? undefined, minCtcInr: n("minCtc"), maxYears: n("maxYears") }) });
     }
     if (action === "applications") return json({ applications: await candidateApplications(db, id) });
+    if (action === "inbox") { const sender = await resolveSender(db, null); return json({ messages: await candidateInbox(db, id), whatsapp: sender?.number ?? "" }); }
     if (action === "profile") {
       const p = await primaryProfile(db, id);
       return json({ profile: p?.profile ?? null, status: p?.status ?? "none", sharing: await consentActive(db, id, "share_with_companies") });
@@ -39,10 +42,9 @@ export async function GET(request: Request, context: Ctx) {
     }
     if (action === "attempt") return json(await attemptQuestions(db, url.searchParams.get("id") ?? "", id));
     if (action === "companies") {
-      // Companies a candidate can block (verified company records, not free-text names).
-      const row = await db.prepare("SELECT hidden_company_ids FROM candidates WHERE id = ?").bind(id).first<{ hidden_company_ids: string }>();
-      const { results } = await db.prepare("SELECT id, display_name, city FROM companies WHERE status = 'active' ORDER BY display_name").all();
-      return json({ companies: results, blocked: parseJson<string[]>(row?.hidden_company_ids, []), sharing: await candidateSharing(db, id) });
+      // Only the names this candidate typed are returned. The list of client companies is never shown to candidates.
+      const row = await db.prepare("SELECT hidden_company_names FROM candidates WHERE id = ?").bind(id).first<{ hidden_company_names: string }>();
+      return json({ hidden: parseJson<string[]>(row?.hidden_company_names, []), sharing: await candidateSharing(db, id) });
     }
     if (action === "assessments") {
       const { results } = await db.prepare(`SELECT s.id, s.title, s.description, s.skill_id, s.items_per_form, s.time_limit_sec, s.owner_kind, s.jd_id,
@@ -95,16 +97,22 @@ export async function POST(request: Request, context: Ctx) {
       return json({ message: "Sharing stopped. Companies can no longer see your profile, and companies that unlocked it have been asked to delete their copies." });
     }
     if (action === "block") {
-      const companyId = typeof body.companyId === "string" ? body.companyId : "";
-      const row = await db.prepare("SELECT hidden_company_ids FROM candidates WHERE id = ?").bind(id).first<{ hidden_company_ids: string }>();
-      const set = new Set(parseJson<string[]>(row?.hidden_company_ids, []));
-      if (body.block === false) set.delete(companyId); else if (companyId) set.add(companyId);
+      // The candidate types an employer's name. The reply is the same whether or not that employer is a client.
+      const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
+      if (nameKey(name).length < 2) return fail("Type the employer's name.");
+      const row = await db.prepare("SELECT hidden_company_ids, hidden_company_names FROM candidates WHERE id = ?").bind(id).first<{ hidden_company_ids: string; hidden_company_names: string }>();
+      const names = parseJson<string[]>(row?.hidden_company_names, []).filter(n => nameKey(n) !== nameKey(name));
+      const ids = new Set(parseJson<string[]>(row?.hidden_company_ids, []));
+      const { results: all } = await db.prepare("SELECT id, display_name, legal_name FROM companies").all<{ id: string; display_name: string; legal_name: string }>();
+      const matched = all.filter(c => [nameKey(c.display_name), nameKey(c.legal_name)].includes(nameKey(name))).map(c => c.id);
+      if (body.block === false) matched.forEach(m => ids.delete(m)); else { names.push(name); matched.forEach(m => ids.add(m)); }
       await db.batch([
-        db.prepare("UPDATE candidates SET hidden_company_ids = ? WHERE id = ?").bind(JSON.stringify([...set].slice(0, 50)), id),
-        db.prepare("UPDATE releases SET revoked_at = ?, revoke_reason = 'blocked_by_candidate' WHERE candidate_id = ? AND company_id = ? AND revoked_at IS NULL").bind(nowIso(), id, companyId),
+        db.prepare("UPDATE candidates SET hidden_company_ids = ?, hidden_company_names = ? WHERE id = ?").bind(JSON.stringify([...ids].slice(0, 50)), JSON.stringify(names.slice(-20)), id),
+        ...(body.block === false ? [] : matched.map(m => db.prepare("UPDATE releases SET revoked_at = ?, revoke_reason = 'blocked_by_candidate' WHERE candidate_id = ? AND company_id = ? AND revoked_at IS NULL").bind(nowIso(), id, m))),
       ]);
-      return json({ message: body.block === false ? "Company unblocked." : "That company will not see your profile, even anonymously." });
+      return json({ message: body.block === false ? "Removed from your list." : "Saved. Your profile will not be shared with this employer." });
     }
+    if (action === "inbox-read") { await markInboxRead(db, id); return json({ message: "ok" }); }
     if (action === "apply") { await applyToJd(db, id, String(body.jdId ?? "")); await drainQueue(db, portalSecret(), 300); return json({ message: "Application recorded." }); }
     if (action === "delete") {
       if (body.confirm !== "DELETE") return fail("Type DELETE to confirm.", 400, "CONFIRM");

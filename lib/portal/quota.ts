@@ -2,6 +2,7 @@
 // grants add, unlocks subtract one. An unlock of the same candidate by the same
 // company is charged once, however many of its JDs the candidate matches.
 
+import { notifyCandidate } from "./notify";
 import { audit, newId, now, nowIso, PortalError, type Db } from "./db";
 
 export type PlanSeed = { code: string; name: string; unlockQuota: number; validityDays: number; priceInr: number | null; isFree?: boolean };
@@ -104,5 +105,6 @@ export async function unlockCandidate(db: Db, args: { companyId: string; userId:
   ]);
   const row = await db.prepare("SELECT id, trace_id FROM unlocks WHERE company_id = ? AND candidate_id = ?").bind(companyId, release.candidate_id).first<{ id: string; trace_id: string }>();
   if (!row) throw new PortalError("QUOTA_EXHAUSTED", "Your unlock quota is used up. Upgrade your plan to unlock more profiles.", 402);
+  if (row.id === unlockId) await notifyCandidate(db, release.candidate_id, "profile.opened", "An employer opened your full profile", "An employer that matched your profile has opened your full CV and contact details for a role. They may contact you directly.", companyId);
   return { unlockId: row.id, charged: row.id === unlockId, traceId: row.trace_id, remaining: (await quotaStatus(db, companyId)).remaining };
 }
