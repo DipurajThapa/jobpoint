@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import { desc, eq, like, or, sql, gt } from "drizzle-orm";
 import { getDb } from "@/db";
 import { applications, employerEnquiries, jobs } from "@/db/schema";
@@ -19,9 +20,11 @@ export async function GET(request: Request) {
       db.select({ id: jobs.id, title: jobs.title }).from(jobs),
       db.select({ email: applications.email, count: sql<number>`count(*)` }).from(applications).groupBy(applications.email).having(gt(sql<number>`count(*)`, 1)).limit(200),
     ]);
+    // Clients an enquiry can be linked to (the portal's tables are read directly).
+    const clients = (await env.DB!.prepare("SELECT id, display_name AS name FROM companies WHERE status != 'closed' ORDER BY display_name LIMIT 500").all<{ id: string; name: string }>()).results ?? [];
     const duplicateEmails = new Set(duplicates.map(d => d.email));
     const reviewCutoff = Date.now() - 365 * 24 * 60 * 60 * 1000;
     const reviewDue = (value: string) => Date.parse(value.replace(" ", "T") + (value.includes("Z") || value.includes("+") ? "" : "Z")) < reviewCutoff;
-    return json({ applications: candidateApplications.map(a => ({ ...a, hasResume: !!a.hasResume, possibleDuplicate: duplicateEmails.has(a.email), reviewDue: reviewDue(a.updatedAt) })), enquiries: enquiries.map(q => ({ ...q, reviewDue: reviewDue(q.updatedAt) })), jobs: roleList });
+    return json({ applications: candidateApplications.map(a => ({ ...a, hasResume: !!a.hasResume, possibleDuplicate: duplicateEmails.has(a.email), reviewDue: reviewDue(a.updatedAt) })), enquiries: enquiries.map(q => ({ ...q, reviewDue: reviewDue(q.updatedAt) })), jobs: roleList, clients });
   } catch { return errorJson("Enquiry records are temporarily unavailable.", 503); }
 }

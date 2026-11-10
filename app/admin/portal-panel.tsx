@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Row = Record<string, string | number | null>;
-type Overview = { selfService?: boolean; websiteUnlinked?: number; companies: Row[]; paramRequests: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; plans: Row[]; heldAttempts?: Row[]; clientWork?: { managed: Row[]; placements: Row[] } };
+type Overview = { selfService?: boolean; websiteUnlinked?: number; companies: Row[]; paramRequests: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; plans: Row[]; heldAttempts?: Row[]; clientWork?: { managed: Row[]; placements: Row[] }; outreachOrgs?: { id: string; name: string }[] };
 const ROLE_FAMILIES = ["accounts-finance", "sales-bd", "customer-support", "operations-supply", "hr-admin", "software-it", "marketing", "manufacturing-engineering", "healthcare", "education", "hospitality-retail", "field-services"];
 const SENIORITY = ["fresher", "junior", "mid", "senior", "lead"];
 
@@ -127,6 +127,7 @@ export default function PortalPanel() {
     <section className="admin-records"><h2>Companies <span>{o.companies.length}</span></h2>
       {o.companies.map(c => <article className="admin-detail" key={String(c.id)}><div>
         <b>{c.display_name}</b> <span className="pill">{c.status}</span><p>{c.legal_name} · {c.city} · {c.owner_email} · fee {c.fee_percent ?? 8.33}% · guarantee {c.guarantee_days ?? 60} days · non-solicit {c.non_solicit_months ?? 12} months{c.fee_terms ? ` · ${c.fee_terms}` : ""}</p>
+        <p className="admin-help">{Number(c.enquiries) > 0 ? `Came from ${c.enquiries} website enquiry(ies). ` : ""}<label>Email Kit organisation <select value={String(c.email_kit_org_id ?? "")} onChange={e => act("client-outreach-link", { companyId: c.id, orgId: e.target.value })}><option value="">Not linked</option>{c.email_kit_org_id && !(o.outreachOrgs ?? []).some(g => g.id === c.email_kit_org_id) && <option value={String(c.email_kit_org_id)}>{c.outreach_org || "Linked organisation"}</option>}{(o.outreachOrgs ?? []).map(g => <option key={g.id} value={g.id}>{g.name || g.id}</option>)}</select></label></p>
         {c.status === "applied" && <>
           <button className="text-link" onClick={() => setOpen(open === c.id ? null : String(c.id))}>{open === c.id ? "Cancel" : "Approve with matching parameters"}</button>
           {open === c.id && <form className="admin-form" onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); act("company-activate", { companyId: c.id, params: paramsFrom(f), plan: f.get("plan") ?? "free" }).then(() => setOpen(null)); }}>

@@ -62,9 +62,11 @@ export const employerEnquiries = sqliteTable("employer_enquiries", {
   termsVersion: text("terms_version").notNull().default(""),
   consentAt: text("consent_at"),
   status: text("status", { enum: ["new", "contacted", "in_progress", "closed"] }).notNull().default("new"),
+  // The client (companies.id) this enquiry became, once it has.
+  companyId: text("company_id"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [index("enquiries_status_created_idx").on(table.status, table.createdAt)]);
+}, (table) => [index("enquiries_status_created_idx").on(table.status, table.createdAt), index("employer_enquiries_company_idx").on(table.companyId)]);
 
 export const privacyRequests = sqliteTable("privacy_requests", {
   id: text("id").primaryKey(),

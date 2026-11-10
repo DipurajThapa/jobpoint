@@ -105,6 +105,35 @@ export async function inviteClient(db: Db, input: ClientInvite, adminId: string)
   return { companyId, accountId, token };
 }
 
+/**
+ * Record which client an employer enquiry became (or clear the link with null).
+ * The enquiry keeps its own details; only the link is stored.
+ */
+export async function linkEnquiryToClient(db: Db, enquiryId: string, companyId: string | null, adminId: string) {
+  if (!await db.prepare("SELECT id FROM employer_enquiries WHERE id = ?").bind(enquiryId).first()) throw new PortalError("NOT_FOUND", "Enquiry not found.", 404);
+  if (companyId && !await db.prepare("SELECT id FROM companies WHERE id = ?").bind(companyId).first()) throw new PortalError("NOT_FOUND", "Client not found.", 404);
+  await db.prepare("UPDATE employer_enquiries SET company_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(companyId, enquiryId).run();
+  await audit(db, adminId, companyId ? "enquiry.linked" : "enquiry.unlinked", "employer_enquiry", enquiryId, companyId ? `company ${companyId}` : "");
+}
+
+/** Email Kit organisations, for linking to a client. Names only. */
+export async function outreachOrgs(db: Db) {
+  const { results } = await db.prepare("SELECT id, COALESCE(json_extract(data, '$.name'), '') AS name FROM email_kit_records WHERE tbl = 'orgs' ORDER BY name LIMIT 500").all<{ id: string; name: string }>();
+  return results;
+}
+
+/** Record which Email Kit organisation a client was reached through (or clear it with null). One organisation, one client. */
+export async function linkClientToOutreach(db: Db, companyId: string, orgId: string | null, adminId: string) {
+  if (!await db.prepare("SELECT id FROM companies WHERE id = ?").bind(companyId).first()) throw new PortalError("NOT_FOUND", "Client not found.", 404);
+  if (orgId) {
+    if (!await db.prepare("SELECT id FROM email_kit_records WHERE tbl = 'orgs' AND id = ?").bind(orgId).first()) throw new PortalError("NOT_FOUND", "That Email Kit organisation no longer exists.", 404);
+    const taken = await db.prepare("SELECT display_name FROM companies WHERE email_kit_org_id = ? AND id != ?").bind(orgId, companyId).first<{ display_name: string }>();
+    if (taken) throw new PortalError("LINKED", `That Email Kit organisation is already linked to ${taken.display_name}.`, 409);
+  }
+  await db.prepare("UPDATE companies SET email_kit_org_id = ? WHERE id = ?").bind(orgId, companyId).run();
+  await audit(db, adminId, orgId ? "client.outreach_linked" : "client.outreach_unlinked", "company", companyId, orgId ? `org ${orgId}` : "");
+}
+
 const pct = (value: unknown) => { try { return feePercent(value); } catch (e) { throw new PortalError("FEE", (e as Error).message); } };
 
 export async function updateClientTerms(db: Db, companyId: string, guaranteeDays: number, feeTerms: string, adminId: string, nonSolicitMonths = 12, fee: unknown = undefined) {
