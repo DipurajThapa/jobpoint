@@ -41,6 +41,18 @@ export const TOOLS: PlatformTool[] = [
       manage: "Same as Edit. Team managers are set per team by an administrator.",
     },
   },
+  {
+    key: "assessments",
+    name: "Assessments",
+    description: "Question banks for technical, aptitude and client tests. For administrators and invigilators.",
+    href: "/platform/assessments",
+    icon: "quiz",
+    levels: {
+      view: "Read question banks and questions. Cannot change anything.",
+      edit: "Invigilator: create banks, add and upload questions, withdraw questions, set a bank live.",
+      manage: "Same as Edit. Fast Track payments are confirmed by an administrator.",
+    },
+  },
 ];
 
 export const toolByKey = (key: string) => TOOLS.find(t => t.key === key);

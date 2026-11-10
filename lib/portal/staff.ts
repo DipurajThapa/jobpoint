@@ -10,6 +10,8 @@
 
 import { audit, newId, nowIso, PortalError, type Db } from "./db";
 import { messagingFor, saveMessaging } from "./notify";
+import { inviteToTest, testsForPipeline } from "./adaptive";
+import { reissueCommitmentLink } from "./commitment";
 import { moveStage, pipelineView, scheduleInterview, submissionCandidates, submitByRecruiter, type InterviewInput, type StageInput } from "./client";
 
 export type Staff = { id: string; admin: boolean };
@@ -89,9 +91,39 @@ export async function staffPass(db: Db, staff: Staff, input: { jdId: string; can
   await audit(db, staff.id, "shortlist.pass", "jd", input.jdId, input.reason);
 }
 
+/** The job's pipeline for staff, with each candidate's test results and commitment status (never shown to clients). */
 export async function staffPipeline(db: Db, staff: Staff, jdId: string) {
   const job = await jobForStaff(db, staff, jdId);
-  return pipelineView(db, job.company_id, jdId);
+  const rows = await pipelineView(db, job.company_id, jdId), tests = await testsForPipeline(db, jdId);
+  const { results: extra } = await db.prepare("SELECT p.id, p.candidate_id, c.accepted_at, c.id AS commitment FROM pipeline p LEFT JOIN candidate_commitments c ON c.pipeline_id = p.id WHERE p.jd_id = ?").bind(jdId).all<{ id: string; candidate_id: string; accepted_at: string | null; commitment: string | null }>();
+  return rows.map(r => { const x = extra.find(e => e.id === r.id); return { ...r, commitment: x?.commitment ? (x.accepted_at ? "accepted" : "pending") : null, tests: tests.filter(t => t.candidate_id === x?.candidate_id).map(t => ({ title: t.title, kind: t.kind, status: t.status, level: t.final_level, band: t.band })) }; });
+}
+
+/** Tests that can be sent for this job: the aptitude test if the client opted for it, and this client's own tests. */
+export async function staffJobTests(db: Db, staff: Staff, jdId: string) {
+  const job = await jobForStaff(db, staff, jdId);
+  const jd = await db.prepare("SELECT aptitude_test FROM jds WHERE id = ?").bind(jdId).first<{ aptitude_test: number }>();
+  const { results } = await db.prepare("SELECT id, title, kind FROM question_banks WHERE status = 'active' AND ((kind = 'aptitude' AND ? = 1) OR (kind = 'client' AND company_id = ?)) ORDER BY kind, title").bind(jd?.aptitude_test ?? 0, job.company_id).all();
+  return { aptitudeOpted: !!jd?.aptitude_test, banks: results };
+}
+
+/** Record that the client opted for the aptitude test on this job (admin or the team's manager). */
+export async function setJobAptitude(db: Db, staff: Staff, jdId: string, on: boolean) {
+  const job = await jobForStaff(db, staff, jdId), scope = await staffScope(db, staff);
+  if (!scope.admin && !(job.team_id && scope.managedTeams.includes(job.team_id))) throw new PortalError("MANAGER_ONLY", "Only the team's manager or an administrator can change the tests on a job.", 403);
+  await db.prepare("UPDATE jds SET aptitude_test = ? WHERE id = ?").bind(on ? 1 : 0, jdId).run();
+  await audit(db, staff.id, "jd.aptitude", "jd", jdId, on ? "opted in" : "opted out");
+}
+
+export async function staffInviteToTest(db: Db, staff: Staff, pipelineId: string, bankId: string) {
+  const job = await pipelineJob(db, staff, pipelineId);
+  const p = await db.prepare("SELECT candidate_id, jd_id FROM pipeline WHERE id = ?").bind(pipelineId).first<{ candidate_id: string; jd_id: string }>();
+  return inviteToTest(db, { bankId, candidateId: p!.candidate_id, jdId: p!.jd_id, companyId: job.company_id }, staff.id);
+}
+
+export async function staffCommitmentLink(db: Db, staff: Staff, pipelineId: string) {
+  await pipelineJob(db, staff, pipelineId);
+  return reissueCommitmentLink(db, pipelineId, staff.id);
 }
 
 export async function staffSubmit(db: Db, secret: string, staff: Staff, input: { jdId: string; candidateId: string; note: string }) {

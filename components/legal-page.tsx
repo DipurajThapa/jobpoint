@@ -3,5 +3,5 @@ import PublicHeader from "./public-header";
 import PublicFooter from "./public-footer";
 
 export default function LegalPage({ title, intro, children }: { title: string; intro: string; children: ReactNode }) {
-  return <><PublicHeader /><main className="privacy-page"><article className="container privacy-content"><span className="eyebrow">JOBBOARD300 · WEBSITE INFORMATION</span><h1>{title}</h1><p>{intro}</p><nav className="legal-nav" aria-label="Policy pages"><a href="/privacy">Privacy notice</a><a href="/terms">Terms of use</a><a href="/compliance">Privacy safeguards</a></nav>{children}</article></main><PublicFooter /></>;
+  return <><PublicHeader /><main className="privacy-page"><article className="container privacy-content"><span className="eyebrow">JOBBOARD300 · WEBSITE INFORMATION</span><h1>{title}</h1><p>{intro}</p><nav className="legal-nav" aria-label="Policy pages"><a href="/privacy">Privacy notice</a><a href="/terms">Terms of use</a><a href="/terms/job-seekers">Terms for job seekers</a><a href="/terms/employers">Terms for employers</a><a href="/compliance">Privacy safeguards</a></nav>{children}</article></main><PublicFooter /></>;
 }

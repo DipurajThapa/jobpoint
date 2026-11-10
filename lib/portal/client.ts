@@ -17,6 +17,7 @@ import { issuePortalToken } from "./accounts";
 import { activateCompany, currentParams } from "./company";
 import { notifyCandidate, notifyCompany, notifyStage } from "./notify";
 import { FEE, feePercent, nameKey, placementFee } from "./policy";
+import { createCommitment, EARLY_EXIT } from "./commitment";
 
 export const STAGES = ["submitted", "shortlisted", "interview", "offered", "offer_accepted", "joined", "rejected", "offer_declined", "no_show", "withdrawn"] as const;
 export type Stage = typeof STAGES[number];
@@ -304,6 +305,7 @@ export async function moveStage(db: Db, companyId: string, actorId: string, pipe
   if (!results[0]?.meta.changes) throw new PortalError("CONFLICT", "Someone else updated this candidate just now. Reload and try again.", 409);
   await audit(db, actorId, "pipeline.stage", "pipeline", row.id, `${row.stage} → ${stage}`);
   await notifyStage(db, { candidateId: row.candidate_id, companyId, jdId: row.jd_id, stage, byStaff: actorId.startsWith("staff:") });
+  if (stage === "offered") await createCommitment(db, row.id);
   return { stage };
 }
 
@@ -452,13 +454,19 @@ export async function adminClientWork(db: Db) {
 export async function submissionCandidates(db: Db, jdId: string) {
   const jd = await db.prepare("SELECT company_id FROM jds WHERE id = ?").bind(jdId).first<{ company_id: string }>();
   if (!jd) throw new PortalError("NOT_FOUND", "Job not found.", 404);
+  const since = now(); since.setUTCMonth(since.getUTCMonth() - EARLY_EXIT.lowPriorityMonths);
+  const lowPrioritySince = since.toISOString().slice(0, 10);
   const { results } = await db.prepare(`SELECT m.candidate_id, k.display_name, k.current_city, m.score, m.lower_bound, m.hard_pass, m.explanation,
       EXISTS (SELECT 1 FROM pipeline p WHERE p.jd_id = m.jd_id AND p.candidate_id = m.candidate_id) AS in_pipeline,
       CASE WHEN k.account_id IS NOT NULL THEN 'portal' ELSE 'website' END AS source,
       (${ACTIVE_CONSENT_SQL("m.candidate_id", "share_with_companies")} OR ${ACTIVE_CONSENT_SQL("m.candidate_id", "recruiter_sharing")}) AS can_share,
       (SELECT COUNT(*) FROM placements pl WHERE pl.candidate_id = m.candidate_id AND pl.status IN ('left_in_guarantee', 'replaced')) AS early_exits,
+      (SELECT COUNT(*) FROM placements pl WHERE pl.candidate_id = m.candidate_id AND pl.status IN ('left_in_guarantee', 'replaced') AND COALESCE(pl.left_on, pl.joined_on) >= ?) AS recent_early_exits,
+      k.fast_track_at IS NOT NULL AS fast_track,
       (SELECT sp.reason FROM shortlist_passes sp WHERE sp.jd_id = m.jd_id AND sp.candidate_id = m.candidate_id) AS passed
-    FROM matches m JOIN candidates k ON k.id = m.candidate_id WHERE m.jd_id = ? AND k.status = 'active' ORDER BY m.hard_pass DESC, m.lower_bound DESC LIMIT 200`).bind(jdId).all<{ explanation: string; candidate_id: string; in_pipeline: number; passed: string | null; score?: number; lower_bound?: number }>();
+    FROM matches m JOIN candidates k ON k.id = m.candidate_id WHERE m.jd_id = ? AND k.status = 'active' ORDER BY m.hard_pass DESC, m.lower_bound DESC LIMIT 200`).bind(lowPrioritySince, jdId).all<{ explanation: string; candidate_id: string; in_pipeline: number; passed: string | null; recent_early_exits: number; score?: number; lower_bound?: number }>();
+  // A candidate who left a placement inside the replacement period in the last 12 months ranks after everyone else.
+  results.sort((a, b) => Number(!!a.recent_early_exits) - Number(!!b.recent_early_exits));
   return results.map(r => ({ ...r, explanation: parseJson<{ summary?: string }>(r.explanation, {}).summary ?? "" }));
 }
 

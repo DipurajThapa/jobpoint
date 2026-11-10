@@ -85,6 +85,13 @@
       "when": 1794355700000,
       "tag": "0011_shortlist_passes",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794442100000,
+      "tag": "0012_assessments_fast_track",
+      "breakpoints": true
     }
   ]
 }

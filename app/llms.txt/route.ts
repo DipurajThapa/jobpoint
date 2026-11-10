@@ -11,13 +11,15 @@ export async function GET(request: Request) {
 > Jobboard300 is a job board and recruitment consultancy for IT and non-IT white-collar roles. Candidates register a CV and apply for jobs free of charge. Employers hire recruiter-screened candidates and pay 7.5% to 8.33% of annual salary only on a successful placement, with one free replacement if the hire leaves within 60 days.
 
 ## For job seekers
+- Page for job seekers: ${origin}/job-seekers
 - Search current jobs: ${origin}/#jobs
-- Register a CV free of charge: ${origin}/#candidates
+- Terms for job seekers: ${origin}/terms/job-seekers
 - Roles: technology and IT, finance and accounts, sales and customer support, operations, HR and administration
 - A CV is shared with an employer only with the candidate's consent
 
 ## For employers
-- Send a hiring requirement: ${origin}/#employers
+- Page for employers: ${origin}/employers
+- Terms for employers: ${origin}/terms/employers
 - Services: permanent recruitment, contract and temporary staffing
 - Fee: 7.5% to 8.33% of the hire's annual salary, charged only on a successful placement
 - Replacement: one free replacement if the hire leaves within 60 days of joining

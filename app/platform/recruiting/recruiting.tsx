@@ -6,8 +6,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Row = Record<string, string | number | null>;
 type Work = { role: "admin" | "manager" | "recruiter"; clients: Row[]; jobs: Row[]; members: Row[]; teams: Row[]; canEdit: boolean; me: string; messaging: { scopes: Row[]; queue: Row[] } };
-type Entry = { id: string; name: string; stage: string; stageLabel: string; stageReason: string; source: string; available: boolean; recruiterNote: string; next: string[]; interviews: { id: string; round: string; scheduled_at: string; mode: string; status: string; outcome: string }[] };
-type Pipe = { pipeline: Entry[]; reasons: Record<string, string[]>; labels: Record<string, string> };
+type Entry = { commitment?: string | null; tests?: { title: string; kind: string; status: string; level: number | null; band: string | null }[]; id: string; name: string; stage: string; stageLabel: string; stageReason: string; source: string; available: boolean; recruiterNote: string; next: string[]; interviews: { id: string; round: string; scheduled_at: string; mode: string; status: string; outcome: string }[] };
+type Pipe = { tests?: { aptitudeOpted: boolean; banks: { id: string; title: string; kind: string }[] }; pipeline: Entry[]; reasons: Record<string, string[]>; labels: Record<string, string> };
 
 async function api<T>(action: string, body?: object, query = ""): Promise<T> {
   const r = await fetch(`/api/platform/recruiting/${action}${query}`, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : { cache: "no-store" });
@@ -85,13 +85,17 @@ function JobWork({ jd, canEdit, say, reload }: { jd: Row; canEdit: boolean; say:
     api<Pipe>("pipeline", undefined, `?jd=${jd.id}`).then(setPipe).catch(e => say(e.message));
   }, [jd.id, say]);
   useEffect(() => { load(); }, [load]);
-  const post = async (action: string, body: object) => { try { say((await api<{ message: string }>(action, body)).message); setForm(null); load(); reload(); } catch (e) { say((e as Error).message); } };
+  const post = async (action: string, body: object) => { try { const d = await api<{ message: string; link?: string }>(action, body); say(d.link ? `${d.message} ${d.link}` : d.message); setForm(null); load(); reload(); } catch (e) { say((e as Error).message); } };
   const today = new Date().toISOString().slice(0, 10);
   return <div className="pj-list" style={{ marginTop: 12 }}>
     <h3>Pipeline</h3>
+    {pipe?.tests && canEdit && <label className="pj-row pj-muted"><input type="checkbox" checked={pipe.tests.aptitudeOpted} onChange={ev => post("job-aptitude", { jdId: jd.id, on: ev.target.checked })} /> The client has opted for the aptitude and soft-skills test on this job (team manager or admin)</label>}
     {!pipe ? <p className="pj-muted">Loading…</p> : pipe.pipeline.length === 0 ? <p className="pj-muted">Nobody in the client&apos;s pipeline yet.</p> : pipe.pipeline.map(e => <div className="pj-note" key={e.id}>
       <b>{e.name}</b> <span className="pj-pill">{e.stageLabel}</span>{e.stageReason ? <span className="pj-muted"> · {e.stageReason.replace(/_/g, " ")}</span> : null}
       {e.interviews.map(i => <p className="pj-muted" key={i.id}>{i.round} · {when(i.scheduled_at)} · {i.mode.replace("_", " ")} · {i.status}{i.status === "completed" ? `: ${i.outcome}` : ""}</p>)}
+      {(e.tests ?? []).map((t, i) => <p className="pj-muted" key={i}>Test: {t.title} · {t.status === "completed" ? `${t.band} (level ${t.level} of 10). For staff only: never share the level with the client.` : t.status.replace("_", " ")}</p>)}
+      {e.commitment && <p className="pj-muted">Offer commitment: {e.commitment === "accepted" ? "accepted by the candidate" : "sent, not yet accepted"}{e.commitment === "pending" && canEdit ? <> · <button className="pj-link" onClick={() => post("commitment-link", { pipelineId: e.id })}>Get a new link to send</button></> : null}</p>}
+      {canEdit && e.available && (pipe.tests?.banks.length ?? 0) > 0 && <div className="pj-row"><select value="" aria-label="Send a test" onChange={ev => ev.target.value && post("test-invite", { pipelineId: e.id, bankId: ev.target.value })}><option value="">Send a test…</option>{pipe.tests!.banks.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}</select></div>}
       {canEdit && e.available && <div className="pj-row">
         {["shortlisted", "interview"].includes(e.stage) && <button className="pj-link" onClick={() => setForm({ id: e.id, kind: "interview" })}>Schedule interview</button>}
         {e.next.length > 0 && <select value="" aria-label="Update stage" onChange={ev => ev.target.value && setForm({ id: e.id, kind: `stage:${ev.target.value}` })}><option value="">Update stage…</option>{e.next.map(s => <option key={s} value={s}>{pipe.labels[s]}</option>)}</select>}
@@ -115,6 +119,7 @@ function JobWork({ jd, canEdit, say, reload }: { jd: Row; canEdit: boolean; say:
     {!cands ? <p className="pj-muted">Loading…</p> : cands.length === 0 ? <p className="pj-muted">No more candidates for this job right now.</p> : cands.map(c => <div className="pj-note" key={String(c.candidate_id)}>
       <b>{c.display_name || "Candidate"}</b> <span className="pj-pill">{c.source === "website" ? "Website applicant" : "Portal"}</span> <span className="pj-muted">· {c.current_city || "city not stated"}{c.score == null ? "" : ` · score ${Math.round(Number(c.score))}`} · {Number(c.hard_pass) ? "meets the hard filters" : "misses a hard filter"}{Number(c.in_pipeline) ? " · already submitted" : ""}</span>
       <p className="pj-muted">{c.explanation}</p>
+      {Number(c.fast_track) > 0 && <span className="pj-pill">Fast Track</span>}
       {Number(c.early_exits) > 0 && <p className="pj-notice bad">Left a previous placement within the 60-day guarantee ({String(c.early_exits)} time{Number(c.early_exits) > 1 ? "s" : ""}). Ask why before submitting.</p>}
       {c.passed ? <p className="pj-muted">Passed: {String(c.passed).replace(/_/g, " ")}</p> : null}
       {!Number(c.in_pipeline) && !Number(c.can_share) && <p className="pj-muted">Has not agreed to their CV being shared with employers. Ask them first.</p>}

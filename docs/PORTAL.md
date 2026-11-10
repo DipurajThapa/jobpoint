@@ -238,6 +238,19 @@ Policy lives in `lib/portal/policy.ts`; migration `0010_placement_model.sql`.
 
 See `docs/SECURITY.md` for the access table and the breach response plan.
 
+## 7c. Assessments, Fast Track and the offer commitment
+
+Engine in `lib/portal/adaptive.ts`, commitment in `lib/portal/commitment.ts`, migration `0012_assessments_fast_track.sql`.
+
+- **Three kinds of test, one engine.** *Technical*: a Fast Track candidate takes it when they choose. *Aptitude*: Jobboard300's own test, sent to chosen candidates only when the client opted in on that job (`jds.aptitude_test`, set by the admin or team manager). *Client*: the client's questions, sent to chosen candidates for that client's jobs.
+- **Adaptive.** 20 questions in 25 minutes, starting at level 5 of 10. Correct raises the level, wrong lowers it (two levels for the first four questions, then one). The result is the level the test settled at: 1 to 4 beginner, 5 to 7 intermediate, 8 to 10 expert. Questions are drawn at random without repeats; options are shuffled per sitting; the answer never leaves the server; the clock is kept by the server.
+- **Question banks** (`/platform/assessments`, the Assessments tool). Administrators and invigilators (the tool at Edit) create banks, add questions one at a time or by pasting spreadsheet rows, withdraw questions and set a bank live. Every question is checked: level 1 to 10, three to six distinct options, a marked answer, and no "all of the above" style options (they break under shuffling). Upload answers are a letter or the option's exact text; an ambiguous answer is refused. A bank needs 20 active questions to go live; aim for 10 to 20 per level. "Load sample banks" (admin) adds two working banks with computed answers; sample banks never count towards ranking.
+- **Fast Track.** The admin sets the price and payment instructions. A candidate's request creates an order with a reference; they become Fast Track only when the admin confirms the payment was received. There is no payment gateway yet: this is the point to plug one in (`decideFastTrackOrder`).
+- **Who sees what.** Candidate: their level; Fast Track candidates also see weak topics. Staff: levels, on the pipeline. Clients: never levels, scores or answers. A verified technical level counts as evidence for that skill in ranking; paying alone changes nothing.
+- **Invited tests and the commitment use one-time links** (`/test?token=`, `/commit?token=`), so a candidate needs no account. Tokens are stored hashed.
+- **Offer commitment.** Moving a candidate to "offered" creates the commitment and messages the candidate. Staff can reissue the link. Leaving within 60 days is marked for staff and ranks the candidate after everyone else for 12 months. No money is charged.
+- **Terms.** `/terms/job-seekers` and `/terms/employers` must be accepted on the website forms; the version accepted is stored with each application and enquiry (`lib/terms.ts`). The client contract template is `docs/legal/RECRUITMENT_SERVICES_AGREEMENT.md` (needs a lawyer's review).
+
 ## 8. Checks
 
 ```bash

@@ -5,6 +5,7 @@
 // An integrity flag puts an attempt on hold for review; it never penalises by itself.
 
 import { audit, newId, now, nowIso, parseJson, PortalError, type Db } from "./db";
+import { adaptiveEvidence } from "./adaptive";
 
 export const RETAKE_COOLDOWN_DAYS = 30, MAX_ATTEMPTS_PER_YEAR = 3, JOB_READY_CUT = 0.7, DEFAULT_SCORE_SD = 0.18, DEFAULT_RELIABILITY = 0.7;
 const RAPID_MS = 2500;
@@ -172,7 +173,8 @@ export async function skillEvidence(db: Db, candidateId: string): Promise<Record
     const rec = scoreOfRecord(g.attempts);
     if (rec) out[skill] = { y: Math.min(1, rec.x / JOB_READY_CUT), e: rec.e / JOB_READY_CUT, label: `${g.title}: ${Math.round(rec.x * 100)}% (±${Math.round(rec.e * 100)})` };
   }
-  return out;
+  // Verified levels from adaptive technical tests count as evidence for the same skills.
+  return { ...out, ...await adaptiveEvidence(db, candidateId) };
 }
 
 /** The company assessment score for a JD, if the candidate took it. */

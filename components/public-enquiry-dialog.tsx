@@ -72,6 +72,7 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
               <label>Number of hires<input name="headcount" type="number" min="1" max="500" defaultValue="1" required /></label>
               <label className="full-field">Role details<textarea name="details" required maxLength={1800} rows={3} placeholder="Key skills, experience and expected start date" /></label>
               <label className="consent full-field"><input name="consent" type="checkbox" value="yes" required /> I agree that Jobboard300 may contact me about this hiring requirement.</label>
+              <label className="consent full-field"><input name="terms" type="checkbox" value="yes" required /> I am authorised to act for this company, and I have read and agree to the <a href="/terms/employers" target="_blank" rel="noopener noreferrer">terms for employers</a>.</label>
             </div>
           </>}
           {!DEMO_MODE && <button className="button" disabled={busy}>{busy ? "Sending…" : type === "candidate" ? "Submit my details" : "Send hiring enquiry"} <Icon name="north_east" /></button>}

@@ -1,3 +1,4 @@
+import { EMPLOYER_TERMS_VERSION } from "@/lib/terms";
 import { DEMO_MODE, demoSubmissionResponse } from "@/lib/demo";
 import { getDb } from "@/db";
 import { employerEnquiries } from "@/db/schema";
@@ -16,9 +17,9 @@ export async function POST(request: Request) {
     const contactName = clean(body.contactName, 120), company = clean(body.company, 160), email = clean(body.email, 254).toLowerCase();
     const phone = clean(body.phone, 30), roleTitle = clean(body.roleTitle, 160), location = clean(body.location, 120);
     const details = clean(body.details, 1800), headcount = Math.trunc(Math.max(1, Math.min(500, Number(body.headcount) || 1)));
-    if (!contactName || !company || !validEmail(email) || !phone || !roleTitle || !location || !details || body.consent !== "yes") return errorJson("Please complete the required fields and consent checkbox.");
+    if (!contactName || !company || !validEmail(email) || !phone || !roleTitle || !location || !details || body.consent !== "yes" || body.terms !== "yes") return errorJson("Please complete the required fields and accept the terms for employers.");
     const id = crypto.randomUUID();
-    await getDb().insert(employerEnquiries).values({ id, contactName, company, email, phone, roleTitle, location, headcount, details, consent: true, privacyVersion: "2026-10-13", consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    await getDb().insert(employerEnquiries).values({ id, contactName, company, email, phone, roleTitle, location, headcount, details, consent: true, privacyVersion: "2026-10-13", termsVersion: EMPLOYER_TERMS_VERSION, consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     const reference = `HE-${id.slice(0, 13).replaceAll("-", "").toUpperCase()}`;
     return json({ reference, message: `Your hiring enquiry has been saved. Reference: ${reference}. A recruiter will review the requirement and follow up using your contact details. Recruitment starts after the scope is agreed.` }, 201);
   } catch { return errorJson("We couldn't submit your enquiry. Please try again in a moment.", 503); }

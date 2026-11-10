@@ -35,6 +35,8 @@ const staffMod = await mod("staff.ts");
 const notify = await mod("notify.ts");
 const views = await mod("views.ts");
 const policy = await mod("policy.ts");
+const adaptive = await mod("adaptive.ts");
+const commitment = await mod("commitment.ts");
 
 const SECRET = "test-secret-test-secret-test-secret-123";
 let clock = new Date("2026-11-09T06:00:00Z");
@@ -1022,6 +1024,128 @@ await check("Recruiters see the three best candidates at a time, without scores;
   clock = new Date("2026-12-20T06:00:00Z");
   assert.equal((await client.reportPlacementExit(t.db, t.compK.id, t.compK.userId, pl.id, "2026-12-19", "Left")).inGuarantee, true);
   assert.equal((await staffMod.staffCandidates(t.db, t.admin, t.jdK)).find(x => x.candidate_id === c[1]).early_exits, 1, "a candidate who left inside the guarantee is marked for staff");
+  clock = new Date("2026-11-09T06:00:00Z");
+});
+
+// ---------- Question banks, adaptive tests, Fast Track, commitment ----------
+
+await check("Question banks: every question is checked, uploads report bad rows, and a bank needs a full sitting before going live", async () => {
+  const db = await setup();
+  const ok = { level: 5, topic: "T", stem: "What is two plus two?", options: ["4", "5", "6", "7"], answerIndex: 0 };
+  assert.equal(adaptive.questionProblem(ok), null);
+  for (const bad of [{ ...ok, level: 11 }, { ...ok, options: ["4", "4", "6"] }, { ...ok, options: ["4", "5", "All of the above"] }, { ...ok, answerIndex: 4 }, { ...ok, stem: "Short" }, { ...ok, options: ["4", "5"] }]) assert.ok(adaptive.questionProblem(bad), JSON.stringify(bad));
+  const parsed = adaptive.parseQuestionRows('level,topic,question,option 1,option 2,option 3,option 4,answer,explanation\n3,Maths,"What is 10, divided by 2?",5,2,8,20,A,Ten over two\n4,Maths,What is three times three?,6,9,12,3,9,\n4,Maths,No answer given here at all,1,2,3,4,zzz,');
+  assert.deepEqual([parsed.questions.length, parsed.errors.length, parsed.questions[0].stem, parsed.questions[0].answerIndex, parsed.questions[1].answerIndex], [2, 1, "What is 10, divided by 2?", 0, 1]);
+  const bank = await adaptive.createBank(db, { kind: "technical", title: "Java", skillId: "java" }, "inv1");
+  await rejects(adaptive.createBank(db, { kind: "client", title: "Client test" }, "inv1"), "COMPANY");
+  const r = await adaptive.addQuestions(db, bank, [...parsed.questions, parsed.questions[0], { ...ok, options: ["4", "4", "5"] }], "inv1");
+  assert.deepEqual([r.added, r.errors.length], [2, 2], "duplicates and invalid rows are refused and reported");
+  await rejects(adaptive.setBankStatus(db, bank, "active", "inv1"), "TOO_FEW");
+  const ids = await adaptive.loadSampleBanks(db, "admin");
+  const sum = await adaptive.bankSummary(db);
+  assert.ok(ids.length === 2 && sum.filter(b => b.is_sample).every(b => b.status === "active" && b.questions === 120 && b.levels === 10));
+  await rejects(adaptive.loadSampleBanks(db, "admin"), "EXISTS");
+});
+
+// Sit a test as someone who answers correctly whenever the question is at or below their true level.
+async function sit(db, testId, cand, ability) {
+  let step = await adaptive.testStep(db, testId, cand, { start: true }), seen = new Set(), orders = new Set(), n = 0;
+  while (step.state === "question") {
+    const t = await db.prepare("SELECT current_question_id, current_order FROM adaptive_tests WHERE id = ?").bind(testId).first();
+    const q = await db.prepare("SELECT level, answer_index, options FROM bank_questions WHERE id = ?").bind(t.current_question_id).first();
+    assert.ok(!seen.has(t.current_question_id), "no question repeats in one sitting"); seen.add(t.current_question_id);
+    const order = JSON.parse(t.current_order); orders.add(order.join(""));
+    assert.deepEqual(step.question.options, order.map(i => JSON.parse(q.options)[i]), "options are shown in the shuffled order");
+    assert.ok(!("answer_index" in step.question) && !JSON.stringify(step).includes("Computed answer"), "the answer is never sent");
+    step = await adaptive.answerTest(db, testId, cand, q.level <= ability ? order.indexOf(q.answer_index) : (order.indexOf(q.answer_index) + 1) % order.length);
+    n++;
+  }
+  return { step, n, orders };
+}
+
+await check("Fast Track: payment confirmation marks the candidate; technical tests need it; the adaptive test finds the candidate's level", async () => {
+  const db = await setup();
+  const [tech] = await adaptive.loadSampleBanks(db, "admin");
+  const cand = await makeCandidate(db, "Test Taker");
+  await rejects(adaptive.startTechnicalTest(db, cand, tech), "FAST_TRACK");
+  await rejects(adaptive.requestFastTrack(db, cand), "NOT_OPEN");
+  await rejects(adaptive.saveFastTrackSettings(db, 0, "Pay by UPI to jobboard300@upi", "admin"), "PRICE");
+  await adaptive.saveFastTrackSettings(db, 1499, "Pay by UPI to jobboard300@upi and quote your reference.", "admin");
+  const order = await adaptive.requestFastTrack(db, cand);
+  assert.ok(/^FT-[A-Z0-9]{8}$/.test(order.reference) && order.amount_inr === 1499 && (await adaptive.requestFastTrack(db, cand)).reference === order.reference, "one open order per candidate");
+  assert.equal(await adaptive.isFastTrack(db, cand), false, "asking is not paying");
+  await rejects(adaptive.decideFastTrackOrder(db, order.id, true, "", "admin"), "NOTE");
+  await adaptive.decideFastTrackOrder(db, order.id, true, "UPI ref 12345", "admin");
+  assert.equal(await adaptive.isFastTrack(db, cand), true);
+  assert.ok((await kinds(db, cand)).includes("fast_track.active"));
+  await rejects(adaptive.decideFastTrackOrder(db, order.id, true, "again", "admin"), "DECIDED");
+  const view = await adaptive.candidateTests(db, cand, ["sample"]);
+  assert.ok(view.fastTrack && view.technical[0].suggested === true, "tests matching the candidate's skills are suggested first");
+  const { id } = await adaptive.startTechnicalTest(db, cand, tech);
+  assert.equal((await adaptive.startTechnicalTest(db, cand, tech)).id, id, "an unfinished test is resumed, not restarted");
+  const out = await sit(db, id, cand, 7);
+  assert.deepEqual([out.n, out.step.state, out.step.band], [20, "done", "intermediate"]);
+  assert.ok(Math.abs(out.step.level - 7) <= 1 && out.orders.size > 3, `level ${out.step.level} for a true level of 7; options shuffled`);
+  assert.ok(Array.isArray(out.step.weakTopics), "Fast Track candidates see weak topics");
+  await rejects(adaptive.startTechnicalTest(db, cand, tech), "COOLDOWN");
+  await rejects(adaptive.answerTest(db, id, cand, 0), "NO_QUESTION");
+  for (const [ability, band] of [[10, "expert"], [0, "beginner"]]) {
+    const c = await makeCandidate(db, `Level ${ability}`); await db.prepare("UPDATE candidates SET fast_track_at = ? WHERE id = ?").bind(clock.toISOString(), c).run();
+    const t = await adaptive.startTechnicalTest(db, c, tech); const res = await sit(db, t.id, c, ability);
+    assert.equal(res.step.band, band); assert.ok(ability ? res.step.level >= 9 : res.step.level <= 2, `level ${res.step.level}`);
+    await rejects(adaptive.testStep(db, t.id, cand), "NOT_FOUND");
+  }
+  assert.deepEqual(await adaptive.adaptiveEvidence(db, cand), {}, "sample banks never count towards ranking");
+});
+
+await check("Aptitude and client tests go only to invited candidates; the offer commitment and early-leaver priority work", async () => {
+  const t = await staffSetup();
+  await client.setJdService(t.db, t.compK.id, t.jdK, "managed", 1, t.compK.userId);
+  const [, apt] = await adaptive.loadSampleBanks(t.db, "admin");
+  const cand = await makeCandidate(t.db, "Invited Person"), other = await makeCandidate(t.db, "Steady Person");
+  const args = { bankId: apt, candidateId: cand, jdId: t.jdK, companyId: t.compK.id };
+  await rejects(adaptive.inviteToTest(t.db, args, t.recA.id), "NOT_OPTED");
+  await t.db.prepare("UPDATE jds SET aptitude_test = 1 WHERE id = ?").bind(t.jdK).run();
+  const inv = await adaptive.inviteToTest(t.db, args, t.recA.id);
+  await rejects(adaptive.inviteToTest(t.db, args, t.recA.id), "ALREADY");
+  const token = new URL(inv.link).searchParams.get("token");
+  await rejects(adaptive.testByToken(t.db, "0".repeat(64)), "NOT_FOUND");
+  const found = await adaptive.testByToken(t.db, token);
+  assert.equal(found.candidate_id, cand);
+  assert.equal((await adaptive.testStep(t.db, found.id, cand)).state, "ready", "opening the link does not start the clock");
+  const res = await sit(t.db, found.id, cand, 3);
+  assert.ok(res.step.band === "beginner" && res.step.weakTopics === null, "a candidate who has not paid sees the level but not the weak topics");
+  const clientBank = await adaptive.createBank(t.db, { kind: "client", title: "Kolkata Client test", companyId: t.compK.id }, "admin");
+  await adaptive.addQuestions(t.db, clientBank, Array.from({ length: 20 }, (_, i) => ({ level: 1 + (i % 10), topic: "Client", stem: `Client question number ${i + 1}?`, options: ["Right", "Wrong one", "Wrong two"], answerIndex: 0 })), "admin");
+  await adaptive.setBankStatus(t.db, clientBank, "active", "admin");
+  await rejects(adaptive.inviteToTest(t.db, { bankId: clientBank, candidateId: cand, jdId: t.jdF, companyId: t.compF.id }, t.recF.id), "NOT_FOUND");
+  assert.ok((await adaptive.inviteToTest(t.db, { ...args, bankId: clientBank }, t.recA.id)).link.includes("/test?token="));
+  assert.ok(!JSON.stringify(await client.pipelineView(t.db, t.compK.id, undefined, true)).match(/final_level|band|beginner/), "the client never sees test levels");
+
+  // Offer-stage commitment
+  const sub = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: cand, note: "Fit" });
+  for (const stage of ["shortlisted", "interview"]) await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage });
+  await rejects(commitment.reissueCommitmentLink(t.db, sub.id, "staff"), "NOT_FOUND");
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "offered", offerCtcInr: 800_000 });
+  assert.ok((await kinds(t.db, cand)).includes("commitment.requested"));
+  const link = await commitment.reissueCommitmentLink(t.db, sub.id, "staff"), ctoken = new URL(link).searchParams.get("token");
+  const read = await commitment.readCommitment(t.db, ctoken);
+  assert.ok(read.body.includes("60 days") && read.body.includes("does not charge") && read.acceptedAt === null);
+  const acc = await commitment.acceptCommitment(t.db, ctoken, "iphash");
+  assert.equal((await commitment.acceptCommitment(t.db, ctoken, "x")).acceptedAt, acc.acceptedAt, "accepting twice keeps the first record");
+  await rejects(commitment.reissueCommitmentLink(t.db, sub.id, "staff"), "ACCEPTED");
+
+  // Early leaver ranks last for 12 months, then normally again
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "offer_accepted", joiningDate: "2026-12-01" });
+  clock = new Date("2026-12-01T06:00:00Z");
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "joined", joiningDate: "2026-12-01" });
+  const pl = await t.db.prepare("SELECT id FROM placements WHERE pipeline_id = ?").bind(sub.id).first();
+  clock = new Date("2026-12-21T06:00:00Z");
+  await client.reportPlacementExit(t.db, t.compK.id, t.compK.userId, pl.id, "2026-12-20", "Left");
+  await rank(t.db, t.jdF, cand, 95); await rank(t.db, t.jdF, other, 60);
+  assert.deepEqual((await client.submissionCandidates(t.db, t.jdF)).map(c => c.candidate_id), [other, cand], "a recent early leaver ranks after everyone else");
+  clock = new Date("2028-01-05T06:00:00Z");
+  assert.deepEqual((await client.submissionCandidates(t.db, t.jdF)).map(c => c.candidate_id), [cand, other], "after 12 months the ranking is by fit again");
   clock = new Date("2026-11-09T06:00:00Z");
 });
 
