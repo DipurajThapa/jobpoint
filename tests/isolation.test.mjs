@@ -382,6 +382,8 @@ test("recruiters see the shortlist without scores; a job assigned to a colleague
   await w.db.prepare("INSERT INTO matches (jd_id, candidate_id, cv_id, profile_version, score, lower_bound, hard_pass, explanation, engine_version, scored_at) VALUES (?, ?, 'cv', 1, 91.5, 88.25, 1, '{}', 't', ?)").bind(w.A.jdId, carol, new Date().toISOString()).run();
   const one = await makeStaff(w.db, "rec-one", { team: "team-one" }), other = await makeStaff(w.db, "rec-other", { team: "team-one" });
   const admin = await makeStaff(w.db, "boss", { admin: true, level: null });
+  // Opening a job scores whatever is waiting. This test seeds its own score, so nothing may be waiting.
+  await w.db.prepare("DELETE FROM score_queue").run();
   const list = await call(recruiting, "GET", `/api/platform/recruiting/candidates?jd=${w.A.jdId}`, { cookie: one, action: "candidates" });
   assert.equal(list.status, 200);
   assert.ok(list.json.candidates.length >= 1 && list.json.candidates.length <= 3);
