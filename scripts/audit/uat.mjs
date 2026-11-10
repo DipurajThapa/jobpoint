@@ -122,7 +122,7 @@ await step("U2.3", "the owner invites the client from the Job portal tab and get
   await owner.page.getByRole("button", { name: /^Job portal/ }).click();
   await owner.page.getByRole("button", { name: "Invite a client", exact: true }).click();
   const form = owner.page.locator("form", { has: owner.page.locator("[name=ownerEmail]") });
-  await fill(form, { displayName: CLIENT.name, legalName: CLIENT.legal, city: "Durgapur", ownerName: CLIENT.owner, ownerEmail: CLIENT.email, minScore: 65 });
+  await fill(form, { displayName: CLIENT.name, legalName: CLIENT.legal, city: "Durgapur", ownerName: CLIENT.owner, ownerEmail: CLIENT.email });
   for (const fam of seedCo.params.roleFamilies) await form.locator(`[name=roleFamilies][value="${fam}"]`).check();
   await form.getByRole("button", { name: /Create client and get sign-in link/ }).click();
   await owner.page.getByText(/\/portal\/accept\?token=/).first().waitFor();
@@ -154,9 +154,9 @@ await step("U2.4", "the owner links the enquiry to the new client and marks it i
   await card.waitFor().catch(() => {});
   if (await card.count()) {
     await card.getByRole("button", { name: "Change parameters" }).click().catch(() => {});
-    const shown = await card.locator("[name=minScore]").inputValue().catch(() => "");
+    // The form must open with what is set today: the families the client was set up with are ticked.
     const ticked = await card.locator("[name=roleFamilies]:checked").count().catch(() => -1);
-    if (shown && (shown !== "65" || ticked === 0)) finding("U2.5", { severity: "high", kind: "defect", title: "\"Change parameters\" opens a blank form and saving it replaces the client's rules with defaults", actual: `This client was set up with minimum score 65 and ${seedCo.params.roleFamilies.length} permitted role families. Opening "Change parameters" shows minimum score ${shown} and ${ticked} role families ticked: the form never loads the current values, and nothing on the card shows what they are. Pressing "Save parameters" overwrites everything with what is on the form; live jobs that no longer fit are paused.`, expected: "The form opens showing the client's current rules, so the owner changes one thing and keeps the rest.", fix: "Return each company's current params from adminOverview() (lib/portal/views.ts) and pass them to <ParamsFields defaults={…}/> in app/admin/portal-panel.tsx.", where: "app/admin/portal-panel.tsx ParamsFields; lib/portal/views.ts adminOverview" });
+    if (ticked !== seedCo.params.roleFamilies.length) finding("U2.5", { severity: "high", kind: "defect", title: "\"Change parameters\" opens a blank form and saving it replaces the client's rules with defaults", actual: `This client was set up with ${seedCo.params.roleFamilies.length} permitted role families. Opening "Change parameters" shows ${ticked} ticked: the form never loads the current values. Pressing "Save parameters" overwrites everything with what is on the form; live jobs that no longer fit are paused.`, expected: "The form opens showing the client's current rules, so the owner changes one thing and keeps the rest.", fix: "Return each company's current params from adminOverview() (lib/portal/views.ts) and pass them to <ParamsFields defaults={…}/> in app/admin/portal-panel.tsx.", where: "app/admin/portal-panel.tsx ParamsFields; lib/portal/views.ts adminOverview" });
     await card.getByRole("button", { name: "Change parameters" }).click().catch(() => {});
   }
 }
@@ -191,7 +191,7 @@ await step("U3.3", "the client posts a job and submits it for approval", async (
   await client.page.getByRole("button", { name: "Jobs", exact: true }).click();
   await client.page.getByRole("button", { name: "Post a job" }).click();
   const f = client.page.locator("form", { has: client.page.locator("[name=text]") });
-  await fill(f, { title: JOB, location: "Durgapur", openings: 1, text: seedJd.text });
+  await fill(f, { title: JOB, location: "Durgapur", openings: 2, text: seedJd.text });
   await f.getByRole("button", { name: "Create draft" }).click();
   await client.page.getByRole("button", { name: "Submit for approval" }).waitFor();
   await client.shot("05-client-job-draft");
@@ -457,7 +457,7 @@ await step("U8.9", "the recruiter's screen shows the stage, the interview and it
   const t = await r.innerText();
   await recruiter.shot("15-recruiter-interview");
   if (!t.includes("Strong on GST")) finding("U8.9a", { severity: "high", kind: "gap", title: "The client's interview feedback is not shown to the recruiter", actual: `The client wrote feedback ("Strong on GST; fine on TDS.", 4/5) and was told on the form that it is "Shared with Jobboard300 to improve the next shortlist". The recruiter's pipeline row shows only: "${t.split("\n").find(l => /Technical 1/.test(l)) ?? ""}". The feedback text, the rating, the meeting link and the interviewer's name are sent to the recruiter's screen by the server but never displayed.`, expected: "The recruiter sees the feedback, rating, link and interviewer under each interview.", fix: "In app/platform/recruiting/recruiting.tsx, extend the interview line to print location, interviewer, rating and feedback (the Entry type needs those fields).", where: "app/platform/recruiting/recruiting.tsx" });
-  return /Technical 1/.test(t) && /completed: advance/.test(t);
+  return /Technical 1/.test(t) && /completed: (advance|move forward)/.test(t);
 }, { severity: "high" });
 {
   const r = jobCard().locator(".pj-note", { hasText: CAND.name }).first();
@@ -491,8 +491,10 @@ await step("U9.3", "the recruiter sees the commitment waiting and gets a link to
   const r = jobCard().locator(".pj-note", { hasText: CAND.name }).first();
   await r.getByText(/Offer commitment: sent, not yet accepted/).waitFor();
   await r.getByRole("button", { name: "Get a new link to send" }).click();
-  await recruiter.page.getByText(/\/commit\?token=/).first().waitFor();
-  commitLink = (await recruiter.text()).match(/https?:\/\/\S+\/commit\?token=[a-f0-9]{64}/)?.[0] ?? "";
+  // The link is in a box of its own, with a Copy button.
+  const linkBox = recruiter.page.locator('input[aria-label="One-time link"]');
+  await linkBox.waitFor();
+  commitLink = (await linkBox.inputValue()).match(/https?:\/\/\S+\/commit\?token=[a-f0-9]{64}/)?.[0] ?? "";
   const asLink = await recruiter.page.locator(`a[href*="/commit?token="], input[value*="/commit?token="]`).count();
   if (!asLink) finding("U9.3a", { severity: "medium", kind: "defect", title: "One-time links in the Recruiting tool appear as plain text in a message that the next action wipes", actual: "\"Get a new link to send\", \"Send a test…\" and \"Invite and get link\" put the link at the end of the status line at the top of the page. It cannot be clicked or copied with a button, the recruiter has usually scrolled far below it, and the next thing they press replaces the message. A test link lost this way cannot be issued again (\"This candidate already has this test for this job\").", expected: "A box with the link, a Copy button and (for tests and commitments) \"send again\".", fix: "Reuse the copy box from app/platform/admin/team-access.tsx in recruiting.tsx; add a `test-link` reissue action.", where: "app/platform/recruiting/recruiting.tsx" });
   return !!commitLink;

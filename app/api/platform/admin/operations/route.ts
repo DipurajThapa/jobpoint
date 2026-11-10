@@ -58,8 +58,22 @@ export async function POST(request: Request) {
   }
   if (action === "team.unassign" || action === "team.delete") {
     if (!await db().prepare("SELECT id FROM platform_teams WHERE id=?").bind(id).first()) return apiError("Team not found.",404);
-    await db().batch([action === "team.delete" ? db().prepare("DELETE FROM platform_teams WHERE id=?").bind(id) : db().prepare("DELETE FROM platform_team_members WHERE team_id=? AND user_id=?").bind(id,String(body.userId || "")),auditStatement(actor,action,"team",id)]);
-    return apiJson({ok:true});
+    // Jobs assigned to the person (or to anyone in the team being deleted) go back to "Unassigned" for the team, so they are not left invisible.
+    const userId = String(body.userId || "");
+    const cleared = action === "team.delete"
+      ? (await db().prepare("SELECT COUNT(*) AS n FROM jds WHERE recruiter_id IS NOT NULL AND company_id IN (SELECT id FROM companies WHERE team_id=?)").bind(id).first<{ n: number }>())?.n ?? 0
+      : (await db().prepare("SELECT COUNT(*) AS n FROM jds WHERE recruiter_id=? AND company_id IN (SELECT id FROM companies WHERE team_id=?)").bind(userId,id).first<{ n: number }>())?.n ?? 0;
+    await db().batch(action === "team.delete" ? [
+      db().prepare("UPDATE jds SET recruiter_id=NULL WHERE company_id IN (SELECT id FROM companies WHERE team_id=?)").bind(id),
+      db().prepare("UPDATE companies SET team_id=NULL WHERE team_id=?").bind(id),
+      db().prepare("DELETE FROM platform_teams WHERE id=?").bind(id),
+      auditStatement(actor,action,"team",id,`${cleared} job assignment(s) cleared`),
+    ] : [
+      db().prepare("DELETE FROM platform_team_members WHERE team_id=? AND user_id=?").bind(id,userId),
+      db().prepare("UPDATE jds SET recruiter_id=NULL WHERE recruiter_id=? AND company_id IN (SELECT id FROM companies WHERE team_id=?)").bind(userId,id),
+      auditStatement(actor,action,"team",id,`${cleared} job assignment(s) cleared`),
+    ]);
+    return apiJson({ok:true,cleared});
   }
   if (action === "secrets.rewrap") {
     // After INTEGRATION_SECRET_KEY is set: move stored credentials off the shared key.

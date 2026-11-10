@@ -150,6 +150,8 @@ test("staff see contact details one candidate at a time, only for people in fron
   const other = await makeStaff(w.db, "rec-two", { team: "team-two" });
   const viewer = await makeStaff(w.db, "viewer", { team: "team-one", level: "view" });
   const contact = (cookie, jdId, candidateId) => call(recruiting, "POST", "/api/platform/recruiting/contact", { cookie, action: "contact", body: { jdId, candidateId } });
+  // Opening a job scores whatever is waiting. These tests seed their own scores, so nothing may be waiting.
+  await w.db.prepare("DELETE FROM score_queue").run();
   const list = await call(recruiting, "GET", `/api/platform/recruiting/candidates?jd=${w.A.jdId}`, { cookie: rec, action: "candidates" });
   assert.equal(list.json.candidates.length, 3);
   // The list itself never carries phone numbers or emails.

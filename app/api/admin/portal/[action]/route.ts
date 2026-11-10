@@ -6,6 +6,7 @@ import { mergeCandidates, primaryProfile, purgeExpiredStubs, resolveReview } fro
 import { drainQueue } from "@/lib/portal/queue";
 import { adminOverview } from "@/lib/portal/views";
 import { audit } from "@/lib/portal/db";
+import { placementFee } from "@/lib/portal/policy";
 import { adminClientWork, inviteClient, linkClientToOutreach, linkEnquiryToClient, outreachOrgs, setJdOpenings, submissionCandidates, submitByRecruiter, updateClientTerms } from "@/lib/portal/client";
 import { sendMail } from "@/lib/portal/mailer";
 import { weeklySummaries } from "@/lib/portal/notify";
@@ -87,6 +88,19 @@ export async function POST(request: Request, context: Ctx) {
         await audit(db, admin, "placement.status", "placement", s(b.placementId, 60), status);
         return json({ message: "Placement updated." });
       }
+      case "placement-edit": {
+        // The fee is a share of the salary: the owner can correct the salary (and the fee follows), with a reason that is kept.
+        const id = s(b.placementId, 60), reason = s(b.reason, 300).trim();
+        if (reason.length < 5) return fail("Give a reason for the change.");
+        const ctc = Math.round(Number(b.ctcInr));
+        if (!(ctc >= 50_000 && ctc <= 100_000_000)) return fail("Enter the annual CTC in rupees (for example 1200000 for ₹12 LPA).");
+        const pl = await db.prepare("SELECT ctc_inr, fee_percent, fee_inr, replaces_placement_id FROM placements WHERE id = ?").bind(id).first<{ ctc_inr: number | null; fee_percent: number; fee_inr: number | null; replaces_placement_id: string | null }>();
+        if (!pl) return fail("Placement not found.", 404);
+        const fee = pl.replaces_placement_id ? 0 : placementFee(ctc, pl.fee_percent);
+        await db.prepare("UPDATE placements SET ctc_inr = ?, fee_inr = ? WHERE id = ?").bind(ctc, fee, id).run();
+        await audit(db, admin, "placement.edited", "placement", id, `CTC ${pl.ctc_inr ?? "none"} to ${ctc}; fee ${pl.fee_inr ?? "none"} to ${fee}; ${reason}`);
+        return json({ message: pl.replaces_placement_id ? "Salary saved. This hire replaces an earlier one, so there is no new fee." : "Salary and fee saved." });
+      }
       case "company-activate": await activateCompany(db, s(b.companyId, 60), b.params, admin); return done("Company approved with its matching rules.");
       case "company-params": { const id = await requestParamChange(db, s(b.companyId, 60), b.params, admin); const out = await decideParamRequest(db, id, true, admin, "Set by admin"); return done(`Parameters updated.${out.paused.length ? ` ${out.paused.length} live JD(s) paused because they no longer fit.` : ""}`); }
       case "company-status": {
@@ -96,7 +110,7 @@ export async function POST(request: Request, context: Ctx) {
         await audit(db, admin, `company.${status}`, "company", s(b.companyId, 60), s(b.note, 300));
         return done(`Company ${status}.`);
       }
-      case "jd-decide": await decideJd(db, s(b.jdId, 60), b.approve === true, admin, s(b.note, 500)); return done(b.approve === true ? "JD is live. Matching CVs will be released automatically." : "JD rejected.");
+      case "jd-decide": await decideJd(db, s(b.jdId, 60), b.approve === true, admin, s(b.note, 500)); return done(b.approve === true ? "Job is live. It now appears in the Recruiting tool." : "JD rejected.");
       case "review-resolve": {
         const id = s(b.candidateId, 60), p = await primaryProfile(db, id);
         if (!p) return fail("Candidate not found.", 404);

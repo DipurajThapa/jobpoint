@@ -58,6 +58,9 @@ export async function signIn(db: Db, email: string, password: string, userAgent:
   if (!row || !ok) throw new PortalError("BAD_CREDENTIALS", "Email or password is incorrect.", 401);
   if (row.status === "pending") throw new PortalError("UNVERIFIED", "Verify your email address first. Check your inbox for the link.", 403);
   if (row.status !== "active") throw new PortalError("ACCOUNT_INACTIVE", "This account is not active.", 403);
+  // A suspended or closed company cannot sign in: say so, instead of bouncing the person between sign-in and the workspace.
+  const company = await db.prepare("SELECT co.status FROM company_users cu JOIN companies co ON co.id = cu.company_id WHERE cu.account_id = ?").bind(row.id).first<{ status: string }>();
+  if (company && (company.status === "suspended" || company.status === "closed")) throw new PortalError("COMPANY_INACTIVE", "This company account is not active. Contact Jobboard300 to have it reactivated.", 403);
   const token = randomToken(), at = now();
   await db.batch([
     db.prepare("INSERT INTO portal_sessions (token_hash, account_id, created_at, last_seen_at, expires_at, user_agent) VALUES (?, ?, ?, ?, ?, ?)")

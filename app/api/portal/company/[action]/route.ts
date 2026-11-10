@@ -4,10 +4,9 @@ import { createJd, submitJd, updateJdRequirements } from "@/lib/portal/company";
 import { companyDashboard, unlockedCandidate } from "@/lib/portal/views";
 import { guard } from "@/lib/portal/access";
 import { renderCvPdf, watermarkPdf } from "@/lib/portal/watermark";
-import { revokeJdReleases } from "@/lib/portal/release";
 import { audit, nowIso, PortalError } from "@/lib/portal/db";
 import { extractText } from "@/lib/ats/extract";
-import { clientOverview, inviteMember, moveStage, pipelineView, recordInterview, reissueInvite, removeMember, reportPlacementExit, scheduleInterview, setJdOpenings, teamList, REASONS, STAGE_LABEL } from "@/lib/portal/client";
+import { clientOverview, closeJob, closeOpenCandidates, inviteMember, moveStage, pipelineView, recordInterview, reissueInvite, removeMember, reportPlacementExit, rescheduleInterview, scheduleInterview, setJdOpenings, teamList, REASONS, STAGE_LABEL } from "@/lib/portal/client";
 import { sendMail } from "@/lib/portal/mailer";
 import { companyNotices, markNoticesRead, notifyCandidate } from "@/lib/portal/notify";
 import { redactContacts } from "@/lib/portal/policy";
@@ -85,10 +84,12 @@ export async function POST(request: Request, context: Ctx) {
     if (action === "jd-openings") { await setJdOpenings(db, companyId, s(body.jdId, 60), Number(body.openings ?? 1), account.id); return json({ message: "Saved." }); }
     if (action === "pipeline-stage") {
       const out = await moveStage(db, companyId, account.id, s(body.pipelineId, 60), { stage: s(body.stage, 20), reason: s(body.reason, 40), note: s(body.note, 1000), offerCtcInr: body.offerCtcInr == null || body.offerCtcInr === "" ? null : Number(body.offerCtcInr), offerDate: s(body.offerDate, 10), joiningDate: s(body.joiningDate, 10), lastWorkingDay: s(body.lastWorkingDay, 10), competingOffers: s(body.competingOffers, 300) });
-      return json({ ...out, message: `Moved to “${STAGE_LABEL[out.stage]}”.` });
+      return json({ ...out, message: `Moved to “${STAGE_LABEL[out.stage]}”.${out.filled ? ` Every opening is now filled and the job is closed.${out.filled.remaining ? ` ${out.filled.remaining} other candidate(s) are still in process: you can close them out as “position filled”.` : ""}` : ""}` });
     }
     if (action === "interview-schedule") { const out = await scheduleInterview(db, companyId, account.id, s(body.pipelineId, 60), { round: s(body.round, 80), scheduledAt: s(body.scheduledAt, 40), mode: s(body.mode, 20), location: s(body.location, 300), interviewer: s(body.interviewer, 120) }); return json({ ...out, message: "Interview scheduled." }, 201); }
-    if (action === "interview-record") { await recordInterview(db, companyId, account.id, s(body.interviewId, 60), { status: s(body.status, 20), outcome: s(body.outcome, 20), rating: body.rating == null || body.rating === "" ? null : Number(body.rating), feedback: s(body.feedback, 2000) }); return json({ message: "Interview updated." }); }
+    if (action === "interview-record") { const out = await recordInterview(db, companyId, account.id, s(body.interviewId, 60), { status: s(body.status, 20), outcome: s(body.outcome, 20), rating: body.rating == null || body.rating === "" ? null : Number(body.rating), feedback: s(body.feedback, 2000), rejectReason: s(body.rejectReason, 40) }); return json({ ...out, message: out.moved ? "Saved, and the candidate is marked “Not selected”." : "Interview updated." }); }
+    if (action === "interview-reschedule") { await rescheduleInterview(db, companyId, account.id, s(body.interviewId, 60), { scheduledAt: s(body.scheduledAt, 40), mode: s(body.mode, 20), location: s(body.location, 300), interviewer: s(body.interviewer, 120) }); return json({ message: "Interview rescheduled. The candidate is told." }); }
+    if (action === "jd-fill") { const out = await closeOpenCandidates(db, companyId, account.id, s(body.jdId, 60), "filled"); return json({ ...out, message: out.closed ? `${out.closed} candidate${out.closed === 1 ? "" : "s"} closed as “position filled” and told.` : "Nobody else was in process." }); }
     if (action === "placement-exit") { const out = await reportPlacementExit(db, companyId, account.id, s(body.placementId, 60), s(body.leftOn, 10), s(body.note, 500)); return json({ ...out, message: out.inGuarantee ? "Recorded. This is inside the replacement guarantee: Jobboard300 will contact you about a replacement." : "Recorded." }); }
     if (action === "team-invite") {
       const email = s(body.email, 254), out = await inviteMember(db, companyId, account.id, email, s(body.name, 120));
@@ -98,14 +99,14 @@ export async function POST(request: Request, context: Ctx) {
     }
     if (action === "team-reinvite") { const token = await reissueInvite(db, companyId, account.id, s(body.memberId, 60)); return json({ message: "New one-time link (valid for 7 days; the old one no longer works):", link: `${new URL(request.url).origin}/portal/accept?token=${token}` }); }
     if (action === "team-remove") { await removeMember(db, companyId, account.id, s(body.memberId, 60)); return json({ message: "Removed. They can no longer sign in." }); }
-    if (action === "jd-update") return json({ requirements: await updateJdRequirements(db, companyId, s(body.jdId, 60), body.requirements, account.id), message: "Saved. Submit the JD for approval when ready." });
+    if (action === "jd-update") {
+      const out = await updateJdRequirements(db, companyId, s(body.jdId, 60), body.requirements, account.id);
+      return json({ ...out, message: !out.changed ? "Nothing was changed." : out.status === "pending" ? "Saved. The change is with Jobboard300 for approval; your candidates stay where they are." : "Saved. Send the job for approval when you are ready." });
+    }
     if (action === "jd-submit") { const out = await submitJd(db, companyId, s(body.jdId, 60), account.id); return json({ ...out, message: out.conflicts.length ? "Submitted. Jobboard300 will review the points below against your approved parameters." : "Submitted for approval." }); }
     if (action === "jd-close") {
-      const jdId = s(body.jdId, 60);
-      const r = await db.prepare("UPDATE jds SET status = 'closed', updated_at = ? WHERE id = ? AND company_id = ?").bind(nowIso(), jdId, companyId).run();
-      if (!r.meta.changes) return fail("JD not found.", 404);
-      await revokeJdReleases(db, jdId, "jd_closed");
-      return json({ message: "Job closed." });
+      const out = await closeJob(db, companyId, account.id, s(body.jdId, 60));
+      return json({ ...out, message: out.closed ? `Job closed. ${out.closed} candidate${out.closed === 1 ? " was" : "s were"} closed as “position closed” and told.` : "Job closed." });
     }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }

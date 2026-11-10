@@ -41,11 +41,12 @@ export default function CandidateApp() {
       <Tests say={say} />
       <Cv data={profile} reload={loadProfile} say={say} />
       {profile?.profile && <Privacy data={profile} reload={loadProfile} say={say} />}
+      <YourData say={say} />
     </main>
   </>;
 }
 
-type Message = { id: string; kind: string; title: string; body: string; created_at: string; read_at: string | null };
+type Message = { id: string; kind: string; title: string; body: string; link?: string; created_at: string; read_at: string | null };
 
 type TestsView = { test: { questions: number; minutes: number }; fastTrack: boolean; offer: { priceInr: number | null; payNote: string }; order: { reference: string; amount_inr: number } | null; technical: { id: string; title: string; suggested: boolean }[]; tests: { id: string; title: string; kind: string; status: string; final_level: number | null; band: string | null; completed_at: string | null; weakTopics: string[] | null }[] };
 
@@ -96,7 +97,7 @@ function Inbox() {
     <p className="pj-muted">Every update about your CV and applications appears here.{data.whatsapp && <> You can also <a href={`https://wa.me/${data.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer">message us on WhatsApp</a>.</>}</p>
     {data.messages.length === 0 ? <p className="pj-muted">No messages yet. Upload your CV to get started.</p> : <div className="pj-list">{data.messages.map(m => <article className="pj-note" key={m.id} style={m.read_at ? undefined : { borderLeftColor: "#14603e" }}>
       <b>{m.title}</b>{!m.read_at && <span className="pj-pill strong">New</span>} <span className="pj-muted">· {new Date(m.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
-      <p>{m.body}</p></article>)}</div>}
+      <p>{m.body}</p>{m.link && <p><a className="pj-btn" href={m.link} {...(m.link.startsWith("https://") ? { target: "_blank", rel: "noopener noreferrer" } : {})}>{m.kind.startsWith("commitment") ? "Read and confirm" : m.kind.startsWith("test") ? "Start the test" : m.kind.startsWith("interview") ? "Open the interview link" : "Open"}</a></p>}</article>)}</div>}
   </section>;
 }
 
@@ -171,6 +172,12 @@ function Privacy({ data, reload, say }: { data: { sharing: boolean } | null; rel
         <input name="name" required minLength={2} maxLength={120} placeholder="Employer name" aria-label="Employer name" /><button className="pj-btn quiet">Hide from this employer</button></form>
       {info && info.hidden.length > 0 && <div className="pj-list">{info.hidden.map(n => <div key={n} className="pj-row"><span>{n}</span><button className="pj-btn quiet" onClick={() => act("/api/portal/candidate/block", { name: n, block: false }).then(load)}>Remove</button></div>)}</div>}
     </section>
+  </>;
+}
+
+/** Download or delete everything held about the person. Always shown: someone who registered and changed their mind has no CV, and still has this right. */
+function YourData({ say }: { say: (t: string, bad?: boolean) => void }) {
+  return <>
     <section className="pj-card"><h2>Your data</h2>
       <div className="pj-row">
         <a className="pj-btn quiet" href="/api/portal/candidate/export" download>Download my data</a>

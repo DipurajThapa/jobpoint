@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { CONSENT_NOTICE_VERSION } from "@/lib/portal/notice";
 import { candidateInbox, markInboxRead, resolveSender, setWhatsappConsent } from "@/lib/portal/notify";
 import { portalDb, portalSecret, json, fail, failFrom, requireApi, ipHash } from "@/lib/portal/session";
-import { recordConsent, withdrawSharing, consentActive } from "@/lib/portal/consent";
+import { recordConsent, withdrawSharing, withdrawFromCompany, consentActive } from "@/lib/portal/consent";
 import { applyToJd, correctProfile, deleteCandidateData, primaryProfile } from "@/lib/portal/candidate";
 import { ingestCv } from "@/lib/portal/ingest";
 import { drainQueue } from "@/lib/portal/queue";
@@ -110,7 +110,9 @@ export async function POST(request: Request, context: Ctx) {
         db.prepare("UPDATE candidates SET hidden_company_ids = ?, hidden_company_names = ? WHERE id = ?").bind(JSON.stringify([...ids].slice(0, 50)), JSON.stringify(names.slice(-20)), id),
         ...(body.block === false ? [] : matched.map(m => db.prepare("UPDATE releases SET revoked_at = ?, revoke_reason = 'blocked_by_candidate' WHERE candidate_id = ? AND company_id = ? AND revoked_at IS NULL").bind(nowIso(), id, m))),
       ]);
-      return json({ message: body.block === false ? "Removed from your list." : "Saved. Your profile will not be shared with this employer." });
+      // An employer that already has the profile loses access now, and its open entries close as withdrawn. The reply is the same either way.
+      if (body.block !== false) for (const m of matched) await withdrawFromCompany(db, id, m, `candidate:${id}`);
+      return json({ message: body.block === false ? "Removed from your list." : "Saved. Your profile will not be shared with this employer. If they already had it, their access has ended and your applications with them are closed." });
     }
     if (action === "fasttrack-request") { const o = await requestFastTrack(db, id); return json({ ...o, message: `Pay ₹${o.amount_inr.toLocaleString("en-IN")} and quote the reference ${o.reference}. You are on Fast Track as soon as we confirm the payment.` }, o.created ? 201 : 200); }
     if (action === "test-start") { const t = typeof body.testId === "string" ? { id: body.testId } : await startTechnicalTest(db, id, String(body.bankId ?? "")); return json(await testStep(db, t.id, id, { start: true })); }

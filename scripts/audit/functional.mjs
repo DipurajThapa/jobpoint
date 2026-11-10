@@ -380,8 +380,10 @@ if (C) {
   check("F7.14", "passing on a candidate needs a reason, and the reason is stored", noReason.status === 400 && pass.ok && row("SELECT reason, staff_id FROM shortlist_passes WHERE jd_id = ? AND candidate_id = ?", jdId, C.candidate_id)?.reason === "salary_mismatch", { severity: "medium" });
   const seen = (await admin.get(`/api/platform/recruiting/candidates?jd=${jdId}`)).body?.candidates?.find(c => c.candidate_id === C.candidate_id);
   check("F7.15", "the administrator sees why the recruiter passed", seen?.passed === "salary_mismatch", { severity: "low" });
-  const undo = await recruiter.post("/api/platform/recruiting/submit", { jdId, candidateId: C.candidate_id, note: "Changed my mind" });
-  if (undo.status === 404) finding("F7.16", { severity: "medium", kind: "gap", title: "A recruiter cannot undo a pass", actual: "Once a recruiter passes on a candidate for a job, that candidate never returns to their shortlist and cannot be submitted by them (404). Only an administrator can still submit the person. There is no \"undo\" or \"reconsider\".", expected: "A mis-click or a candidate who calls back should be recoverable by the recruiter or their team manager.", fix: "Add an `unpass` action (manager or admin, or the same recruiter within 24 hours) that deletes the shortlist_passes row, and show passed candidates in a collapsed \"Passed\" list with a \"Reconsider\" button.", where: "lib/portal/staff.ts staffPass / staffCandidates; app/platform/recruiting/recruiting.tsx" });
+  const undo = await recruiter.post("/api/platform/recruiting/unpass", { jdId, candidateId: C.candidate_id });
+  const backOnList = (await recruiter.get(`/api/platform/recruiting/candidates?jd=${jdId}`)).body?.candidates?.some(c => c.candidate_id === C.candidate_id);
+  check("F7.16", "a recruiter can undo a pass: the candidate returns to the shortlist", undo.ok && !!backOnList, { severity: "medium", detail: `${undo.status} ${undo.text.slice(0, 120)}` });
+  await recruiter.post("/api/platform/recruiting/pass", { jdId, candidateId: C.candidate_id, reason: "salary_mismatch" });
 }
 
 // ------------------------------------------------------------------ 8. client review and interviews
@@ -459,9 +461,9 @@ if (B) {
     await clientOwner.post("/api/portal/company/pipeline-stage", { pipelineId: B.pipelineId, stage: "shortlisted" });
     const iv = await clientOwner.post("/api/portal/company/interview-schedule", { pipelineId: B.pipelineId, round: "Technical 1", scheduledAt: inDays(4), mode: "video", location: "https://meet.example/xyz" });
     const up = await clientOwner.post("/api/portal/company/interview-schedule", { pipelineId: B.pipelineId, round: "Technical 2", scheduledAt: inDays(7), mode: "video" });
-    await clientOwner.post("/api/portal/company/interview-record", { interviewId: iv.body?.id, status: "completed", outcome: "reject", rating: 2, feedback: "Could not explain ITC reconciliation." });
+    const recReject = await clientOwner.post("/api/portal/company/interview-record", { interviewId: iv.body?.id, status: "completed", outcome: "reject", rating: 2, feedback: "Could not explain ITC reconciliation." });
     const after = row("SELECT stage FROM pipeline WHERE id = ?", B.pipelineId)?.stage;
-    if (after === "interview") finding("F8.27", { severity: "high", kind: "gap", title: "An interview outcome of \"Do not proceed\" does not move the candidate or tell anyone", actual: "The client records an interview as completed with outcome \"Do not proceed\". The candidate stays at \"Interviewing\" in every screen, later interview rounds stay scheduled, the candidate is not told, and the recruiter is not prompted. The decision has to be entered a second time through \"Move to… Not selected\" with a reason.", expected: "Saving \"Do not proceed\" should either move the candidate to \"Not selected\" in the same step (asking for the reason code) or clearly prompt \"Move this candidate to Not selected?\". Likewise \"Move forward\" should offer the next step (schedule next round / make offer).", fix: "In the client FeedbackForm, when outcome is `reject`, show the reason select and call pipeline-stage → rejected after interview-record succeeds (one button). Server-side, recordInterview() can return `suggest: \"rejected\"` so both screens prompt.", where: "app/company/company-app.tsx FeedbackForm; lib/portal/client.ts recordInterview" });
+    check("F8.27", "'Do not proceed' tells the screen to mark the candidate Not selected (and can do it in the same step)", after !== "interview" || recReject.body?.suggest === "rejected", { severity: "high", detail: JSON.stringify(recReject.body ?? {}).slice(0, 160) });
     const noReason = await clientOwner.post("/api/portal/company/pipeline-stage", { pipelineId: B.pipelineId, stage: "rejected" });
     check("F8.28", "rejecting a candidate needs a reason code", noReason.status === 400 && /reason/i.test(noReason.body?.error ?? ""), { severity: "high", detail: `status ${noReason.status}` });
     const rej = await clientOwner.post("/api/portal/company/pipeline-stage", { pipelineId: B.pipelineId, stage: "rejected", reason: "skills_gap", note: "ITC reconciliation" });
@@ -479,8 +481,8 @@ if (B) {
     check("F8.33", "after rejection the client no longer sees the candidate's name, note or CV", !!Bentry && Bentry.available === false && Bentry.name.startsWith("Candidate ") && Bentry.recruiterNote === "" && [403, 404, 410].includes((await clientOwner.get(`/api/portal/company/candidate?ref=${Bentry.ref}`)).status), { severity: "high", detail: JSON.stringify(Bentry ? { name: Bentry.name, available: Bentry.available } : null) });
     const staffEntry = (await recruiter.get(`/api/platform/recruiting/pipeline?jd=${jdId}`)).body?.pipeline?.find(e => e.id === B.pipelineId);
     check("F8.34", "the recruiter sees the rejection and its reason", staffEntry?.stage === "rejected" && /skills_gap/.test(staffEntry.stageReason), { severity: "high", detail: JSON.stringify(staffEntry ? { stage: staffEntry.stage, reason: staffEntry.stageReason } : null) });
-    const told = await until(async () => count("messages", "recipient_kind NOT IN ('candidate','company')") > 0, 300);
-    if (!told) finding("F8.35", { severity: "medium", kind: "gap", title: "Recruiters get no notification of what the client does", actual: "When a client shortlists, rejects, schedules an interview, makes an offer or reports an exit, nothing is sent to the recruiter or team: no inbox, no badge, no email. They find out only by opening each job in the Recruiting tool and reading its pipeline. (Clients and candidates each have an inbox; staff do not.)", expected: "A \"What changed\" list at the top of the Recruiting tool (per team), and optionally an email digest, fed by the same events.", fix: "Write a staff-audience message in notifyStage()/scheduleInterview()/recordInterview()/reportPlacementExit() when the actor is a client user; show unread ones in recruiting.tsx above \"Jobs\".", where: "lib/portal/notify.ts; app/platform/recruiting/recruiting.tsx" });
+    const told = await until(async () => count("staff_updates") > 0 && ((await recruiter.get("/api/platform/recruiting/work")).body?.changes?.items?.length ?? 0) > 0, 300);
+    check("F8.35", "recruiters see what the client did, in a What changed list", told, { severity: "medium" });
     // Re-open.
     const reopenByClient = (Bentry?.next ?? []).length;
     const reopen = await recruiter.post("/api/platform/recruiting/stage", { pipelineId: B.pipelineId, stage: "shortlisted", note: "Client agreed to a second look" });
@@ -516,7 +518,8 @@ if (A?.pipelineId && entry) {
   let commitLink;
   if (known) {
     const m = ((await known.session.get("/api/portal/candidate/inbox")).body?.messages ?? []).find(x => /commitment/i.test(x.title));
-    commitLink = m?.body.match(/https?:\/\/\S+\/commit\?token=[a-f0-9]+/)?.[0];
+    // The link is its own field on the message (a path on this site, shown as a button), so it is right on any address.
+    commitLink = m?.link ? `${BASE}${m.link}` : m?.body.match(/https?:\/\/\S+\/commit\?token=[a-f0-9]+/)?.[0];
     check("F9.5", "the candidate's inbox carries the offer and the commitment link", !!m && !!commitLink, { severity: "high", detail: m?.body ?? "no message" });
     if (commitLink && !commitLink.startsWith(BASE)) note(`commitment link host: ${new URL(commitLink).origin} (SITE_URL), not the server that issued it`);
   }
@@ -526,7 +529,9 @@ if (A?.pipelineId && entry) {
   if (commitLink && fresh) {
     const oldToken = new URL(commitLink).searchParams.get("token");
     check("F9.7", "issuing a new link stops the old one working", (await anon.get(`/api/portal/public/commitment?token=${oldToken}`)).status === 404, { severity: "medium" });
-    finding("F9.7a", { severity: "medium", kind: "defect", title: "Re-issuing the commitment link silently breaks the link already in the candidate's inbox", actual: "The inbox message \"Please confirm your commitment for this offer\" keeps showing the first link. As soon as a recruiter clicks \"Get a new link to send\", that first link answers \"This link is not valid\" and the inbox is not updated.", expected: "Re-issuing either adds a new inbox message with the new link, or the inbox reads the current link.", fix: "In reissueCommitmentLink() also call notifyCandidate(..., \"commitment.requested\", …new link…).", where: "lib/portal/commitment.ts reissueCommitmentLink" });
+    const inboxAfter = known ? ((await known.session.get("/api/portal/candidate/inbox")).body?.messages ?? []) : [];
+    const freshToken = new URL(fresh ?? "", BASE).searchParams.get("token") ?? "";
+    check("F9.7a", "after a new commitment link is issued, the candidate's inbox carries the new link", !known || inboxAfter.some(m => (m.link ?? "").includes(freshToken)), { severity: "medium" });
   }
   if (fresh) {
     const token = new URL(fresh).searchParams.get("token");
@@ -815,7 +820,7 @@ section("13. Editing a live job, and closing a job");
   }
   // The owner closes and re-publishes a public role.
   const closeRole = await owner.patch(`/api/admin/jobs/${roleId}`, { status: "closed" });
-  check("F13.6", "the owner closes the public role: it leaves the website and the recruiter's list, and its page stops loading", closeRole.ok && !(await anon.get("/api/jobs")).body?.jobs?.some(j => j.id === roleId) && !(await recruiter.get("/api/platform/recruiting/work")).body?.jobs?.some(j => j.id === roleId) && row("SELECT status FROM jds WHERE id = ?", roleId)?.status === "closed" && (await anon.get(`/jobs/${roleId}`)).status === 404, { severity: "high", detail: `status ${closeRole.status}` });
+  check("F13.6", "the owner closes the public role: it leaves the website, stays on the recruiter's list only as closed (read-only), and its page stops loading", closeRole.ok && !(await anon.get("/api/jobs")).body?.jobs?.some(j => j.id === roleId) && ((await recruiter.get("/api/platform/recruiting/work")).body?.jobs ?? []).filter(j => j.id === roleId).every(j => j.status === "closed") && row("SELECT status FROM jds WHERE id = ?", roleId)?.status === "closed" && (await anon.get(`/jobs/${roleId}`)).status === 404, { severity: "high", detail: `status ${closeRole.status}` });
   const reopenRole = await owner.patch(`/api/admin/jobs/${roleId}`, { status: "published" });
   const st = row("SELECT status FROM jds WHERE id = ?", roleId)?.status;
   check("F13.7", "a closed public role can be published again and returns to the Recruiting tool", reopenRole.ok && st === "live" && !!(await anon.get("/api/jobs")).body?.jobs?.some(j => j.id === roleId), { severity: "medium", detail: `${reopenRole.status} jds.status=${st}` });

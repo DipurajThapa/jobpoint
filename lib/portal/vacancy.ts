@@ -76,6 +76,17 @@ export async function syncRoleStatus(db: Db, roleId: string, roleStatus: string,
   return true;
 }
 
+/** Close a vacancy (filled or closed by the client): the job leaves the live lists and its website listing, if it has one, comes down. */
+export async function closeVacancy(db: Db, jdId: string, note: string, actor: string) {
+  const at = nowIso();
+  await db.batch([
+    db.prepare("UPDATE jds SET status = 'closed', decision_note = ?, updated_at = ? WHERE id = ? AND status != 'closed'").bind(note.slice(0, 500), at, jdId),
+    db.prepare("UPDATE jobs SET status = 'closed', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'published'").bind(jdId),
+    db.prepare("UPDATE releases SET revoked_at = ?, revoke_reason = 'jd_closed' WHERE jd_id = ? AND revoked_at IS NULL").bind(at, jdId),
+  ]);
+  await audit(db, actor, "vacancy.closed", "jd", jdId, note);
+}
+
 /** Website roles that have no vacancy record yet (roles posted before merge 2). Creates up to `limit` of them. */
 export async function backfillVacancies(db: Db, actor: string, limit = 25): Promise<number> {
   const { results } = await db.prepare(`SELECT j.id, j.title, j.location, j.work_mode AS workMode, j.description, j.requirements, j.status FROM jobs j

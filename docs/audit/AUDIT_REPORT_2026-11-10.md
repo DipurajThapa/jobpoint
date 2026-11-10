@@ -2,6 +2,23 @@
 
 10 November 2026. Tested on the code of branch `claude/kind-turing-1olzbi` (same as `main` at commit `7ed2066`), running locally with an empty database.
 
+## Status, 11 November 2026: the open items are fixed
+
+A later run of the same three auditors after the fixes below: **481 checks, 481 passed, 0 findings** ([RESULTS_2026-11-11.md](RESULTS_2026-11-11.md)). Before the fixes the same run had 477 checks and 44 findings. Every reference below is now a passing check, or an auditor step that exercises the new behaviour.
+
+| Group in section 6 | References | Where it is fixed |
+|---|---|---|
+| Interviews | F8.18, F8.24, F8.25, F8.26, F8.27 | `lib/portal/client.ts` (`scheduleInterview`, `rescheduleInterview`, `recordInterview`); staff versions in `lib/portal/staff.ts`; both screens |
+| Filling, closing, editing a job | F9.19, F9.20, F13.1, F13.2, F13.5 | `lib/portal/client.ts` (`jobFilledCheck`, `closeOpenCandidates`, `closeJob`), `lib/portal/company.ts` (`updateJdRequirements`), `lib/portal/vacancy.ts` (`closeVacancy`) |
+| Salary, fee, replacement | F10.3b, F10.8 | `moveStage` (salary required for Joined; replacement linked, no new fee), `reportPlacementExit` (job re-opens), owner `placement-edit` |
+| Consent | F12.0, F12.4, F12.5 | `lib/portal/consent.ts` (`withdrawFromCompany`, history on withdrawal), `submitByRecruiter` |
+| Nobody left in the dark | F4.11, F8.35, F9.7a, U9.8a, F11.19 | `lib/portal/notify.ts` (`notifyStaff`, message `link`), `lib/portal/commitment.ts`, `lib/portal/adaptive.ts`; candidate inbox shows buttons |
+| The recruiter does the whole job in one place | U7.5, U7.7, U7.8, U8.9a, F9.13, F9.4a, F11.12, F7.16, F10.4, U9.3a | `app/platform/recruiting/recruiting.tsx`, `lib/portal/staff.ts`, `lib/portal/views.ts` |
+| Owner console | U2.2, U2.4a, U2.5, U6.5, F14.8, F6.5, F4.7a | `app/admin/*`, `app/api/admin/portal/[action]/route.ts`, `app/api/platform/admin/*` |
+| Sign-in, wording | F14.7, U5.3, U8.5, U11.8 (two pages), Q.stale.rules, Q.stale.unlock | `app/portal/*`, `app/candidate/candidate-app.tsx`, `app/company/company-app.tsx`, `lib/portal/accounts.ts` |
+
+Not code, and still open: the business and legal items in GitHub issue 1 (registered entity, grievance contact, processor agreements, retention approval, verified vacancies), email delivery (the mail provider keys must be set on the live site, then sent as a test), and the live-site checks in section 7. One fix changed an auditor's expectation rather than the product: a filled or closed job now stays visible to recruiters under a “closed” filter instead of disappearing (F13.6).
+
 ## 1. Verdict
 
 **The core hiring workflow works and the data is stored and kept apart correctly. The product is not ready to run a live recruitment desk yet, because people are not told what happens and several workflows have no ending.**

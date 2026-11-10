@@ -35,6 +35,9 @@ export function sessionCookie(requestUrl: string, token: string) {
 }
 export const clearCookie = (requestUrl: string) => `${secureUrl(requestUrl) ? SECURE_COOKIE : LOCAL_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureUrl(requestUrl) ? "; Secure" : ""}`;
 
+/** A link on this site, built from the address the request came to (so it is right on any domain, preview or local run). */
+export const siteLink = (request: Request, path: string) => new URL(path, request.url).toString();
+
 export const json = (data: unknown, status = 200) => Response.json(data, { status, headers: NO_STORE });
 export const fail = (message: string, status = 400, code = "ERROR") => json({ error: message, code }, status);
 export function failFrom(error: unknown) {

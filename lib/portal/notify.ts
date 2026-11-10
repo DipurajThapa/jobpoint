@@ -14,6 +14,7 @@
 // ratings or scores.
 
 import { newId, nowIso, PortalError, type Db } from "./db";
+import { SITE_URL } from "../site";
 
 export type Sender = { scope: string; number: string } | null;
 
@@ -48,20 +49,33 @@ export async function messagingFor(db: Db, scopes: string[]) {
 }
 
 /** One inbox message for the candidate, plus its place on the WhatsApp queue. */
-export async function notifyCandidate(db: Db, candidateId: string, kind: string, title: string, body: string, companyId: string | null = null) {
+export async function notifyCandidate(db: Db, candidateId: string, kind: string, title: string, body: string, companyId: string | null = null, link = "") {
   const sender = await resolveSender(db, companyId), at = nowIso();
+  // A link is kept as a path on this site and shown as a button in the inbox, so it works on any address.
+  // The WhatsApp copy needs the full address.
+  const path = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@%/?#]*$/.test(link) || /^https:\/\/[^\s<>"']{4,380}$/.test(link) ? link.slice(0, 400) : "";
+  const whatsappText = `${title}\n${body.slice(0, 700)}${path ? `\n${path.startsWith("/") ? SITE_URL : ""}${path}` : ""}`;
   // WhatsApp only with the person's own consent (given on a website form or at CV upload).
   const agreed = !!(await db.prepare("SELECT whatsapp_consent_at FROM candidates WHERE id = ?").bind(candidateId).first<{ whatsapp_consent_at: string | null }>())?.whatsapp_consent_at;
   await db.batch([
-    db.prepare("INSERT INTO messages (id, recipient_kind, recipient_id, channel, kind, title, body, created_at) VALUES (?, 'candidate', ?, 'inbox', ?, ?, ?, ?)").bind(newId(), candidateId, kind, title.slice(0, 160), body.slice(0, 1200), at),
+    db.prepare("INSERT INTO messages (id, recipient_kind, recipient_id, channel, kind, title, body, link, created_at) VALUES (?, 'candidate', ?, 'inbox', ?, ?, ?, ?, ?)").bind(newId(), candidateId, kind, title.slice(0, 160), body.slice(0, 1200), path, at),
     db.prepare("INSERT INTO messages (id, channel, recipient_kind, recipient_id, sender_scope, kind, body, status, status_detail, created_at) VALUES (?, 'whatsapp', 'candidate', ?, ?, ?, ?, ?, ?, ?)")
-      .bind(newId(), candidateId, sender?.scope ?? "", kind, `${title}\n${body}`.slice(0, 1200), agreed && sender ? "queued" : "skipped", !agreed ? "no WhatsApp consent from the candidate" : sender ? "waiting for a WhatsApp provider" : "no WhatsApp number configured", at),
+      .bind(newId(), candidateId, sender?.scope ?? "", kind, whatsappText.slice(0, 1200), agreed && sender ? "queued" : "skipped", !agreed ? "no WhatsApp consent from the candidate" : sender ? "waiting for a WhatsApp provider" : "no WhatsApp number configured", at),
   ]);
 }
 
 /** Record (or withdraw) a candidate's consent to WhatsApp updates. */
 export async function setWhatsappConsent(db: Db, candidateId: string, agreed: boolean, version = "") {
   await db.prepare("UPDATE candidates SET whatsapp_consent_at = CASE WHEN ? = 1 THEN COALESCE(whatsapp_consent_at, ?) ELSE NULL END, whatsapp_consent_version = CASE WHEN ? = 1 THEN ? ELSE '' END WHERE id = ?").bind(agreed ? 1 : 0, nowIso(), agreed ? 1 : 0, version, candidateId).run();
+}
+
+/**
+ * "What changed" for Jobboard300's recruiters: something the client or the candidate did.
+ * It holds no names; the person is read through the pipeline entry while they still exist.
+ */
+export async function notifyStaff(db: Db, companyId: string, kind: string, title: string, body = "", ids: { jdId?: string | null; pipelineId?: string | null } = {}) {
+  await db.prepare("INSERT INTO staff_updates (id, company_id, jd_id, pipeline_id, kind, title, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(newId(), companyId, ids.jdId ?? null, ids.pipelineId ?? null, kind, title.slice(0, 160), body.slice(0, 600), nowIso()).run();
 }
 
 export async function notifyCompany(db: Db, companyId: string, kind: string, title: string, body: string) {
@@ -94,7 +108,7 @@ export async function notifyStage(db: Db, p: { candidateId: string; companyId: s
 }
 
 export async function candidateInbox(db: Db, candidateId: string) {
-  const { results } = await db.prepare("SELECT id, kind, title, body, created_at, read_at FROM messages WHERE recipient_kind = 'candidate' AND recipient_id = ? AND channel = 'inbox' ORDER BY created_at DESC, rowid DESC LIMIT 100").bind(candidateId).all();
+  const { results } = await db.prepare("SELECT id, kind, title, body, link, created_at, read_at FROM messages WHERE recipient_kind = 'candidate' AND recipient_id = ? AND channel = 'inbox' ORDER BY created_at DESC, rowid DESC LIMIT 100").bind(candidateId).all();
   return results;
 }
 export async function markInboxRead(db: Db, candidateId: string) {

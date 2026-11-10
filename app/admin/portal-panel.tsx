@@ -18,42 +18,47 @@ async function call(action: string, body: object) {
 
 function paramsFrom(f: FormData) {
   return {
-    minScore: Number(f.get("minScore")), roleFamilies: f.getAll("roleFamilies").map(String), seniority: f.getAll("seniority").map(String),
+    roleFamilies: f.getAll("roleFamilies").map(String), seniority: f.getAll("seniority").map(String),
     cities: String(f.get("cities") ?? "").split(",").map(s => s.trim()).filter(Boolean), allowRemote: f.get("allowRemote") === "yes",
     ctcBands: f.get("ctcMax") ? [{ minInr: Number(f.get("ctcMin") || 0) * 100_000, maxInr: Number(f.get("ctcMax")) * 100_000 }] : [],
     maxNoticeDays: f.get("maxNoticeDays") === "" ? null : Number(f.get("maxNoticeDays")), mandatoryFilters: f.getAll("mandatoryFilters").map(String),
-    maxReleasePerJd: Number(f.get("maxReleasePerJd") || 25), maxLiveJds: Number(f.get("maxLiveJds") || 10),
+    maxLiveJds: Number(f.get("maxLiveJds") || 10),
   };
 }
 
-function ParamsFields() {
+type StoredParams = { roleFamilies?: string[]; seniority?: string[]; cities?: string[]; allowRemote?: boolean; ctcBands?: { minInr: number; maxInr: number }[]; maxNoticeDays?: number | null; mandatoryFilters?: string[]; maxLiveJds?: number };
+/** The client's current rules, from the overview (a JSON string), so the form opens with what is set and the owner changes one thing. */
+const storedParams = (value: unknown): StoredParams | null => { try { return typeof value === "string" ? JSON.parse(value) as StoredParams : null; } catch { return null; } };
+
+function ParamsFields({ defaults }: { defaults?: StoredParams | null }) {
+  const d = defaults, band = d?.ctcBands?.[0];
   return <div className="form-grid">
-    <label>Minimum match score<input name="minScore" type="number" min={40} max={95} defaultValue={70} required /></label>
-    <label>Cities (comma-separated, empty = any)<input name="cities" placeholder="Kolkata, Howrah" /></label>
-    <fieldset className="full-field"><legend>Permitted role families</legend>{ROLE_FAMILIES.map(r => <label key={r} className="consent"><input type="checkbox" name="roleFamilies" value={r} /> {r}</label>)}</fieldset>
-    <fieldset className="full-field"><legend>Permitted seniority</legend>{SENIORITY.map(s => <label key={s} className="consent"><input type="checkbox" name="seniority" value={s} defaultChecked={s === "junior" || s === "mid"} /> {s}</label>)}</fieldset>
-    <label>CTC band from (LPA)<input name="ctcMin" type="number" step={0.5} min={0} /></label>
-    <label>CTC band to (LPA)<input name="ctcMax" type="number" step={0.5} min={0} /></label>
-    <label>Maximum notice (days)<input name="maxNoticeDays" type="number" min={0} max={180} defaultValue={60} /></label>
-    <label>Remote roles<select name="allowRemote"><option value="no">Not permitted</option><option value="yes">Permitted</option></select></label>
-    <label>Maximum CVs released per job<input name="maxReleasePerJd" type="number" min={5} max={200} defaultValue={25} /></label>
-    <label>Maximum live jobs<input name="maxLiveJds" type="number" min={1} max={100} defaultValue={10} /></label>
+    <label>Cities (comma-separated, empty = any)<input name="cities" placeholder="Kolkata, Howrah" defaultValue={(d?.cities ?? []).join(", ")} /></label>
+    <fieldset className="full-field"><legend>Permitted role families</legend>{ROLE_FAMILIES.map(r => <label key={r} className="consent"><input type="checkbox" name="roleFamilies" value={r} defaultChecked={d ? (d.roleFamilies ?? []).includes(r) : false} /> {r}</label>)}</fieldset>
+    <fieldset className="full-field"><legend>Permitted seniority</legend>{SENIORITY.map(s => <label key={s} className="consent"><input type="checkbox" name="seniority" value={s} defaultChecked={d ? (d.seniority ?? []).includes(s) : s === "junior" || s === "mid"} /> {s}</label>)}</fieldset>
+    <label>CTC band from (LPA)<input name="ctcMin" type="number" step={0.5} min={0} defaultValue={band ? band.minInr / 100_000 : ""} /></label>
+    <label>CTC band to (LPA)<input name="ctcMax" type="number" step={0.5} min={0} defaultValue={band ? band.maxInr / 100_000 : ""} /></label>
+    <label>Maximum notice (days)<input name="maxNoticeDays" type="number" min={0} max={180} defaultValue={d ? d.maxNoticeDays ?? "" : 60} /></label>
+    <label>Remote roles<select name="allowRemote" defaultValue={d?.allowRemote ? "yes" : "no"}><option value="no">Not permitted</option><option value="yes">Permitted</option></select></label>
+    <label>Maximum live jobs<input name="maxLiveJds" type="number" min={1} max={100} defaultValue={d?.maxLiveJds ?? 10} /></label>
     <fieldset className="full-field"><legend>Mandatory filters</legend>
-      <label className="consent"><input type="checkbox" name="mandatoryFilters" value="ctc_stated" /> Candidate must state expected CTC</label>
-      <label className="consent"><input type="checkbox" name="mandatoryFilters" value="notice_stated" /> Candidate must state notice period</label>
-      <label className="consent"><input type="checkbox" name="mandatoryFilters" value="work_evidence_for_mandatory_skills" /> Essential skills must appear in work history</label>
+      {([["ctc_stated", "Candidate must state expected CTC"], ["notice_stated", "Candidate must state notice period"], ["strict_mandatory_skills", "Strict: a candidate whose CV does not show an essential skill is filtered out (the default is to ask the candidate)"], ["work_evidence_for_mandatory_skills", "Essential skills must appear in work history (also strict)"]] as const).map(([value, text]) =>
+        <label key={value} className="consent"><input type="checkbox" name="mandatoryFilters" value={value} defaultChecked={(d?.mandatoryFilters ?? []).includes(value)} /> {text}</label>)}
     </fieldset>
   </div>;
 }
 
-function InviteClient({ act }: { act: (action: string, body: object) => Promise<boolean> }) {
+export type InvitePrefill = { enquiryId: string; displayName: string; ownerName: string; ownerEmail: string; city: string };
+
+function InviteClient({ act, prefill }: { act: (action: string, body: object) => Promise<boolean>; prefill?: InvitePrefill | null }) {
   return <form className="admin-form" onSubmit={async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const form = e.currentTarget, f = new FormData(form);
-    const ok = await act("client-invite", { displayName: f.get("displayName"), legalName: f.get("legalName"), city: f.get("city"), website: f.get("website"), gstin: f.get("gstin"), ownerName: f.get("ownerName"), ownerEmail: f.get("ownerEmail"), guaranteeDays: Number(f.get("guaranteeDays")), nonSolicitMonths: Number(f.get("nonSolicitMonths")), feeTerms: f.get("feeTerms"), feePercent: Number(f.get("feePercent")), params: paramsFrom(f) });
+    const ok = await act("client-invite", { displayName: f.get("displayName"), legalName: f.get("legalName"), city: f.get("city"), website: f.get("website"), gstin: f.get("gstin"), ownerName: f.get("ownerName"), ownerEmail: f.get("ownerEmail"), enquiryId: prefill?.enquiryId, guaranteeDays: Number(f.get("guaranteeDays")), nonSolicitMonths: Number(f.get("nonSolicitMonths")), feeTerms: f.get("feeTerms"), feePercent: Number(f.get("feePercent")), params: paramsFrom(f) });
     if (ok) form.reset(); }}>
+    {prefill && <p className="admin-help">Filled in from the employer enquiry. When you create the client, the enquiry is linked to it.</p>}
     <div className="form-grid">
-      <label>Company name<input name="displayName" required maxLength={120} /></label><label>Registered legal name<input name="legalName" required maxLength={160} /></label>
-      <label>City<input name="city" maxLength={80} /></label><label>Website<input name="website" maxLength={200} /></label><label>GSTIN<input name="gstin" maxLength={15} /></label>
-      <label>Owner&apos;s name<input name="ownerName" maxLength={120} /></label><label>Owner&apos;s work email<input name="ownerEmail" type="email" required maxLength={254} /></label>
+      <label>Company name<input name="displayName" required maxLength={120} defaultValue={prefill?.displayName} /></label><label>Registered legal name<input name="legalName" required maxLength={160} defaultValue={prefill?.displayName ? `${prefill.displayName}` : ""} /></label>
+      <label>City<input name="city" maxLength={80} defaultValue={prefill?.city} /></label><label>Website<input name="website" maxLength={200} /></label><label>GSTIN<input name="gstin" maxLength={15} /></label>
+      <label>Owner&apos;s name<input name="ownerName" maxLength={120} defaultValue={prefill?.ownerName} /></label><label>Owner&apos;s work email<input name="ownerEmail" type="email" required maxLength={254} defaultValue={prefill?.ownerEmail} /></label>
       <label>Placement fee (% of annual salary)<input name="feePercent" type="number" min={7.5} max={8.33} step={0.01} defaultValue={8.33} required /></label>
       <label>Replacement guarantee (days)<input name="guaranteeDays" type="number" min={0} max={365} defaultValue={60} required /></label>
       <label>Non-solicitation of placed people (months)<input name="nonSolicitMonths" type="number" min={0} max={36} defaultValue={12} required /></label>
@@ -71,7 +76,7 @@ function ManagedSearch({ jd, act }: { jd: Row; act: (action: string, body: objec
   return <article className="admin-detail"><div>
     <b>{jd.title}</b> · {jd.company} <span className="pill">{jd.status}</span>
     <p>{jd.openings} opening(s) · {jd.submitted} submitted · {jd.in_process} in process · {jd.joined} joined</p>
-    <button className="text-link" onClick={() => list ? setList(null) : load()}>{list ? "Hide candidates" : "Find candidates to submit"}</button>
+    <button className="text-link" onClick={() => list ? setList(null) : load()}>{list ? "Hide candidates" : "Find candidates to submit"}</button> · <a className="text-link" href="/platform/recruiting">Open in the Recruiting tool</a>
     {error && <p className="admin-help">{error}</p>}
     {list && (list.length === 0 ? <p className="admin-help">No scored candidates for this job yet. Run scoring, or source candidates and ask them to upload a CV.</p> : list.map(c => <div className="admin-submit" key={String(c.candidate_id)}>
       <p><b>{c.display_name || "Candidate"}</b> <span className="pill">{c.source === "website" ? "Website applicant" : "Portal"}</span> · {c.current_city || "city not stated"} · score {Math.round(Number(c.score))} (floor {Math.round(Number(c.lower_bound))}) · {Number(c.hard_pass) ? "meets the hard filters" : "misses a hard filter"}{Number(c.in_pipeline) ? " · already submitted" : ""}</p>
@@ -83,13 +88,13 @@ function ManagedSearch({ jd, act }: { jd: Row; act: (action: string, body: objec
   </div></article>;
 }
 
-export default function PortalPanel() {
-  const [o, setO] = useState<Overview | null>(null), [notice, setNotice] = useState(""), [open, setOpen] = useState<string | null>(null);
+export default function PortalPanel({ prefill, onChanged }: { prefill?: InvitePrefill | null; onChanged?: () => void }) {
+  const [o, setO] = useState<Overview | null>(null), [notice, setNotice] = useState(""), [open, setOpen] = useState<string | null>(prefill ? "invite" : null);
   const load = useCallback(() => fetch("/api/admin/portal/overview", { cache: "no-store" }).then(r => r.json() as Promise<Overview>).then(setO).catch(() => setNotice("The portal overview could not be loaded.")), []);
   useEffect(() => { load(); }, [load]);
   const act = async (action: string, body: object, confirm?: string) => {
     if (confirm && !window.confirm(confirm)) return false;
-    try { const d = await call(action, body); setNotice(d.link ? `${d.message} ${d.link}` : d.message ?? "Done."); await load(); return true; } catch (e) { setNotice((e as Error).message); return false; }
+    try { const d = await call(action, body); setNotice(d.link ? `${d.message} ${d.link}` : d.message ?? "Done."); await load(); onChanged?.(); return true; } catch (e) { setNotice((e as Error).message); return false; }
   };
   if (!o) return <p>Loading the job portal…</p>;
   const pending = o.companies.filter(c => c.status === "applied");
@@ -108,19 +113,20 @@ export default function PortalPanel() {
     </section>
 
     <section className="admin-records"><h2>Clients</h2>
-      <p className="admin-help">Set up a client account yourself. This works while public registration is closed. You get a one-time link for the client&apos;s owner, valid for 7 days. If email is configured, the owner is also emailed.</p>
+      <p className="admin-help">Set up a client account yourself (or start from an employer enquiry). This works while public registration is closed. You get a one-time link for the client&apos;s owner, valid for 7 days. If email is configured, the owner is also emailed.</p>
       <button className="text-link" onClick={() => setOpen(open === "invite" ? null : "invite")}>{open === "invite" ? "Cancel" : "Invite a client"}</button>
-      {open === "invite" && <InviteClient act={async (a, b) => { const ok = await act(a, b); if (ok) setOpen(null); return ok; }} />}
+      {open === "invite" && <InviteClient prefill={prefill} act={async (a, b) => { const ok = await act(a, b); if (ok) setOpen(null); return ok; }} />}
     </section>
 
     <section className="admin-records"><h2>Managed searches <span>{o.clientWork?.managed.length ?? 0}</span></h2>
-      <p className="admin-help">Jobs where the client asked Jobboard300 to recruit. Submitting a candidate needs their consent to share. The fee is on placement.</p>
+      <p className="admin-help">Jobs where the client asked Jobboard300 to recruit. Submitting a candidate needs their consent to share. The fee is on placement. Recruiters work each job&apos;s candidates and pipeline in the <a href="/platform/recruiting">Recruiting tool</a>.</p>
       {(o.clientWork?.managed ?? []).length === 0 ? <p>None.</p> : o.clientWork!.managed.map(j => <ManagedSearch key={String(j.id)} jd={j} act={act} />)}
     </section>
 
     <section className="admin-records"><h2>Placements <span>{o.clientWork?.placements.length ?? 0}</span></h2>
-      {(o.clientWork?.placements ?? []).length === 0 ? <p>None yet.</p> : <table className="pj-table"><thead><tr><th>Client</th><th>Role</th><th>Joined</th><th>CTC</th><th>Guarantee until</th><th>No job approaches until</th><th>Fee</th><th>Status</th></tr></thead>
+      {(o.clientWork?.placements ?? []).length === 0 ? <p>None yet.</p> : <table className="pj-table"><thead><tr><th>Client</th><th>Role</th><th>Joined</th><th>CTC</th><th>Guarantee until</th><th>No job approaches until</th><th>Fee</th><th>Salary</th><th>Status</th></tr></thead>
         <tbody>{o.clientWork!.placements.map(p => <tr key={String(p.id)}><td>{p.company}</td><td>{p.title}</td><td>{p.joined_on}</td><td>{p.ctc_inr ? `₹${(Number(p.ctc_inr) / 100000).toFixed(1)} LPA` : ""}</td><td>{p.guarantee_ends_on}</td><td>{p.non_solicit_until}</td><td>{p.fee_inr ? `₹${Number(p.fee_inr).toLocaleString("en-IN")} (${p.fee_percent}%)` : p.fee_percent ? `${p.fee_percent}%` : ""}{p.fee_terms ? ` · ${p.fee_terms}` : ""}</td>
+          <td><button className="text-link" onClick={() => { const lpa = window.prompt("Annual CTC the person joined at, in LPA (for example 12 for ₹12 LPA). The fee follows it:", p.ctc_inr ? String(Number(p.ctc_inr) / 100000) : ""); if (!lpa) return; const reason = window.prompt("Why is it being changed? (kept in the record)"); if (reason) act("placement-edit", { placementId: p.id, ctcInr: Math.round(Number(lpa) * 100_000), reason }); }}>{p.ctc_inr ? "Correct" : "Add salary"}</button></td>
           <td><select value={String(p.status)} onChange={e => act("placement-status", { placementId: p.id, status: e.target.value })}>{["active", "left_in_guarantee", "replaced", "left"].map(s => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select>{p.left_on ? ` · left ${p.left_on}` : ""}{p.note ? ` · ${p.note}` : ""}</td></tr>)}</tbody></table>}
     </section>
 
@@ -140,7 +146,7 @@ export default function PortalPanel() {
           <button className="text-link" onClick={() => setOpen(open === `p${c.id}` ? null : `p${c.id}`)}>Change parameters</button>
           <button className="text-link" onClick={() => { const fp = window.prompt("Placement fee, % of annual salary (7.5 to 8.33):", String(c.fee_percent ?? 8.33)); if (fp === null) return; const g = window.prompt("Replacement guarantee (days):", String(c.guarantee_days ?? 60)); if (g === null) return; const n = window.prompt("Months Jobboard300 will not approach people placed here about other jobs:", String(c.non_solicit_months ?? 12)); if (n === null) return; const t = window.prompt("Other fee terms:", String(c.fee_terms ?? "")); if (t !== null) act("client-terms", { companyId: c.id, feePercent: Number(fp), guaranteeDays: Number(g), nonSolicitMonths: Number(n), feeTerms: t }); }}>Client terms</button>
           <button className="delete-link" onClick={() => act("company-status", { companyId: c.id, status: "suspended" }, "Suspend this company? Its users lose access to the portal.")}>Suspend</button>
-          {open === `p${c.id}` && <form className="admin-form" onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); act("company-params", { companyId: c.id, params: paramsFrom(new FormData(e.currentTarget)) }).then(() => setOpen(null)); }}><ParamsFields /><button className="button button-small">Save parameters</button></form>}
+          {open === `p${c.id}` && <form className="admin-form" onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); act("company-params", { companyId: c.id, params: paramsFrom(new FormData(e.currentTarget)) }).then(() => setOpen(null)); }}><ParamsFields defaults={storedParams(c.params)} /><button className="button button-small">Save parameters</button></form>}
         </div>}
         {c.status === "suspended" && <button className="text-link" onClick={() => act("company-status", { companyId: c.id, status: "active" })}>Reactivate</button>}
       </div></article>)}
@@ -178,8 +184,9 @@ export default function PortalPanel() {
     </section>
 
     <section className="admin-records"><h2>Candidates shared with clients</h2>
+      <p className="admin-help">Each time a recruiter put a candidate in front of a client. Work these in the <a href="/platform/recruiting">Recruiting tool</a>.</p>
       <table className="pj-table"><thead><tr><th>When</th><th>Event</th><th>Company</th><th>Job</th><th>Candidate ref</th><th>Score</th><th>Revoked</th></tr></thead>
-        <tbody>{o.log.map((l, i) => <tr key={i}><td>{String(l.at).slice(0, 16).replace("T", " ")}</td><td>{l.kind}</td><td>{l.company}</td><td>{l.jd}</td><td>{l.candidate}</td><td>{l.score === null ? "" : Math.round(Number(l.score))}</td><td>{l.revoked_at ? String(l.revoked_at).slice(0, 10) : ""}</td></tr>)}</tbody></table>
+        <tbody>{o.log.map((l, i) => <tr key={i}><td>{String(l.at).slice(0, 16).replace("T", " ")}</td><td>{l.kind === "release" ? "Shown to client" : "Access opened"}</td><td>{l.company}</td><td>{l.jd}</td><td>{l.candidate}</td><td>{l.score === null ? "" : Math.round(Number(l.score))}</td><td>{l.revoked_at ? String(l.revoked_at).slice(0, 10) : ""}</td></tr>)}</tbody></table>
     </section>
   </div>;
 }

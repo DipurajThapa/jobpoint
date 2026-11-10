@@ -6,7 +6,7 @@ import { SENIORITY_ORDER, formatLpa, type Seniority } from "./india";
 import { roleFamilyById } from "./roles";
 import type { PortalRequirements } from "./jd";
 
-export type MandatoryFilter = "ctc_stated" | "notice_stated" | "work_evidence_for_mandatory_skills";
+export type MandatoryFilter = "ctc_stated" | "notice_stated" | "work_evidence_for_mandatory_skills" | "strict_mandatory_skills";
 
 export type CompanyParams = {
   minScore: number;                 // 0..100, CVs below this are never released
@@ -27,7 +27,9 @@ export function sanitiseParams(input: unknown): CompanyParams | string {
   if (!input || typeof input !== "object") return "Parameters are missing.";
   const r = input as Record<string, unknown>;
   const list = (v: unknown) => (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).filter((x): x is string => typeof x === "string" && !!x.trim()).map(x => x.trim());
-  const minScore = Number(r.minScore);
+  // The minimum score and the release cap belonged to self-service browsing, which was removed. They are kept in the
+  // record for old clients but are no longer asked for; a recruiter judges every candidate.
+  const minScore = r.minScore === undefined || r.minScore === "" ? DEFAULT_PARAMS.minScore : Number(r.minScore);
   if (!Number.isFinite(minScore) || minScore < 40 || minScore > 95) return "Minimum score must be between 40 and 95.";
   const roleFamilies = list(r.roleFamilies).filter(id => roleFamilyById(id));
   if (!roleFamilies.length) return "Choose at least one permitted role family.";
@@ -36,7 +38,7 @@ export function sanitiseParams(input: unknown): CompanyParams | string {
   const bands = (Array.isArray(r.ctcBands) ? r.ctcBands : []).map(b => ({ minInr: Number((b as { minInr?: unknown }).minInr), maxInr: Number((b as { maxInr?: unknown }).maxInr) }))
     .filter(b => Number.isFinite(b.minInr) && Number.isFinite(b.maxInr) && b.minInr >= 0 && b.maxInr >= b.minInr && b.maxInr <= 50_000_000).slice(0, 6);
   const notice = r.maxNoticeDays === null || r.maxNoticeDays === "" ? null : Number(r.maxNoticeDays);
-  const filters = list(r.mandatoryFilters).filter((f): f is MandatoryFilter => ["ctc_stated", "notice_stated", "work_evidence_for_mandatory_skills"].includes(f));
+  const filters = list(r.mandatoryFilters).filter((f): f is MandatoryFilter => ["ctc_stated", "notice_stated", "work_evidence_for_mandatory_skills", "strict_mandatory_skills"].includes(f));
   const cap = Number(r.maxReleasePerJd ?? 50), live = Number(r.maxLiveJds ?? 10);
   return {
     minScore: Math.round(minScore), roleFamilies, seniority, cities: list(r.cities).slice(0, 20), allowRemote: r.allowRemote === true, ctcBands: bands,

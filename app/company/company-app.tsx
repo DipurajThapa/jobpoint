@@ -15,13 +15,16 @@ type Overview = {
   placements: { id: string; title: string; joined_on: string; guarantee_ends_on: string; status: string; left_on: string | null; name: string; inGuarantee: boolean }[];
   metrics: { daysToOffer: number | null; daysToJoin: number | null; offerAcceptance: number | null; noShows: number };
 };
-type Dashboard = { company: { display_name: string; status: string; city: string }; params: { version: number; params: Params } | null; jds: { id: string; title: string; status: string; decision_note: string; released: number; unlocked: number }[]; overview: Overview; role: string; terms?: { feePercent?: number; guaranteeDays?: number }; notices?: { id: string; title: string; body: string; created_at: string; read_at: string | null }[] };
+type Dashboard = { company: { display_name: string; status: string; city: string }; params: { version: number; params: Params } | null; jds: { id: string; title: string; status: string; decision_note: string; released: number; unlocked: number; open_candidates?: number }[]; overview: Overview; role: string; terms?: { feePercent?: number; guaranteeDays?: number }; notices?: { id: string; title: string; body: string; created_at: string; read_at: string | null }[] };
 type Interview = { id: string; round: string; scheduled_at: string; mode: string; location: string; interviewer: string; status: string; outcome: string; rating: number | null; feedback: string };
 type Entry = { id: string; jdId: string; jdTitle: string; ref: string; stage: string; stageLabel: string; stageReason: string; source: string; name: string; available: boolean; cvOpen?: boolean; recruiterNote: string; offerCtcInr: number | null; offerDate: string | null; joiningDate: string | null; lastWorkingDay: string | null; competingOffers: string; updatedAt: string; next: string[]; interviews: Interview[] };
+type Reschedulable = { id: string; round: string; scheduled_at: string; mode: string; location: string; interviewer: string };
 type PipelineData = { pipeline: Entry[]; reasons: Record<string, string[]>; labels: Record<string, string> };
 type Params = { minScore: number; roleFamilies: string[]; seniority: string[]; cities: string[]; allowRemote: boolean; ctcBands: { minInr: number; maxInr: number }[]; maxNoticeDays: number | null; maxReleasePerJd: number; maxLiveJds: number; mandatoryFilters: string[] };
 type Full = { contactsHidden?: boolean; traceId: string; unlockedAt: string; profile: { contact: { name: string; email: string; phone: string; links: string[] }; headline: string; summary: string; work: { title: string; employer: string; location: string; start: string | null; end: string | null; current: boolean; highlights: string[] }[]; education: { qualification: string; field: string; institution: string; year: number | null }[]; skills: { name: string; evidence: string }[]; certifications: string[]; languages: string[]; india: { yearsExperience: number; noticeDays: number | null; ctcCurrentInr: number | null; ctcExpectedInr: number | null; currentCity: string } }; applications: { id: string; status: string; title: string }[] };
 
+/** Now, in the format a date-time field uses, so a past time cannot be picked. */
+const nowLocal = () => { const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000); return d.toISOString().slice(0, 16); };
 const lpa = (n: number | null) => n === null ? "not stated" : `₹${(n / 100_000).toFixed(1)} LPA`;
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(path, { cache: "no-store" });
@@ -31,7 +34,7 @@ async function get<T>(path: string): Promise<T> {
 }
 
 export default function CompanyApp() {
-  const [view, setView] = useState<{ name: "home" } | { name: "jobs" } | { name: "new" } | { name: "jd"; id: string } | { name: "candidate"; ref: string } | { name: "pipeline"; jd?: string } | { name: "team" }>({ name: "home" });
+  const [view, setView] = useState<{ name: "home" } | { name: "jobs" } | { name: "new" } | { name: "jd"; id: string } | { name: "candidate"; ref: string; jd?: string } | { name: "pipeline"; jd?: string } | { name: "team" }>({ name: "home" });
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [notice, setNotice] = useState<{ text: string; bad?: boolean; upgrade?: boolean } | null>(null);
   const load = useCallback(() => get<Dashboard>("/api/portal/company/dashboard").then(setDash).catch(e => setNotice({ text: e.message, bad: true })), []);
@@ -56,12 +59,12 @@ export default function CompanyApp() {
       {notice && <p className={`pj-notice ${notice.bad ? "bad" : "good"}`} role="status">{notice.text}</p>}
       {dash && !active && <section className="pj-card"><h2>Your account is being reviewed</h2><p>Jobboard300 checks every hiring company and sets the rules for which CVs you receive. You can post jobs once your account is approved.</p></section>}
       {dash && view.name === "home" && <OverviewView dash={dash} say={say} reload={load} go={(name, jd) => setView(name === "pipeline" ? { name: "pipeline", jd } : { name: "jobs" })} />}
-      {dash && view.name === "jobs" && <Home dash={dash} active={active} post={() => setView({ name: "new" })} edit={id => setView({ name: "jd", id })} pipeline={jd => setView({ name: "pipeline", jd })} />}
-      {view.name === "pipeline" && <Pipeline jd={view.jd} jobs={dash?.overview.jobs ?? []} say={say} reload={load} profile={ref => setView({ name: "candidate", ref })} />}
+      {dash && view.name === "jobs" && <Home dash={dash} active={active} say={say} reload={load} post={() => setView({ name: "new" })} edit={id => setView({ name: "jd", id })} pipeline={jd => setView({ name: "pipeline", jd })} />}
+      {view.name === "pipeline" && <Pipeline jd={view.jd} jobs={dash?.overview.jobs ?? []} say={say} reload={load} profile={(ref, jd) => setView({ name: "candidate", ref, jd })} reloadJobs={load} />}
       {view.name === "team" && <Team say={say} />}
       {view.name === "new" && <NewJd created={id => setView({ name: "jd", id })} say={say} />}
       {view.name === "jd" && <JdEditor id={view.id} say={say} done={() => setView({ name: "home" })} />}
-      {view.name === "candidate" && <Candidate refId={view.ref} say={say} back={() => setView({ name: "pipeline" })} />}
+      {view.name === "candidate" && <Candidate refId={view.ref} say={say} back={() => setView({ name: "pipeline", jd: view.jd })} />}
     </main>
   </>;
 }
@@ -111,20 +114,26 @@ function OverviewView({ dash, say, reload, go }: { dash: Dashboard; say: (t: str
   </>;
 }
 
-function Home({ dash, active, post: postJob, edit, pipeline }: { dash: Dashboard; active: boolean; post: () => void; edit: (id: string) => void; pipeline: (jd: string) => void }) {
-  const STATUS: Record<string, string> = { draft: "Draft", pending: "Waiting for Jobboard300 approval", live: "Live", paused: "Paused", rejected: "Changes needed" };
+function Home({ dash, active, post: postJob, edit, pipeline, say, reload }: { dash: Dashboard; active: boolean; post: () => void; edit: (id: string) => void; pipeline: (jd: string) => void; say: (t: string, bad?: boolean) => void; reload: () => void }) {
+  async function closeRemaining(jdId: string, n: number) {
+    if (!window.confirm(`Close the ${n} candidate${n === 1 ? "" : "s"} still in process as “position filled”? Each one is told.`)) return;
+    try { say((await post<{ message: string }>("/api/portal/company/jd-fill", { jdId })).message); reload(); } catch (e) { say((e as Error).message, true); }
+  }
+  const STATUS: Record<string, string> = { draft: "Draft", pending: "Waiting for Jobboard300 approval", live: "Live", paused: "Paused", rejected: "Changes needed", closed: "Closed" };
+  const [showClosed, setShowClosed] = useState(false);
   const stats = new Map(dash.overview.jobs.map(j => [j.id, j]));
   return <>
     <div className="pj-stats">
       <div><span className="pj-muted">Your terms</span><b>{dash.terms?.feePercent ?? 8.33}%</b><span className="pj-muted">of annual salary, charged only when someone joins · {dash.terms?.guaranteeDays ?? 60}-day replacement</span></div>
       <div><span className="pj-muted">Live jobs</span><b>{dash.jds.filter(j => j.status === "live").length}</b><span className="pj-muted">of {dash.params?.params.maxLiveJds ?? 0} allowed</span></div>
     </div>
-    <section className="pj-card"><div className="pj-row" style={{ justifyContent: "space-between" }}><h2>Your jobs</h2>{active && <button className="pj-btn" onClick={postJob}>Post a job</button>}</div>
+    <section className="pj-card"><div className="pj-row" style={{ justifyContent: "space-between" }}><h2>Your jobs</h2><div className="pj-row">{dash.jds.some(j => j.status === "closed") && <label className="pj-muted"><input type="checkbox" checked={showClosed} onChange={e => setShowClosed(e.target.checked)} /> Show closed jobs</label>}{active && <button className="pj-btn" onClick={postJob}>Post a job</button>}</div></div>
       {dash.jds.length === 0 ? <p>No jobs yet. Post a job description and Jobboard300 will approve it against your matching rules.</p> :
-        <div className="pj-list">{dash.jds.map(j => { const s = stats.get(j.id); const managed = s?.service === "managed"; return <article className="pj-item" key={j.id}>
+        <div className="pj-list">{dash.jds.filter(j => showClosed || j.status !== "closed").map(j => { const s = stats.get(j.id); const managed = s?.service === "managed"; return <article className="pj-item" key={j.id}>
           <div><b>{j.title}</b> <span className="pj-pill">{managed ? "Managed by Jobboard300" : "Self-service"}</span>
-            <p className="pj-muted">{STATUS[j.status] ?? j.status} · {s?.openings ?? 1} opening(s){j.status === "live" ? ` · ${managed ? "" : `${j.released} strong match(es) · `}${s?.in_process ?? 0} in process${s?.to_review ? ` · ${s.to_review} to review` : ""} · ${s?.joined ?? 0} joined` : ""}</p>{j.decision_note && j.status !== "live" && <p className="pj-muted">{j.decision_note}</p>}</div>
-          <div className="pj-row">{j.status === "live" && <button className="pj-btn quiet" onClick={() => pipeline(j.id)}>Pipeline</button>}<button className="pj-btn quiet" onClick={() => edit(j.id)}>{j.status === "live" ? "Edit" : "Open"}</button></div>
+            <p className="pj-muted">{STATUS[j.status] ?? j.status} · {s?.openings ?? 1} opening(s){j.status === "live" ? ` · ${managed ? "" : `${j.released} strong match(es) · `}${s?.in_process ?? 0} in process${s?.to_review ? ` · ${s.to_review} to review` : ""} · ${s?.joined ?? 0} joined` : ""}</p>{j.decision_note && j.status !== "live" && <p className="pj-muted">{j.decision_note}</p>}
+            {j.status === "closed" && Number(j.open_candidates) > 0 && <p><button className="pj-link" onClick={() => closeRemaining(j.id, Number(j.open_candidates))}>Close the remaining {j.open_candidates} candidate{Number(j.open_candidates) === 1 ? "" : "s"} as “position filled”</button> <span className="pj-muted">Each is told.</span></p>}</div>
+          <div className="pj-row">{j.status === "live" && <button className="pj-btn quiet" onClick={() => pipeline(j.id)}>Pipeline</button>}<button className="pj-btn quiet" onClick={() => edit(j.id)}>{j.status === "live" ? "Edit" : j.status === "closed" ? "View or re-open" : "Open"}</button></div>
         </article>; })}</div>}
     </section>
   </>;
@@ -141,6 +150,7 @@ function StageForm({ entry, stage, reasons, labels, done, say }: { entry: Entry;
     <h3 className="full">Move to “{labels[stage]}”</h3>
     {reasons && <label>Reason<select name="reason" required defaultValue=""><option value="" disabled>Choose…</option>{reasons.map(r => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}</select></label>}
     {stage === "offered" && <><label>Offered annual CTC (LPA)<input name="offerLpa" type="number" step={0.1} min={0.5} /></label><label>Offer date<input name="offerDate" type="date" defaultValue={today} /></label></>}
+    {stage === "joined" && <label>Annual CTC they joined at (LPA) <span className="pj-muted">The placement fee is worked out from it.</span><input name="offerLpa" type="number" step={0.1} min={0.5} required defaultValue={entry.offerCtcInr ? entry.offerCtcInr / 100_000 : ""} /></label>}
     {(stage === "offer_accepted" || stage === "joined") && <label>{stage === "joined" ? "Joined on" : "Expected joining date"}<input name="joiningDate" type="date" required defaultValue={stage === "joined" ? entry.joiningDate ?? today : ""} /></label>}
     {stage === "offer_accepted" && <><label>Last working day at current employer<input name="lastWorkingDay" type="date" /></label><label>Other offers in hand (if known)<input name="competingOffers" maxLength={300} placeholder="e.g. one offer at ₹14 LPA, decision by 20 Dec" /></label></>}
     <label className="full">Note (optional)<input name="note" maxLength={1000} /></label>
@@ -156,7 +166,7 @@ function InterviewForm({ entry, done, say }: { entry: Entry; done: () => void; s
   return <form className="pj-form" onSubmit={submit}>
     <h3 className="full">Schedule an interview</h3>
     <label>Round<input name="round" required list="rounds" placeholder="Technical 1" /><datalist id="rounds"><option>Online coding test</option><option>Technical 1</option><option>Technical 2</option><option>Managerial</option><option>HR</option></datalist></label>
-    <label>Date and time<input name="when" type="datetime-local" required /></label>
+    <label>Date and time<input name="when" type="datetime-local" required min={nowLocal()} /></label>
     <label>Mode<select name="mode"><option value="video">Video</option><option value="phone">Phone</option><option value="in_person">In person</option></select></label>
     <label>Link or address<input name="location" maxLength={300} /></label>
     <label>Interviewer<input name="interviewer" maxLength={120} /></label>
@@ -164,22 +174,45 @@ function InterviewForm({ entry, done, say }: { entry: Entry; done: () => void; s
   </form>;
 }
 
-function FeedbackForm({ interview, done, say }: { interview: Interview; done: () => void; say: (t: string, bad?: boolean) => void }) {
+function RescheduleForm({ interview, done, say }: { interview: Reschedulable; done: () => void; say: (t: string, bad?: boolean) => void }) {
+  const local = new Date(new Date(interview.scheduled_at).getTime() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget).entries()) as Record<string, string>;
-    try { say((await post<{ message: string }>("/api/portal/company/interview-record", { interviewId: interview.id, status: f.status, outcome: f.outcome, rating: f.rating, feedback: f.feedback })).message); done(); } catch (err) { say((err as Error).message, true); }
+    try { say((await post<{ message: string }>("/api/portal/company/interview-reschedule", { interviewId: interview.id, scheduledAt: f.when ? new Date(f.when).toISOString() : "", mode: f.mode, location: f.location, interviewer: f.interviewer })).message); done(); } catch (err) { say((err as Error).message, true); }
+  }
+  return <form className="pj-form" onSubmit={submit}>
+    <h3 className="full">Reschedule: {interview.round}</h3>
+    <label>New date and time<input name="when" type="datetime-local" required min={nowLocal()} defaultValue={local} /></label>
+    <label>Mode<select name="mode" defaultValue={interview.mode}><option value="video">Video</option><option value="phone">Phone</option><option value="in_person">In person</option></select></label>
+    <label>Link or address<input name="location" maxLength={300} defaultValue={interview.location} /></label>
+    <label>Interviewer<input name="interviewer" maxLength={120} defaultValue={interview.interviewer} /></label>
+    <p className="full pj-muted">The candidate gets one message with the new time. Nothing is cancelled.</p>
+    <div className="full pj-row"><button className="pj-btn">Save new time</button><button type="button" className="pj-link" onClick={done}>Cancel</button></div>
+  </form>;
+}
+
+function FeedbackForm({ interview, reasons, done, say }: { interview: Interview; reasons: string[]; done: () => void; say: (t: string, bad?: boolean) => void }) {
+  const [outcome, setOutcome] = useState("advance"), [status, setStatus] = useState("completed");
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget).entries()) as Record<string, string>;
+    try {
+      const r = await post<{ message: string; suggest?: string | null }>("/api/portal/company/interview-record", { interviewId: interview.id, status: f.status, outcome: f.outcome, rating: f.rating, feedback: f.feedback, rejectReason: f.rejectReason });
+      // Say what comes next, so a decision is never left half made.
+      say(r.suggest === "rejected" ? `${r.message} Use “Move to…” to mark the candidate “Not selected” when you have decided.` : r.suggest === "next" ? `${r.message} Next: schedule another round or make an offer from “Move to…”.` : r.message); done();
+    } catch (err) { say((err as Error).message, true); }
   }
   return <form className="pj-form" onSubmit={submit}>
     <h3 className="full">Feedback: {interview.round}</h3>
-    <label>What happened<select name="status"><option value="completed">Interview completed</option><option value="no_show">Candidate did not attend</option><option value="cancelled">Cancelled</option></select></label>
-    <label>Outcome<select name="outcome"><option value="advance">Move forward</option><option value="hold">On hold</option><option value="reject">Do not proceed</option><option value="pending">Decision pending</option></select></label>
+    <label>What happened<select name="status" value={status} onChange={e => setStatus(e.target.value)}><option value="completed">Interview completed</option><option value="no_show">Candidate did not attend</option><option value="cancelled">Cancelled</option></select></label>
+    <label>Outcome<select name="outcome" value={outcome} onChange={e => setOutcome(e.target.value)}><option value="advance">Move forward</option><option value="hold">On hold</option><option value="reject">Do not proceed</option><option value="pending">Decision pending</option></select></label>
+    {status === "completed" && outcome === "reject" && <label className="full">Mark the candidate “Not selected” now. Reason <span className="pj-muted">Optional: leave it empty to decide later.</span><select name="rejectReason" defaultValue=""><option value="">Decide later</option>{reasons.map(r => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}</select></label>}
     <label>Rating (1–5)<select name="rating" defaultValue=""><option value="">No rating</option>{[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
     <label className="full">Feedback <span className="pj-muted">Shared with Jobboard300 to improve the next shortlist. Judge job-related skills only.</span><textarea name="feedback" rows={3} maxLength={2000} /></label>
     <div className="full pj-row"><button className="pj-btn">Save feedback</button><button type="button" className="pj-link" onClick={done}>Cancel</button></div>
   </form>;
 }
 
-function Pipeline({ jd, jobs, say, reload, profile }: { jd?: string; jobs: Overview["jobs"]; say: (t: string, bad?: boolean) => void; reload: () => void; profile: (ref: string) => void }) {
+function Pipeline({ jd, jobs, say, reload, profile }: { jd?: string; jobs: Overview["jobs"]; say: (t: string, bad?: boolean) => void; reload: () => void; profile: (ref: string, jd?: string) => void; reloadJobs?: () => void }) {
   const [filter, setFilter] = useState(jd ?? ""), [show, setShow] = useState("open");
   const [data, setData] = useState<PipelineData | null>(null), [form, setForm] = useState<{ id: string; kind: string } | null>(null);
   const load = useCallback(() => get<PipelineData>(`/api/portal/company/pipeline${filter ? `?jd=${filter}` : ""}`).then(setData).catch(e => say(e.message, true)), [filter, say]);
@@ -198,13 +231,14 @@ function Pipeline({ jd, jobs, say, reload, profile }: { jd?: string; jobs: Overv
           <b>{e.name}</b> <span className="pj-pill">{e.stageLabel}</span>{e.source === "job_point" && <span className="pj-pill">Submitted by Jobboard300</span>}
           <p className="pj-muted">{e.jdTitle} · updated {fmtDate(e.updatedAt)}{e.offerCtcInr ? ` · offer ${lpa(e.offerCtcInr)}` : ""}{e.joiningDate ? ` · joining ${fmtDate(e.joiningDate)}` : ""}{e.lastWorkingDay ? ` · last day at current job ${fmtDate(e.lastWorkingDay)}` : ""}{e.competingOffers ? ` · other offers: ${e.competingOffers}` : ""}{e.stageReason ? ` · ${e.stageReason.replace(/_/g, " ")}` : ""}</p>
           {e.recruiterNote && <p className="pj-note"><b>Jobboard300&apos;s note:</b> {e.recruiterNote}</p>}
-          {e.interviews.length > 0 && <ul>{e.interviews.map(i => <li key={i.id}>{i.round} · {fmtTime(i.scheduled_at)} · {MODE[i.mode]} · {i.status === "scheduled" ? <>scheduled <button className="pj-link" onClick={() => setForm({ id: i.id, kind: "feedback" })}>Record feedback</button></> : `${i.status.replace("_", " ")}${i.status === "completed" ? `: ${i.outcome}${i.rating ? `, ${i.rating}/5` : ""}` : ""}`}{i.feedback ? ` — ${i.feedback}` : ""}
-            {form?.kind === "feedback" && form.id === i.id && <FeedbackForm interview={i} done={done} say={say} />}</li>)}</ul>}
+          {e.interviews.length > 0 && <ul>{e.interviews.map(i => <li key={i.id}>{i.round} · {fmtTime(i.scheduled_at)} · {MODE[i.mode]} · {i.status === "scheduled" ? <>scheduled <button className="pj-link" onClick={() => setForm({ id: i.id, kind: "feedback" })}>Record feedback</button> · <button className="pj-link" onClick={() => setForm({ id: i.id, kind: "reschedule" })}>Reschedule</button></> : `${i.status.replace("_", " ")}${i.status === "completed" ? `: ${i.outcome}${i.rating ? `, ${i.rating}/5` : ""}` : ""}`}{i.feedback ? ` — ${i.feedback}` : ""}
+            {form?.kind === "feedback" && form.id === i.id && <FeedbackForm interview={i} reasons={data.reasons.rejected ?? []} done={done} say={say} />}
+            {form?.kind === "reschedule" && form.id === i.id && <RescheduleForm interview={i} done={done} say={say} />}</li>)}</ul>}
           {form?.id === e.id && form.kind === "interview" && <InterviewForm entry={e} done={done} say={say} />}
           {form?.id === e.id && form.kind.startsWith("stage:") && <StageForm entry={e} stage={form.kind.slice(6)} reasons={data.reasons[form.kind.slice(6)]} labels={data.labels} done={done} say={say} />}
         </div>
         {e.available && <div className="pj-row pj-actions">
-          {e.cvOpen !== false && <button className="pj-btn quiet" onClick={() => profile(e.ref)}>Profile</button>}
+          {e.cvOpen !== false && <button className="pj-btn quiet" onClick={() => profile(e.ref, filter || undefined)}>Profile</button>}
           {["shortlisted", "interview"].includes(e.stage) && <button className="pj-btn quiet" onClick={() => setForm({ id: e.id, kind: "interview" })}>Schedule interview</button>}
           {e.next.length > 0 && <select value="" aria-label="Move to stage" onChange={ev => ev.target.value && setForm({ id: e.id, kind: `stage:${ev.target.value}` })}><option value="">Move to…</option>{e.next.map(s => <option key={s} value={s}>{data.labels[s]}</option>)}</select>}
         </div>}
@@ -261,23 +295,26 @@ function NewJd({ created, say }: { created: (id: string) => void; say: (t: strin
 
 function JdEditor({ id, say, done }: { id: string; say: (t: string, bad?: boolean) => void; done: () => void }) {
   type Req = { title: string; mustHave: { name: string }[]; niceToHave: { name: string }[]; minYears: number | null; maxYears: number | null; educationLevel: number | null; hard: { cities: string[]; remote: boolean; allowRelocation: boolean; mandatorySkills: { name: string }[]; maxNoticeDays: number | null; ctcMinInr: number | null; ctcMaxInr: number | null } };
-  const [data, setData] = useState<{ jd: { title: string; status: string; requirements: string; decision_note: string } } | null>(null);
+  const [data, setData] = useState<{ jd: { title: string; status: string; requirements: string; decision_note: string } } | null>(null), [dirty, setDirty] = useState(false);
   const load = useCallback(() => get<typeof data>(`/api/portal/company/jd?id=${id}`).then(setData).catch(e => say(e.message, true)), [id, say]);
   useEffect(() => { load(); }, [load]);
   if (!data) return <p className="pj-muted">Loading…</p>;
   const r = JSON.parse(data.jd.requirements) as Req;
   const names = (xs: { name: string }[]) => xs.map(x => x.name).join(", ");
   async function save(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault(); const f = new FormData(e.currentTarget); const n = (k: string, s = 1) => f.get(k) === "" ? null : Number(f.get(k)) * s;
+    e.preventDefault();
+    if (!dirty) { say("Nothing was changed."); return; }
+    if (data!.jd.status === "live" && !window.confirm("Changing a live job sends it to Jobboard300 for approval. Your candidates stay where they are and recruiters can still work them. Continue?")) return;
+    const f = new FormData(e.currentTarget); const n = (k: string, s = 1) => f.get(k) === "" ? null : Number(f.get(k)) * s;
     const requirements = { title: f.get("title"), mustHave: f.get("mustHave"), niceToHave: f.get("niceToHave"), minYears: n("minYears"), maxYears: n("maxYears"), educationLevel: f.get("educationLevel") || null,
       hard: { cities: f.get("cities"), remote: f.get("remote") === "yes", allowRelocation: f.get("relocation") === "yes", mandatorySkills: f.get("mandatory"), maxNoticeDays: n("notice"), ctcMinInr: n("ctcMin", 100_000), ctcMaxInr: n("ctcMax", 100_000) } };
-    try { say((await post<{ message: string }>("/api/portal/company/jd-update", { jdId: id, requirements })).message); load(); } catch (err) { say((err as Error).message, true); }
+    try { say((await post<{ message: string }>("/api/portal/company/jd-update", { jdId: id, requirements })).message); setDirty(false); load(); } catch (err) { say((err as Error).message, true); }
   }
   async function submit() { try { say((await post<{ message: string; conflicts: string[] }>("/api/portal/company/jd-submit", { jdId: id })).message); done(); } catch (err) { say((err as Error).message, true); } }
-  async function close() { if (!window.confirm("Close this job?")) return; try { say((await post<{ message: string }>("/api/portal/company/jd-close", { jdId: id })).message); done(); } catch (err) { say((err as Error).message, true); } }
+  async function close() { if (!window.confirm("Close this job? Candidates still in process are closed as “position closed” and told. You can send the job for approval again to re-open it.")) return; try { say((await post<{ message: string }>("/api/portal/company/jd-close", { jdId: id })).message); done(); } catch (err) { say((err as Error).message, true); } }
   return <section className="pj-card"><h2>{data.jd.title}</h2>
-    <p className="pj-muted">Status: {data.jd.status}{data.jd.decision_note ? ` · ${data.jd.decision_note}` : ""}. Editing a live job sends it back to Jobboard300 for approval.</p>
-    <form className="pj-form" key={data.jd.requirements} onSubmit={save}>
+    <p className="pj-muted">Status: {data.jd.status}{data.jd.decision_note ? ` · ${data.jd.decision_note}` : ""}. {data.jd.status === "closed" ? "A closed job cannot be edited. Send it for approval to re-open it." : "A change to a live job goes to Jobboard300 for approval; nothing changes if you save without editing."}</p>
+    <form className="pj-form" key={data.jd.requirements} onSubmit={save} onChange={() => setDirty(true)}>
       <label className="full">Job title<input name="title" defaultValue={r.title} /></label>
       <label className="full">Must-have skills<textarea name="mustHave" defaultValue={names([...r.mustHave])} rows={2} /></label>
       <label className="full">Essential (pass/fail) skills <span className="pj-muted">Candidates without these are never shown to you. Keep this short.</span><input name="mandatory" defaultValue={names(r.hard.mandatorySkills)} /></label>
@@ -291,7 +328,7 @@ function JdEditor({ id, say, done }: { id: string; say: (t: string, bad?: boolea
       <label>CTC from (LPA)<input name="ctcMin" type="number" step={0.1} min={0} defaultValue={r.hard.ctcMinInr ? r.hard.ctcMinInr / 100_000 : ""} /></label>
       <label>CTC up to (LPA)<input name="ctcMax" type="number" step={0.1} min={0} defaultValue={r.hard.ctcMaxInr ? r.hard.ctcMaxInr / 100_000 : ""} /></label>
       <label>Minimum education<select name="educationLevel" defaultValue={r.educationLevel ?? ""}><option value="">Not required</option><option value="2">12th</option><option value="3">Diploma / ITI</option><option value="4">Graduate</option><option value="5">Postgraduate / professional</option></select></label>
-      <div className="full pj-row"><button className="pj-btn quiet">Save changes</button>{["draft", "rejected", "paused"].includes(data.jd.status) && <button type="button" className="pj-btn" onClick={submit}>Submit for approval</button>}{data.jd.status !== "closed" && <button type="button" className="pj-link" onClick={close}>Close job</button>}</div>
+      <div className="full pj-row">{data.jd.status !== "closed" && <button className="pj-btn quiet">Save changes</button>}{["draft", "rejected", "paused", "closed"].includes(data.jd.status) && <button type="button" className="pj-btn" onClick={submit}>{data.jd.status === "closed" ? "Send for approval to re-open" : "Submit for approval"}</button>}{data.jd.status !== "closed" && <button type="button" className="pj-link" onClick={close}>Close job</button>}</div>
     </form>
   </section>;
 }
@@ -317,7 +354,7 @@ function Candidate({ refId, say, back }: { refId: string; say: (t: string, bad?:
     <h3>Skills</h3><div className="pj-chips">{p.skills.slice(0, 40).map(s => <span key={s.name}>{s.name}{s.evidence === "work" ? " ✓" : ""}</span>)}</div>
     <h3>Pipeline</h3>
     {entries.length > 0 ? <ul>{entries.map(e => <li key={e.id}>{e.jdTitle}: <b>{e.stageLabel}</b></li>)}</ul> : <p className="pj-muted">Not in your pipeline yet.{c.applications.length ? ` Applied to: ${c.applications.map(a => a.title).join(", ")}.` : ""}</p>}
-    <button className="pj-link" onClick={back}>Back to dashboard</button>
+    <button className="pj-link" onClick={back}>Back to pipeline</button>
   </section>;
 }
 
