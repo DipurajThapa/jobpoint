@@ -11,13 +11,21 @@
 //   needs the portal's own share_with_companies consent.
 // - The job-specific form's sharing tick covers only that one role, so it is
 //   not turned into general sharing.
-// A website applicant is never attached to someone's portal account by email
-// alone (the website does not verify email): a separate record is created and
-// flagged as a possible duplicate for the admin to merge.
+// One person record (merge 1). The portal verifies email; the website does not.
+// So the two are joined only on the strength of the portal's verification:
+// - When a portal account's email is verified (and at each sign-in, which covers
+//   records made earlier), website-only records with the same email are merged
+//   into the account's record. Applications, pipeline history and messages
+//   follow; the account holder's own CV and consents are left as they are.
+// - A website application that arrives for an email that already has a verified
+//   account is added to that person's record as an application only. Its ticks
+//   and CV are not applied to the account, because the form's sender is not
+//   proven to be the account holder; the person is told in their inbox.
 
 import { audit, newId, nowIso, sha256Hex, type Db } from "./db";
 import { consentActive, recordConsent, withdrawSharing } from "./consent";
-import { createCandidate, deleteCandidateData, normEmail, normPhone } from "./candidate";
+import { createCandidate, deleteCandidateData, mergeCandidates, normEmail, normPhone } from "./candidate";
+import { notifyCandidate } from "./notify";
 import { enqueue } from "./company";
 import { ingestCv, type Bucket } from "./ingest";
 import { WEBSITE_NOTICE, websiteNoticeVersion } from "./notice";
@@ -36,9 +44,39 @@ async function existingWebsiteCandidate(db: Db, email: string) {
       AND EXISTS (SELECT 1 FROM candidate_sources s WHERE s.candidate_id = c.id AND s.kind = 'website_application') ORDER BY c.created_at LIMIT 1`).bind(hash).first<{ id: string }>();
 }
 
+/** The record of a portal account holder with this email, if the portal has verified the address. */
+async function verifiedAccountCandidate(db: Db, email: string) {
+  const hash = await sha256Hex(normEmail(email));
+  return db.prepare(`SELECT c.id FROM candidates c JOIN portal_accounts a ON a.id = c.account_id
+    WHERE c.dedupe_email_hash = ? AND c.status IN ('active','review') AND a.status = 'active' AND a.email_verified_at IS NOT NULL AND a.email = ? ORDER BY c.created_at LIMIT 1`).bind(hash, email.trim().toLowerCase()).first<{ id: string }>();
+}
+
+/**
+ * Merge website-only records into the record of the portal account that has
+ * verified the same email. Safe to call often: it does nothing when there is
+ * nothing to merge. Returns how many records were merged.
+ */
+export async function mergeVerifiedDuplicates(db: Db, accountId: string): Promise<number> {
+  const mine = await db.prepare(`SELECT c.id, c.dedupe_email_hash AS hash FROM candidates c JOIN portal_accounts a ON a.id = c.account_id
+    WHERE a.id = ? AND a.kind = 'candidate' AND a.status = 'active' AND a.email_verified_at IS NOT NULL AND c.status IN ('active','review') AND c.dedupe_email_hash != ''`).bind(accountId).first<{ id: string; hash: string }>();
+  if (!mine) return 0;
+  const { results } = await db.prepare("SELECT id FROM candidates WHERE dedupe_email_hash = ? AND account_id IS NULL AND status IN ('active','review') AND id != ? ORDER BY created_at").bind(mine.hash, mine.id).all<{ id: string }>();
+  for (const dup of results) await mergeCandidates(db, mine.id, dup.id, "system:verified_email");
+  if (results.length) await notifyCandidate(db, mine.id, "record.merged", "Your earlier website application is now in your account", "You applied on the Jobboard300 website with this email address before creating your account. That application now appears under your account, so there is one record of you. If you did not make it, reply to any Jobboard300 email or use the privacy request form and we will remove it.");
+  return results.length;
+}
+
 export async function linkWebsiteApplication(db: Db, bucket: Bucket, app: WebsiteApplication, cvBytes: Uint8Array | null, actor = "website"): Promise<LinkResult> {
   const linked = await db.prepare("SELECT candidate_id FROM candidate_sources WHERE kind = 'website_application' AND ref_id = ?").bind(app.id).first<{ candidate_id: string }>();
   if (linked) return { candidateId: linked.candidate_id, created: false, cv: "none", matching: await consentActive(db, linked.candidate_id, "profile_processing"), recruiterSharing: await consentActive(db, linked.candidate_id, "recruiter_sharing") };
+  // The email belongs to a verified account: the application joins that person's record, and nothing else changes on it.
+  const owner = await verifiedAccountCandidate(db, app.email);
+  if (owner) {
+    await db.prepare("INSERT INTO candidate_sources (id, candidate_id, kind, ref_id, created_at) VALUES (?, ?, 'website_application', ?, ?)").bind(newId(), owner.id, app.id, nowIso()).run();
+    await notifyCandidate(db, owner.id, "record.application_added", "A website application was added to your account", "An application was made on the Jobboard300 website with your email address. It now appears under your account. Your CV and your sharing choices here were not changed. If you did not make it, use the privacy request form and we will remove it.");
+    await audit(db, actor, "candidate.website_linked", "candidate", owner.id, `application ${app.id}; joined verified account`);
+    return { candidateId: owner.id, created: false, cv: "none", matching: await consentActive(db, owner.id, "profile_processing"), recruiterSharing: await consentActive(db, owner.id, "recruiter_sharing") };
+  }
   const reuse = await existingWebsiteCandidate(db, app.email);
   const candidateId = reuse?.id ?? await createCandidate(db, { accountId: null, displayName: app.fullName, email: app.email, phone: app.phone, currentCity: app.location });
   await db.prepare("INSERT INTO candidate_sources (id, candidate_id, kind, ref_id, created_at) VALUES (?, ?, 'website_application', ?, ?)").bind(newId(), candidateId, app.id, nowIso()).run();

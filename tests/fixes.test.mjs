@@ -133,16 +133,19 @@ test("a correction made on a website application reaches the same person's candi
   assert.deepEqual(await w.db.prepare("SELECT display_name, dedupe_email_hash FROM candidates WHERE id = ?").bind(w.asha.id).first(), before);
 });
 
-test("a website applicant is one person however they type their email, and is never attached to someone's portal account", async () => {
+test("a website applicant is one person however they type their email, and joins a verified account's record without changing it", async () => {
   const w = await world();
   const app = (id, email) => ({ id, jobId: null, fullName: "Gee Mail", email, phone: "", location: "Kolkata", shareConsent: false, futureConsent: true, privacyVersion: "2026-11-09", resumeName: null });
   const one = await mods.website.linkWebsiteApplication(w.db, w.BUCKET, app("g-1", "gee.mail@gmail.com"), null);
   const two = await mods.website.linkWebsiteApplication(w.db, w.BUCKET, app("g-2", "GeeMail+jobs@gmail.com"), null);
   assert.equal(two.candidateId, one.candidateId, "the same mailbox created two candidate records");
-  // Applying on the website with a portal user's email must not join (or expose) that user's account record.
-  const intruder = await mods.website.linkWebsiteApplication(w.db, w.BUCKET, app("g-3", w.asha.email), null);
-  assert.notEqual(intruder.candidateId, w.asha.id);
-  assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM duplicate_flags WHERE status = 'open' AND (a_id = ? OR b_id = ?)").bind(w.asha.id, w.asha.id).first()).n, 1, "the possible duplicate should be flagged for the admin");
+  // Applying on the website with a verified portal user's email joins that person's record as an application only (merge 1):
+  // no second record, no duplicate flag, and nothing the form said is written to the account.
+  const before = await w.db.prepare("SELECT display_name, current_city FROM candidates WHERE id = ?").bind(w.asha.id).first();
+  const joined = await mods.website.linkWebsiteApplication(w.db, w.BUCKET, app("g-3", w.asha.email), null);
+  assert.equal(joined.candidateId, w.asha.id);
+  assert.deepEqual(await w.db.prepare("SELECT display_name, current_city FROM candidates WHERE id = ?").bind(w.asha.id).first(), before);
+  assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM duplicate_flags WHERE status = 'open' AND (a_id = ? OR b_id = ?)").bind(w.asha.id, w.asha.id).first()).n, 0);
 });
 
 test("deleting a staff account returns their jobs to unassigned and ends their sessions", async () => {

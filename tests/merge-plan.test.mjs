@@ -260,3 +260,83 @@ test("merge 5: a Fast Track request is written to the one orders table", async (
   assert.equal(w.db.raw.prepare("SELECT status FROM orders WHERE reference = ?").get(order.reference).status, "paid");
   assert.equal(await adaptive.isFastTrack(w.db, w.asha.id), true);
 });
+
+// ---- Merge 1: one person record ----
+const { PASSWORD } = await import("./helpers/world.mjs");
+const webApp = (id, email, extra = {}) => ({ id, jobId: null, fullName: "Chitra Sen", email, phone: "9830055555", location: "Kolkata", shareConsent: true, futureConsent: true, privacyVersion: "2026-11-09", resumeName: null, ...extra });
+const authCall = async (action, body) => call(await route("portal/auth/[action]"), "POST", `/api/portal/auth/${action}`, { action, body });
+const liveRecords = (db, hash) => db.raw.prepare("SELECT id, account_id FROM candidates WHERE dedupe_email_hash = ? AND status IN ('active','review')").all(hash);
+const hashOf = (db, id) => db.raw.prepare("SELECT dedupe_email_hash AS h FROM candidates WHERE id = ?").get(id).h;
+
+test("merge 1: a website applicant who then verifies a portal account ends up as one record", async () => {
+  const w = await world();
+  const email = "chitra.sen@person.example";
+  const site = await mods.website.linkWebsiteApplication(w.db, w.BUCKET, webApp("app-c1", email), null);
+  await mods.client.submitByRecruiter(w.db, "test-secret-test-secret-test-secret-123", { companyId: w.A.id, jdId: w.A.jdId, candidateId: site.candidateId, note: "From the website." }, "admin-1").catch(() => null);
+  const accountId = await mods.accounts.createAccount(w.db, "candidate", email, PASSWORD, "9830055555");
+  await mods.candidate.createCandidate(w.db, { accountId, displayName: "Chitra Sen", email, phone: "9830055555", currentCity: "Kolkata" });
+  // Until the portal has verified the address, the two records stay apart.
+  assert.equal(liveRecords(w.db, hashOf(w.db, site.candidateId)).length, 2);
+  const token = await mods.accounts.issuePortalToken(w.db, accountId, "verify", 48);
+  assert.equal((await authCall("verify", { token })).status, 200);
+  const live = liveRecords(w.db, hashOf(w.db, site.candidateId));
+  assert.equal(live.length, 1, "two live records remain for one person");
+  assert.equal(live[0].account_id, accountId);
+  const old = w.db.raw.prepare("SELECT status, merged_into FROM candidates WHERE id = ?").get(site.candidateId);
+  assert.deepEqual({ ...old }, { status: "merged", merged_into: live[0].id });
+  // The application and any pipeline history follow the person.
+  assert.equal(w.db.raw.prepare("SELECT candidate_id FROM candidate_sources WHERE ref_id = 'app-c1'").get().candidate_id, live[0].id);
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM pipeline WHERE candidate_id = ?").get(site.candidateId).n, 0);
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM duplicate_flags WHERE status = 'open' AND (a_id = ? OR b_id = ?)").get(site.candidateId, site.candidateId).n, 0);
+  assert.ok(w.db.raw.prepare("SELECT 1 AS x FROM messages WHERE recipient_id = ? AND kind = 'record.merged'").get(live[0].id), "the person was not told");
+  // Running it again changes nothing.
+  assert.equal(await mods.website.mergeVerifiedDuplicates(w.db, accountId), 0);
+});
+
+test("merge 1: signing in merges website records made before this existed", async () => {
+  const w = await world();
+  // Asha has a verified account. A website-only record with her email exists from earlier.
+  const earlier = await mods.candidate.createCandidate(w.db, { accountId: null, displayName: "Asha M", email: w.asha.email, phone: "9830099999", currentCity: "Durgapur" });
+  await w.db.prepare("INSERT INTO candidate_sources (id, candidate_id, kind, ref_id, created_at) VALUES ('src-old', ?, 'website_application', 'app-old', ?)").bind(earlier, new Date().toISOString()).run();
+  const { portalCookie } = await import("./helpers/world.mjs");
+  await portalCookie(w.asha.email);
+  assert.equal(w.db.raw.prepare("SELECT status FROM candidates WHERE id = ?").get(earlier).status, "merged");
+  assert.equal(w.db.raw.prepare("SELECT candidate_id FROM candidate_sources WHERE ref_id = 'app-old'").get().candidate_id, w.asha.id);
+  // A client signing in merges nothing.
+  await portalCookie(w.A.email);
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM candidates WHERE status = 'merged'").get().n, 1);
+});
+
+test("merge 1: an unverified account never takes over a website record, and other people are untouched", async () => {
+  const w = await world();
+  const email = "deepa.roy@person.example";
+  const site = await mods.website.linkWebsiteApplication(w.db, w.BUCKET, webApp("app-d1", email, { fullName: "Deepa Roy" }), null);
+  const other = await mods.website.linkWebsiteApplication(w.db, w.BUCKET, webApp("app-e1", "someone.else@person.example", { fullName: "Someone Else", phone: "9830066666" }), null);
+  const accountId = await mods.accounts.createAccount(w.db, "candidate", email, PASSWORD, "9830055555");
+  await mods.candidate.createCandidate(w.db, { accountId, displayName: "Not Deepa", email, phone: "9830055555" });
+  assert.equal(await mods.website.mergeVerifiedDuplicates(w.db, accountId), 0, "an account that has not verified its email took over a website record");
+  assert.equal(w.db.raw.prepare("SELECT status FROM candidates WHERE id = ?").get(site.candidateId).status, "active");
+  assert.equal(await mods.website.mergeVerifiedDuplicates(w.db, w.asha.accountId), 0);
+  assert.equal(await mods.website.mergeVerifiedDuplicates(w.db, w.A.userId), 0);
+  assert.equal(w.db.raw.prepare("SELECT status FROM candidates WHERE id = ?").get(other.candidateId).status, "active");
+});
+
+test("merge 1: a website form sent with a verified account's email joins the record without changing its CV or consents", async () => {
+  const w = await world();
+  const before = {
+    cv: w.db.raw.prepare("SELECT id, r2_key FROM cvs WHERE candidate_id = ? AND is_primary = 1").get(w.asha.id),
+    consents: w.db.raw.prepare("SELECT COUNT(*) AS n FROM candidate_consents WHERE candidate_id = ?").get(w.asha.id).n,
+    name: w.db.raw.prepare("SELECT display_name FROM candidates WHERE id = ?").get(w.asha.id).display_name,
+  };
+  const out = await mods.website.linkWebsiteApplication(w.db, w.BUCKET, webApp("app-a9", w.asha.email.toUpperCase(), { fullName: "Somebody Else", resumeName: "other.pdf" }), new TextEncoder().encode("not asha's cv"));
+  assert.equal(out.candidateId, w.asha.id);
+  assert.equal(out.created, false); assert.equal(out.cv, "none");
+  assert.equal(liveRecords(w.db, hashOf(w.db, w.asha.id)).length, 1, "a second record was created for a verified account's email");
+  assert.deepEqual({ ...w.db.raw.prepare("SELECT id, r2_key FROM cvs WHERE candidate_id = ? AND is_primary = 1").get(w.asha.id) }, { ...before.cv });
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM cvs WHERE candidate_id = ?").get(w.asha.id).n, 1);
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM candidate_consents WHERE candidate_id = ?").get(w.asha.id).n, before.consents, "the form's ticks were applied to the account");
+  assert.equal(w.db.raw.prepare("SELECT display_name FROM candidates WHERE id = ?").get(w.asha.id).display_name, before.name);
+  assert.ok(w.db.raw.prepare("SELECT 1 AS x FROM messages WHERE recipient_id = ? AND kind = 'record.application_added'").get(w.asha.id));
+  // Bikram's record is not involved.
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM candidate_sources WHERE candidate_id = ?").get(w.bikram.id).n, 0);
+});

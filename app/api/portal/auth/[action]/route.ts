@@ -1,6 +1,7 @@
 import { portalDb, json, fail, failFrom, sameOrigin, ipHash, sessionCookie, clearCookie, tokenFrom, NO_STORE } from "@/lib/portal/session";
 import { createAccount, endPortalSession, issuePortalToken, redeemToken, signIn } from "@/lib/portal/accounts";
 import { createCandidate } from "@/lib/portal/candidate";
+import { mergeVerifiedDuplicates } from "@/lib/portal/website";
 import { applyCompany } from "@/lib/portal/company";
 import { withinLimits } from "@/lib/portal/access";
 import { sendMail } from "@/lib/portal/mailer";
@@ -44,12 +45,14 @@ export async function POST(request: Request, context: { params: Promise<{ action
       await audit(db, accountId, "portal.registered", kind, accountId);
       return json({ message: mail.sent ? "Check your email for a verification link." : mail.reason, devLink: mail.devLink }, 201);
     }
-    if (action === "verify") { await redeemToken(db, str(body.token, 120), "verify"); return json({ message: "Email verified. You can sign in now." }); }
+    if (action === "verify") { await mergeVerifiedDuplicates(db, await redeemToken(db, str(body.token, 120), "verify")); return json({ message: "Email verified. You can sign in now." }); }
     if (action === "sign-in") {
       if (!(await withinLimits(db, ip, "auth")).ok) return fail("Too many sign-in attempts. Wait 15 minutes.", 429, "RATE_LIMIT");
       const token = await signIn(db, str(body.email, 254), String(body.password ?? ""), request.headers.get("user-agent") ?? "");
       const { accountFromToken } = await import("@/lib/portal/accounts");
       const account = await accountFromToken(db, token);
+      // One person record: website applications made with this verified email join the account (also covers records from before this existed).
+      if (account?.kind === "candidate") await mergeVerifiedDuplicates(db, account.id);
       return new Response(JSON.stringify({ kind: account?.kind, next: account?.kind === "company_user" ? "/company" : "/candidate" }), { status: 200, headers: { ...NO_STORE, "content-type": "application/json", "set-cookie": sessionCookie(request.url, token) } });
     }
     if (action === "sign-out") {
