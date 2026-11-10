@@ -1,5 +1,5 @@
 import { apiError, apiJson, auditStatement, authorizeApi, db, newId, nowIso } from "@/lib/platform/auth";
-import { decryptToken, encryptToken, endpointProblem } from "@/lib/platform/integrations";
+import { decryptToken, encryptToken, endpointProblem, rewrapStoredSecrets } from "@/lib/platform/integrations";
 import { TOOLS } from "@/lib/platform/tools";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +57,11 @@ export async function POST(request: Request) {
     if (!await db().prepare("SELECT id FROM platform_teams WHERE id=?").bind(id).first()) return apiError("Team not found.",404);
     await db().batch([action === "team.delete" ? db().prepare("DELETE FROM platform_teams WHERE id=?").bind(id) : db().prepare("DELETE FROM platform_team_members WHERE team_id=? AND user_id=?").bind(id,String(body.userId || "")),auditStatement(actor,action,"team",id)]);
     return apiJson({ok:true});
+  }
+  if (action === "secrets.rewrap") {
+    // After INTEGRATION_SECRET_KEY is set: move stored credentials off the shared key.
+    try { const out = await rewrapStoredSecrets(db()); await auditStatement(actor,action,"secrets","stored",`${out.moved} moved`).run(); return apiJson({ok:true,...out}); }
+    catch (error) { return apiError(error instanceof Error ? error.message : "Could not re-encrypt.", 400); }
   }
   if (action === "setting.invites") {
     const value = body.value === true ? "true" : "false";

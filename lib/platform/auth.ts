@@ -11,6 +11,8 @@ export type PlatformUser = {
   role: "admin" | "member";
   status: "invited" | "active" | "disabled";
   access: Record<string, AccessLevel>;
+  /** True when this person signs in with a second step (authenticator code). */
+  twoFactor: boolean;
 };
 
 const SECURE_COOKIE = "__Host-wp_session";
@@ -75,14 +77,14 @@ export async function loadAccess(userId: string, role: string): Promise<Record<s
   return access;
 }
 
-type SessionRow = { userId: string; email: string; name: string; role: "admin" | "member"; status: PlatformUser["status"]; createdAt: string; lastSeenAt: string; expiresAt: string };
+type SessionRow = { userId: string; email: string; name: string; role: "admin" | "member"; status: PlatformUser["status"]; createdAt: string; lastSeenAt: string; expiresAt: string; twoFactorAt: string | null };
 
 /** Resolves a session token to an active user. Expired or orphaned sessions are deleted. */
 export async function userFromToken(token: string | null): Promise<PlatformUser | null> {
   if (!token) return null;
   const tokenHash = await sha256(token);
   const row = await db().prepare(`SELECT s.user_id AS userId, s.created_at AS createdAt, s.last_seen_at AS lastSeenAt, s.expires_at AS expiresAt,
-      u.email, u.name, u.role, u.status FROM platform_sessions s JOIN platform_users u ON u.id = s.user_id WHERE s.token_hash = ?`).bind(tokenHash).first<SessionRow>();
+      u.email, u.name, u.role, u.status, u.totp_enabled_at AS twoFactorAt FROM platform_sessions s JOIN platform_users u ON u.id = s.user_id WHERE s.token_hash = ?`).bind(tokenHash).first<SessionRow>();
   if (!row) return null;
   const now = Date.now();
   const lastSeen = Date.parse(row.lastSeenAt);
@@ -91,7 +93,7 @@ export async function userFromToken(token: string | null): Promise<PlatformUser 
     return null;
   }
   if (now - lastSeen > TOUCH_MS) await db().prepare("UPDATE platform_sessions SET last_seen_at = ? WHERE token_hash = ?").bind(iso(now), tokenHash).run();
-  return { id: row.userId, email: row.email, name: row.name, role: row.role, status: row.status, access: await loadAccess(row.userId, row.role) };
+  return { id: row.userId, email: row.email, name: row.name, role: row.role, status: row.status, access: await loadAccess(row.userId, row.role), twoFactor: !!row.twoFactorAt };
 }
 
 export async function createSession(userId: string, userAgent: string): Promise<string> {

@@ -11,6 +11,8 @@ class Statement {
   _stmt() { return this.db.prepare(this.sql); }
   async first(column) { const row = this._stmt().get(...this.params); if (!row) return null; return column ? row[column] : { ...row }; }
   async all() { return { results: this._stmt().all(...this.params).map(r => ({ ...r })), success: true, meta: {} }; }
+  // Rows as arrays (used by the Drizzle D1 driver).
+  async raw() { const st = this._stmt(); st.setReturnArrays(true); return st.all(...this.params); }
   async run() { const info = this._stmt().run(...this.params); return { success: true, meta: { changes: Number(info.changes), last_row_id: Number(info.lastInsertRowid) } }; }
   _runSync() { const info = this._stmt().run(...this.params); return { success: true, meta: { changes: Number(info.changes) }, results: [] }; }
 }

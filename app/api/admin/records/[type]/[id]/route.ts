@@ -1,8 +1,8 @@
 import { env } from "cloudflare:workers";
-import { isOwnerRequest } from "@/lib/admin";
+import { adminActor, isOwnerRequest } from "@/lib/admin";
 import { clean, errorJson, json, sameOrigin, validEmail } from "@/lib/http";
 import { portalDb } from "@/lib/portal/session";
-import { unlinkWebsiteApplication, withdrawWebsiteConsents } from "@/lib/portal/website";
+import { syncWebsiteProfile, unlinkWebsiteApplication, withdrawWebsiteConsents } from "@/lib/portal/website";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ const employerStages = ["new", "contacted", "in_progress", "closed"];
 
 function audit(request: Request, action: string, type: string, id: string) {
   return env.DB!.prepare("INSERT INTO audit_events (id, actor_id, action, target_type, target_id) VALUES (?, ?, ?, ?, ?)")
-    .bind(crypto.randomUUID(), request.headers.get("oai-authenticated-user-id"), action, type, id);
+    .bind(crypto.randomUUID(), adminActor(request), action, type, id);
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ type: string; id: string }> }) {
@@ -45,8 +45,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ type:
           .bind(status, notes, fullName, email, phone, location, experience, desiredRole, skills, education, availability, withdrawing ? 0 : current.share_consent, withdrawing ? 0 : current.future_consent, id),
         audit(request, withdrawing ? "consent.withdrawn" : profile ? "profile.corrected" : body.notes === undefined ? "stage.changed" : "notes.updated", "application", id),
       ]);
+      // A correction made here is applied to the same person's record in the shared candidate list.
+      if (profile) await syncWebsiteProfile(portalDb(), id, { fullName, email, phone, location }, adminActor(request));
       // The same person in the shared candidate list stops being matched or shared too.
-      if (withdrawing) await withdrawWebsiteConsents(portalDb(), id, request.headers.get("oai-authenticated-user-id") ?? "owner");
+      if (withdrawing) await withdrawWebsiteConsents(portalDb(), id, adminActor(request));
       return json({ message: withdrawing ? "Consents withdrawn here and in the candidate list." : "Application updated." });
     }
     if (type === "enquiries" && employerStages.includes(clean(body.status, 30))) {
@@ -73,7 +75,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ type
       if (record.resume_key && !env.BUCKET) return errorJson("File storage is unavailable; deletion has not completed.", 503);
       if (record.resume_key) await env.BUCKET!.delete(record.resume_key);
       // If this application was the person's only link to the shared candidate list, their candidate record goes too.
-      const linked = await unlinkWebsiteApplication(portalDb(), id, request.headers.get("oai-authenticated-user-id") ?? "owner");
+      const linked = await unlinkWebsiteApplication(portalDb(), id, adminActor(request));
       for (const key of linked.r2Keys) await env.BUCKET!.delete(key);
       await env.DB!.batch([
         // Screening results hold the parsed CV, so they go with the application.

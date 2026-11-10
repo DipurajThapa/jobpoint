@@ -18,7 +18,8 @@ export type SendResult = { sent: boolean; devLink?: string; reason?: string };
 export async function sendMail(mail: Mail, link?: string): Promise<SendResult> {
   const key = env.MAIL_API_KEY, from = env.MAIL_FROM;
   if (!key || !from) {
-    if (process.env.NODE_ENV !== "production") return { sent: false, devLink: link, reason: "Email is not configured; showing the link because this is local development." };
+    // Fail closed: a one-time link is shown on screen only in an explicit development or test run.
+    if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") return { sent: false, devLink: link, reason: "Email is not configured; showing the link because this is local development." };
     return { sent: false, reason: "Email delivery is not configured yet. Ask Jobboard300 to send your link." };
   }
   const url = env.MAIL_API_URL ?? "https://api.zeptomail.com/v1.1/email";

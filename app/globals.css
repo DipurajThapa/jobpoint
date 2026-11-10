@@ -67,3 +67,10 @@ html{scroll-padding-top:104px}.header{height:88px}.brand img{width:200px;height:
 @media(max-width:1000px){.nav-links{top:87px}}
 @media(max-width:760px){.admin-sidebar img{width:150px;max-height:26px}}
 @media(max-width:720px){html{scroll-padding-top:84px}.header{height:70px}.brand img{width:160px;max-height:28px}.nav-links{top:69px}.footer-top img{width:190px;height:auto}}
+
+/* Audience themes. Candidate pages are blue; company (employer) pages are green.
+   Both only redefine the shared colour variables, so every component follows. */
+.theme-wrap{display:contents}
+.theme-candidate{--pill-bg:#eef2fa;--pill-ink:#41506d;--primary:#1d4ed8;--blue:#1D4ED8;--blue-dark:#1237A0;--navy:#0A1F5C;--ink:#0A1F5C;--accent:#93C5FD;--foreground:#0a1f5c;--tint:#eef3ff;--tint-2:#eaf1ff;--tint-3:#f4f7ff;--tint-4:#fbfcff;--tint-line:#cfd8ea;--nav-muted:#cbd6ed}
+.theme-company{--pill-bg:#edf4ef;--pill-ink:#3f5a48;--primary:#147a3a;--blue:#147A3A;--blue-dark:#166534;--navy:#0B3B24;--ink:#0B3B24;--accent:#86EFAC;--foreground:#0b3b24;--tint:#e8f6ed;--tint-2:#e3f4ea;--tint-3:#f1faf4;--tint-4:#fafdfb;--tint-line:#c9decf;--nav-muted:#c5dccd}
+.wp-root.theme-candidate{background:#f5f7fb}.wp-root.theme-company{background:#f4f8f5}

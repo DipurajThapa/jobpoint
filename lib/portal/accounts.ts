@@ -88,6 +88,23 @@ export async function accountFromToken(db: Db, token: string | null): Promise<Ac
   return { id: row.id, kind: row.kind, email: row.email, status: row.status, candidateId: row.candidate_id, companyId: row.company_id, companyRole: row.company_role, companyStatus: row.company_status };
 }
 
+export type Need = "candidate" | "company" | "company_owner" | "any";
+
+/**
+ * Why this account may not act in the given role, or null when it may.
+ * A company user works only while the company is active: a suspended or closed
+ * client loses its pipeline, candidate profiles and CV downloads at once.
+ * ("applied" companies keep their sign-in so they can see the approval state.)
+ */
+export function accessProblem(account: Account, need: Need): { message: string; status: number; code: string } | null {
+  if (account.kind === "company_user" && account.companyId && (account.companyStatus === "suspended" || account.companyStatus === "closed"))
+    return { message: "This company account is not active. Contact Jobboard300.", status: 403, code: "COMPANY_INACTIVE" };
+  if (need === "candidate" && (account.kind !== "candidate" || !account.candidateId)) return { message: "This is for candidate accounts.", status: 403, code: "CANDIDATE_ONLY" };
+  if ((need === "company" || need === "company_owner") && (account.kind !== "company_user" || !account.companyId)) return { message: "This is for company accounts.", status: 403, code: "COMPANY_ONLY" };
+  if (need === "company_owner" && account.companyRole !== "owner") return { message: "Only the company owner can do this.", status: 403, code: "OWNER_ONLY" };
+  return null;
+}
+
 export async function endPortalSession(db: Db, token: string | null) {
   if (token) await db.prepare("DELETE FROM portal_sessions WHERE token_hash = ?").bind(await sha256(token)).run();
 }

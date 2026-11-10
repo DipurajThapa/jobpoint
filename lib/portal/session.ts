@@ -2,7 +2,7 @@
 import { env } from "cloudflare:workers";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { accountFromToken, type Account } from "./accounts";
+import { accessProblem, accountFromToken, type Account, type Need } from "./accounts";
 import { PortalError, type Db } from "./db";
 
 const SECURE_COOKIE = "__Host-jp_portal", LOCAL_COOKIE = "jp_portal";
@@ -17,7 +17,8 @@ export function portalDb(): Db {
 export function portalSecret(): string {
   const value = env.PORTAL_SECRET ?? env.PLATFORM_SECRET_KEY;
   if (value && value.length >= 32) return value;
-  if (process.env.NODE_ENV !== "production") return "local-development-portal-secret-not-for-production";
+  // Fail closed: the built-in secret is used only when the runtime says it is a development or test run.
+  if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") return "local-development-portal-secret-not-for-production";
   throw new Error("PORTAL_SECRET is not configured.");
 }
 
@@ -53,16 +54,13 @@ export async function ipHash(request: Request) {
   return [...new Uint8Array(digest)].slice(0, 12).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-type Need = "candidate" | "company" | "company_owner" | "any";
-
 /** Every portal API calls this first. Mutations also require a same-origin request. */
 export async function requireApi(request: Request, need: Need, mutate = false): Promise<Account | Response> {
   if (mutate && !sameOrigin(request)) return fail("Cross-site requests are not accepted.", 403, "ORIGIN");
   const account = await accountFromToken(portalDb(), tokenFrom(request));
   if (!account) return fail("Sign in to continue.", 401, "SIGN_IN");
-  if (need === "candidate" && (account.kind !== "candidate" || !account.candidateId)) return fail("This is for candidate accounts.", 403, "CANDIDATE_ONLY");
-  if ((need === "company" || need === "company_owner") && (account.kind !== "company_user" || !account.companyId)) return fail("This is for company accounts.", 403, "COMPANY_ONLY");
-  if (need === "company_owner" && account.companyRole !== "owner") return fail("Only the company owner can do this.", 403, "OWNER_ONLY");
+  const problem = accessProblem(account, need);
+  if (problem) return fail(problem.message, problem.status, problem.code);
   return account;
 }
 
@@ -78,5 +76,7 @@ export async function requirePage(need: "candidate" | "company", path: string): 
   if (!account) redirect(`/portal/sign-in?next=${encodeURIComponent(path)}`);
   if (need === "candidate" && account.kind !== "candidate") redirect("/company");
   if (need === "company" && account.kind !== "company_user") redirect("/candidate");
+  // A suspended or closed company is signed out of its workspace.
+  if (accessProblem(account, need)?.code === "COMPANY_INACTIVE") redirect("/portal/sign-in?inactive=1");
   return account;
 }

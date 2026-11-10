@@ -74,6 +74,8 @@ export const privacyRequests = sqliteTable("privacy_requests", {
   details: text("details").notNull().default(""),
   status: text("status", { enum: ["new", "verifying", "in_progress", "completed", "declined"] }).notNull().default("new"),
   resolutionNote: text("resolution_note").notNull().default(""),
+  erasedAt: text("erased_at"),
+  erasureSummary: text("erasure_summary").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("privacy_requests_status_idx").on(table.status, table.createdAt)]);
@@ -107,6 +109,10 @@ export const platformUsers = sqliteTable("platform_users", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   lastSignInAt: text("last_sign_in_at"),
   createdBy: text("created_by"),
+  totpSecret: text("totp_secret"),
+  totpEnabledAt: text("totp_enabled_at"),
+  totpLastCounter: integer("totp_last_counter").notNull().default(0),
+  totpRecovery: text("totp_recovery").notNull().default("[]"),
 }, (table) => [uniqueIndex("platform_users_email_unique").on(table.email)]);
 
 export const platformToolAccess = sqliteTable("platform_tool_access", {

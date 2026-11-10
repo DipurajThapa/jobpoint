@@ -122,6 +122,10 @@ export async function mergeCandidates(db: Db, survivorId: string, duplicateId: s
     // An unlock of the duplicate counts as an unlock of the survivor, so the company never pays twice.
     db.prepare("UPDATE OR IGNORE unlocks SET candidate_id = ? WHERE candidate_id = ?").bind(survivorId, duplicateId),
     db.prepare("UPDATE OR IGNORE portal_applications SET candidate_id = ? WHERE candidate_id = ?").bind(survivorId, duplicateId),
+    // The hiring history follows the person: pipeline, placements, tests, commitments, messages and sources.
+    ...["pipeline", "placements", "adaptive_tests", "candidate_commitments", "candidate_messages", "candidate_sources", "fast_track_orders", "shortlist_passes"]
+      .map(table => db.prepare(`UPDATE OR IGNORE ${table} SET candidate_id = ? WHERE candidate_id = ?`).bind(survivorId, duplicateId)),
+    db.prepare("UPDATE candidates SET fast_track_at = COALESCE(fast_track_at, (SELECT fast_track_at FROM candidates WHERE id = ?)) WHERE id = ?").bind(duplicateId, survivorId),
     db.prepare("UPDATE duplicate_flags SET status = 'merged', resolved_by = ? WHERE (a_id IN (?, ?) AND b_id IN (?, ?)) AND status = 'open'").bind(adminId, survivorId, duplicateId, survivorId, duplicateId),
     enqueue(db, "candidate", survivorId, "merged"),
   ]);
@@ -129,8 +133,43 @@ export async function mergeCandidates(db: Db, survivorId: string, duplicateId: s
 }
 
 /**
- * Candidate deletes their account. Effective immediately: sharing stops, then
- * CV files, profiles, matches, applications and assessment data are erased.
+ * Every table that carries a candidate id, and what deletion does with it.
+ * "erase": rows are removed when the person is deleted.
+ * "keep": rows stay on the content-free stub, for the reason given.
+ * A test fails when a table with a candidate_id column is missing from this list,
+ * so a new table cannot be forgotten.
+ */
+export const CANDIDATE_DATA: Record<string, "erase" | "keep"> = {
+  cvs: "erase", matches: "erase", pipeline: "erase", candidate_messages: "erase", portal_applications: "erase",
+  assessment_attempts: "erase", service_orders: "erase", service_enrolments: "erase", adaptive_tests: "erase",
+  candidate_commitments: "erase", fast_track_orders: "erase", shortlist_passes: "erase", candidate_sources: "erase",
+  candidate_consents: "keep", // the consent ledger must be kept for at least a year (DPDP Rules)
+  unlocks: "keep",            // the record of which companies received the CV
+  releases: "keep",           // as above (already revoked)
+  placements: "keep",         // the consultancy's business record: company, role, dates, fee basis
+};
+
+/** Erase website applications (form details, stored CV and screening results). Returns the storage keys to delete. */
+export async function eraseWebsiteApplications(db: Db, applicationIds: string[]): Promise<string[]> {
+  const keys: string[] = [];
+  for (const id of applicationIds) {
+    const row = await db.prepare("SELECT resume_key FROM applications WHERE id = ?").bind(id).first<{ resume_key: string | null }>();
+    if (row?.resume_key) keys.push(row.resume_key);
+    await db.batch([
+      db.prepare("DELETE FROM ats_screenings WHERE application_id = ?").bind(id),
+      db.prepare("DELETE FROM candidate_sources WHERE kind = 'website_application' AND ref_id = ?").bind(id),
+      db.prepare("DELETE FROM applications WHERE id = ?").bind(id),
+    ]);
+  }
+  return keys;
+}
+
+/**
+ * Delete a candidate. Effective immediately: sharing stops, then CV files,
+ * profiles, matches, applications, tests, orders and messages are erased, in
+ * the portal tables and in the website application records for the same person
+ * (the applications linked to this record, and those made with the account's
+ * verified email address).
  * A content-free stub remains (no name, contacts or CV) holding the consent
  * ledger and the record of which companies received the CV, as the DPDP Rules
  * require logs to be kept for at least one year; purgeExpiredStubs removes it.
@@ -140,23 +179,51 @@ export async function deleteCandidateData(db: Db, candidateId: string, actor: st
   const { withdrawSharing } = await import("./consent");
   const { companiesToNotify } = await withdrawSharing(db, candidateId, actor);
   const { results } = await db.prepare("SELECT r2_key FROM cvs WHERE candidate_id = ?").bind(candidateId).all<{ r2_key: string }>();
-  const account = await db.prepare("SELECT account_id FROM candidates WHERE id = ?").bind(candidateId).first<{ account_id: string | null }>();
+  const account = await db.prepare("SELECT k.account_id, a.email FROM candidates k LEFT JOIN portal_accounts a ON a.id = k.account_id WHERE k.id = ?").bind(candidateId).first<{ account_id: string | null; email: string | null }>();
+  // The same person's website applications: those linked to this record, and those sent from the account's verified email.
+  const { results: apps } = await db.prepare(`SELECT ref_id AS id FROM candidate_sources WHERE candidate_id = ? AND kind = 'website_application'
+      UNION SELECT id FROM applications WHERE ? != '' AND email = ?`).bind(candidateId, account?.email ?? "", account?.email ?? "").all<{ id: string }>();
+  const websiteKeys = await eraseWebsiteApplications(db, apps.map(a => a.id));
   const at = nowIso();
+  const erase = (table: string) => db.prepare(`DELETE FROM ${table} WHERE candidate_id = ?`).bind(candidateId);
   await db.batch([
-    db.prepare("DELETE FROM cvs WHERE candidate_id = ?").bind(candidateId),
-    // Pipeline notes and interview feedback are about the person: erased. A placement
-    // row (company, role, dates, fee basis) is kept as the consultancy's business record.
-    db.prepare("DELETE FROM pipeline WHERE candidate_id = ?").bind(candidateId),
-    db.prepare("DELETE FROM candidate_messages WHERE candidate_id = ?").bind(candidateId),
+    // Pipeline notes and interview feedback are about the person: erased (interviews go with the pipeline rows).
+    // A placement row (company, role, dates, fee basis) is kept as the consultancy's business record.
+    ...Object.entries(CANDIDATE_DATA).filter(([, rule]) => rule === "erase").map(([table]) => erase(table)),
     db.prepare("DELETE FROM outbound_messages WHERE recipient_kind = 'candidate' AND recipient_id = ?").bind(candidateId),
-    db.prepare("DELETE FROM portal_applications WHERE candidate_id = ?").bind(candidateId),
-    db.prepare("DELETE FROM assessment_attempts WHERE candidate_id = ?").bind(candidateId),
-    db.prepare("DELETE FROM service_orders WHERE candidate_id = ?").bind(candidateId),
-    db.prepare("UPDATE candidates SET status = 'deleted', account_id = NULL, display_name = '', current_city = '', preferred_cities = '[]', hidden_company_ids = '[]', hidden_company_names = '[]', dedupe_email_hash = '', dedupe_phone_hash = '', last_active_at = ? WHERE id = ?").bind(at, candidateId),
-    ...(account?.account_id ? [db.prepare("UPDATE portal_accounts SET status = 'deleted', email = 'deleted-' || id || '@invalid', phone = '', password_hash = NULL WHERE id = ?").bind(account.account_id), db.prepare("DELETE FROM portal_sessions WHERE account_id = ?").bind(account.account_id)] : []),
+    db.prepare("DELETE FROM score_queue WHERE kind = 'candidate' AND ref_id = ?").bind(candidateId),
+    db.prepare("DELETE FROM duplicate_flags WHERE a_id = ? OR b_id = ?").bind(candidateId, candidateId),
+    db.prepare("DELETE FROM abuse_flags WHERE subject_kind = 'candidate' AND subject_id = ?").bind(candidateId),
+    db.prepare("DELETE FROM payment_intents WHERE payer_kind = 'candidate' AND payer_id = ?").bind(candidateId),
+    db.prepare("UPDATE candidates SET status = 'deleted', account_id = NULL, display_name = '', current_city = '', preferred_cities = '[]', hidden_company_ids = '[]', hidden_company_names = '[]', dedupe_email_hash = '', dedupe_phone_hash = '', merged_into = NULL, fast_track_at = NULL, last_active_at = ? WHERE id = ?").bind(at, candidateId),
+    ...(account?.account_id ? [db.prepare("UPDATE portal_accounts SET status = 'deleted', email = 'deleted-' || id || '@invalid', phone = '', password_hash = NULL WHERE id = ?").bind(account.account_id), db.prepare("DELETE FROM portal_sessions WHERE account_id = ?").bind(account.account_id), db.prepare("DELETE FROM portal_tokens WHERE account_id = ?").bind(account.account_id)] : []),
   ]);
-  await audit(db, actor, "candidate.deleted", "candidate", candidateId, `${results.length} CV file(s) erased`);
-  return { r2Keys: results.map(r => r.r2_key), companiesToNotify };
+  await audit(db, actor, "candidate.deleted", "candidate", candidateId, `${results.length} CV file(s) and ${apps.length} website application(s) erased`);
+  return { r2Keys: [...results.map(r => r.r2_key), ...websiteKeys], companiesToNotify };
+}
+
+/**
+ * Erase everything held about one email address: every candidate record with
+ * that address (portal account or website applicant, including merged records)
+ * and every website application sent from it. Used to carry out a verified
+ * deletion request. Returns what was erased and the storage keys to delete.
+ */
+export async function eraseByEmail(db: Db, email: string, actor: string): Promise<{ candidates: number; applications: number; r2Keys: string[]; companiesToNotify: string[] }> {
+  const address = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(address)) throw new PortalError("INVALID_EMAIL", "Enter a valid email address.");
+  const hash = await sha256Hex(normEmail(address));
+  const { results: people } = await db.prepare(`SELECT k.id FROM candidates k LEFT JOIN portal_accounts a ON a.id = k.account_id
+      WHERE k.status != 'deleted' AND (k.dedupe_email_hash = ? OR a.email = ?)`).bind(hash, address).all<{ id: string }>();
+  const r2Keys: string[] = [], notify = new Set<string>();
+  const before = await db.prepare("SELECT COUNT(*) AS n FROM applications WHERE email = ?").bind(address).first<{ n: number }>();
+  for (const person of people) {
+    const out = await deleteCandidateData(db, person.id, actor);
+    r2Keys.push(...out.r2Keys); out.companiesToNotify.forEach(c => notify.add(c));
+  }
+  const { results: rest } = await db.prepare("SELECT id FROM applications WHERE email = ?").bind(address).all<{ id: string }>();
+  r2Keys.push(...await eraseWebsiteApplications(db, rest.map(r => r.id)));
+  await audit(db, actor, "privacy.erased", "email_hash", hash.slice(0, 16), `${people.length} candidate record(s), ${before?.n ?? 0} website application(s)`);
+  return { candidates: people.length, applications: before?.n ?? 0, r2Keys, companiesToNotify: [...notify] };
 }
 
 /** Remove deletion stubs older than one year (consent ledger and unlock records go with them). */

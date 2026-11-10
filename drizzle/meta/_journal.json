@@ -92,6 +92,20 @@
       "when": 1794442100000,
       "tag": "0012_assessments_fast_track",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794528500000,
+      "tag": "0013_audit_fixes",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794614900000,
+      "tag": "0014_two_factor",
+      "breakpoints": true
     }
   ]
 }
