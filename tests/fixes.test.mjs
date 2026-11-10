@@ -84,7 +84,7 @@ test("the built-in development secret is never used unless the run is explicitly
   await world();
   const { portalSecret } = await import(resolve(root, "lib/portal/session.ts"));
   assert.equal(portalSecret(), SECRET);
-  globalThis.__TEST_ENV__.PORTAL_SECRET = undefined;
+  globalThis.__TEST_ENV__.PORTAL_SECRET = undefined; globalThis.__TEST_ENV__.PLATFORM_SECRET_KEY = undefined;
   for (const env of ["production", undefined, "", "staging"]) await withNodeEnv(env, () => assert.throws(() => portalSecret(), /PORTAL_SECRET/, `NODE_ENV=${env}`));
   globalThis.__TEST_ENV__.PORTAL_SECRET = "too-short";
   assert.throws(() => portalSecret(), /PORTAL_SECRET/);
@@ -172,14 +172,25 @@ test("the audit log records who was invited by account, not by email address", a
 
 test("security headers are sent on every page", async () => {
   const config = (await import(resolve(root, "next.config.ts"))).default;
-  const [rule] = await config.headers();
-  assert.equal(rule.source, "/:path*");
+  const rules = await config.headers();
+  assert.deepEqual(rules.map(r => r.source).sort(), ["/", "/:path*"], "the home page and every other path must both be covered");
+  assert.deepEqual(rules[0].headers, rules[1].headers);
+  const [rule] = rules;
   const sent = Object.fromEntries(rule.headers.map(h => [h.key.toLowerCase(), h.value]));
   assert.equal(sent["x-content-type-options"], "nosniff");
   assert.equal(sent["x-frame-options"], "DENY");
   assert.match(sent["strict-transport-security"], /max-age=(\d+)/);
   assert.ok(Number(sent["strict-transport-security"].match(/max-age=(\d+)/)[1]) >= 15552000, "HSTS must last at least 180 days");
-  for (const part of ["frame-ancestors 'none'", "object-src 'none'", "base-uri 'self'"]) assert.ok(sent["content-security-policy"].includes(part), part);
+  const csp = Object.fromEntries(sent["content-security-policy"].split(";").map(d => d.trim().split(/\s+/)).map(([name, ...values]) => [name, values]));
+  for (const part of ["frame-ancestors 'none'", "object-src 'none'", "base-uri 'self'", "default-src 'self'", "form-action 'self'", "frame-src 'none'"]) assert.ok(sent["content-security-policy"].includes(part), part);
+  // Nothing a page reads can be sent to another site, and no code can be loaded from one.
+  assert.deepEqual(csp["connect-src"], ["'self'"]);
+  assert.deepEqual(csp["img-src"], ["'self'", "data:", "blob:"]);
+  assert.ok(!csp["script-src"].includes("'unsafe-eval'"), "eval must be off outside development");
+  for (const [name, values] of Object.entries(csp)) for (const v of values) {
+    assert.ok(!v.includes("*"), `${name} has a wildcard`);
+    if (/^https?:/.test(v)) assert.ok(["https://fonts.googleapis.com", "https://fonts.gstatic.com"].includes(v), `${name} allows ${v}`);
+  }
   assert.ok(sent["referrer-policy"] && sent["permissions-policy"]);
 });
 

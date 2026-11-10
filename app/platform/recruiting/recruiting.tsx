@@ -79,6 +79,9 @@ export default function Recruiting() {
 
 function JobWork({ jd, canEdit, say, reload }: { jd: Row; canEdit: boolean; say: (t: string) => void; reload: () => void }) {
   const [passReasons, setPassReasons] = useState<string[]>([]), [full, setFull] = useState(false);
+  // Phone and email are opened one candidate at a time; each view is recorded and counted against a daily limit.
+  const [contacts, setContacts] = useState<Record<string, { phone: string; email: string }>>({});
+  const showContact = async (candidateId: string) => { try { const d = await api<{ phone: string; email: string }>("contact", { jdId: jd.id, candidateId }); setContacts(c => ({ ...c, [candidateId]: d })); } catch (e) { say((e as Error).message); } };
   const [cands, setCands] = useState<Row[] | null>(null), [pipe, setPipe] = useState<Pipe | null>(null), [form, setForm] = useState<{ id: string; kind: string } | null>(null);
   const load = useCallback(() => {
     api<{ candidates: Row[]; passReasons?: string[]; full?: boolean }>("candidates", undefined, `?jd=${jd.id}`).then(d => { setCands(d.candidates); setPassReasons(d.passReasons ?? []); setFull(!!d.full); }).catch(e => say(e.message));
@@ -123,6 +126,9 @@ function JobWork({ jd, canEdit, say, reload }: { jd: Row; canEdit: boolean; say:
       {Number(c.early_exits) > 0 && <p className="pj-notice bad">Left a previous placement within the 60-day guarantee ({String(c.early_exits)} time{Number(c.early_exits) > 1 ? "s" : ""}). Ask why before submitting.</p>}
       {c.passed ? <p className="pj-muted">Passed: {String(c.passed).replace(/_/g, " ")}</p> : null}
       {!Number(c.in_pipeline) && !Number(c.can_share) && <p className="pj-muted">Has not agreed to their CV being shared with employers. Ask them first.</p>}
+      {canEdit && (contacts[String(c.candidate_id)]
+        ? <p className="pj-muted">Phone: <b>{contacts[String(c.candidate_id)].phone || "not given"}</b> · Email: <b>{contacts[String(c.candidate_id)].email || "not given"}</b></p>
+        : <p><button type="button" className="pj-link" onClick={() => showContact(String(c.candidate_id))}>Show phone and email to contact this candidate</button></p>)}
       {canEdit && jd.service === "managed" && !Number(c.in_pipeline) && Number(c.can_share) > 0 && <form className="pj-row" onSubmit={(ev: FormEvent<HTMLFormElement>) => { ev.preventDefault(); post("submit", { jdId: jd.id, candidateId: c.candidate_id, note: new FormData(ev.currentTarget).get("note") }); }}>
         <input name="note" required maxLength={2000} placeholder="Why this candidate, notice, CTC, availability" style={{ minWidth: "min(380px, 100%)" }} /><button className="pj-btn">Submit to client</button></form>}
       {canEdit && !Number(c.in_pipeline) && !c.passed && passReasons.length > 0 && <form className="pj-row" onSubmit={(ev: FormEvent<HTMLFormElement>) => { ev.preventDefault(); post("pass", { jdId: jd.id, candidateId: c.candidate_id, reason: new FormData(ev.currentTarget).get("reason") }); }}>

@@ -96,6 +96,8 @@ The operating recommendation and decisions are in [docs/DIGITAL_RECRUITMENT_BLUE
 
 ## Automated tests
 
+See also [workflows and merge plan](docs/WORKFLOWS_AND_MERGE_PLAN.md) and [keys, two-step sign-in and hosting](docs/SECRETS_AND_HOSTING.md).
+
 `npm test` runs the suite in `tests/` (no dev server or network needed). It uses the real migrations in an in-memory SQLite database and calls the real API route handlers. It covers: every route's sign-in guard, company-to-company and candidate-to-candidate isolation, recruiter team scope, suspension, deletion (every column of every table is searched for leftover personal data), sign-up and sign-in privacy, the migrations and typed schema, and the blue (candidate) and green (company) themes. `npm run test:all` adds type-check, lint and the older `check:*` scripts. CI runs the same on every pull request.
 
 Migration `drizzle/0013_audit_fixes.sql` adds `jd_requirement_edits` and the erasure fields on `privacy_requests`. The audit behind these changes is [docs/AUDIT_ARCHITECTURE_DATA_SECURITY_2026-11-10.md](docs/AUDIT_ARCHITECTURE_DATA_SECURITY_2026-11-10.md).

@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { isOwnerRequest } from "@/lib/admin";
+import { adminActor, isOwnerRequest } from "@/lib/admin";
 import { portalDb, portalSecret, json, fail, failFrom, sameOrigin } from "@/lib/portal/session";
 import { activateCompany, decideJd, decideParamRequest, enqueue, requestParamChange } from "@/lib/portal/company";
 import { adjustQuota, assignPlan, upsertPlans } from "@/lib/portal/quota";
@@ -20,7 +20,6 @@ import { roleFamilyFor } from "@/lib/portal/roles";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ action: string }> };
-const ADMIN = "owner";
 
 export async function GET(request: Request, context: Ctx) {
   if (!await isOwnerRequest(request)) return fail("Sign-in required.", 401);
@@ -39,7 +38,7 @@ export async function GET(request: Request, context: Ctx) {
       const p = await primaryProfile(db, id);
       const object = p && env.BUCKET ? await env.BUCKET.get(p.r2Key) : null;
       if (!object) return fail("CV not found.", 404);
-      await audit(db, request.headers.get("oai-authenticated-user-id") ?? ADMIN, "cv.review_opened", "candidate", id);
+      await audit(db, adminActor(request), "cv.review_opened", "candidate", id);
       return new Response(object.body, { headers: { "content-type": "application/octet-stream", "content-disposition": `attachment; filename="review-${id}.${p!.fileName.split(".").pop()}"`, "cache-control": "private, no-store", "content-security-policy": "sandbox" } });
     }
     return fail("Unknown action.", 404);
@@ -50,7 +49,7 @@ export async function POST(request: Request, context: Ctx) {
   if (!sameOrigin(request)) return fail("Cross-site requests are not accepted.", 403);
   if (!await isOwnerRequest(request)) return fail("Sign-in required.", 401);
   const { action } = await context.params;
-  const db = portalDb(), admin = request.headers.get("oai-authenticated-user-id") ?? ADMIN;
+  const db = portalDb(), admin = adminActor(request);
   try {
     const b = await request.json().catch(() => ({})) as Record<string, unknown>;
     const s = (v: unknown, max = 200) => typeof v === "string" ? v.slice(0, max) : "";

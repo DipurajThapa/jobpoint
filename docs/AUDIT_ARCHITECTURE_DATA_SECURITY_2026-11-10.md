@@ -14,16 +14,17 @@ Items marked **(verify)** depend on deployment settings I cannot see from the co
 | S2 incomplete erasure | **Fixed.** Deletion is driven by one list (`CANDIDATE_DATA`); a test fails if a new table with `candidate_id` has no rule. |
 | S3 same person in two stores | **Mitigated.** Deleting a portal account also erases website applications linked to it or sent from its verified email. Full merge of the two stores is D1 (open). |
 | S4 privacy requests not linked | **Fixed.** A verified deletion request can erase by email from the request itself and records what was removed. |
-| S5 three sign-in systems, no 2FA | Open. Needs a product decision. |
+| S5 three sign-in systems, no 2FA | **Fixed for staff.** Two-step sign-in is built (optional per person). An administrator with it on reaches the owner console with the same sign-in. Clients and candidates: open. |
 | S6 development shortcuts | **Fixed.** Test owner, built-in secret and on-screen one-time links need an explicit development or test run. |
-| S7 shared secret | Open. Changing it alters every stored candidate reference; needs a planned rotation. |
-| S8 headers | **Partly fixed.** HSTS added, plus the CSP parts that cannot break a page. A full script policy is open. |
+| S7 shared secret | **Fixed in code**, needs three settings steps from the owner: see `docs/SECRETS_AND_HOSTING.md`. |
+| S8 headers | **Fixed.** Full content security policy on every page including the home page (which had no security headers before). Inline scripts remain allowed because the framework needs them; no other site can supply code or receive data. |
 | S9 sign-up enumeration | **Fixed.** |
 | S10 edit limit read from audit log | **Fixed.** Own table, migration 0013 carries old edits over. |
 | S11 dangling staff references | **Fixed** for job assignment on staff deletion. |
 | D1 correction in two places | **Mitigated.** An admin correction to a website application now updates the linked candidate record. |
 | D12 two references after a merge | **Fixed.** Merge moves the hiring history; a company keeps one reference per person. |
-| D2–D11, R1, R2, R6, R7 | Open. These are data migrations and large moves; see section 5. |
+| D2–D11, R1, R2, R6, R7 | Open. Plan and the decisions needed: `docs/WORKFLOWS_AND_MERGE_PLAN.md`. |
+| Staff data limits | **Added.** Contact details one candidate at a time with a daily limit and a log; no CV file or bulk list for team managers and members. |
 | R3 tests and CI | **Fixed.** `npm test` (53 tests) and a CI workflow. |
 | R4 tracked build cache | **Fixed** (`tsconfig.tsbuildinfo` untracked). Installer scripts and package name left: the hosting workflow may use them. |
 | R5 docs | **Partly fixed.** README test section and the broken reference. |

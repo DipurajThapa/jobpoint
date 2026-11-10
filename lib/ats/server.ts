@@ -1,3 +1,4 @@
+import { adminActor } from "@/lib/admin";
 // Server-side helpers for the owner-only screening routes (D1 + R2 access).
 import { env } from "cloudflare:workers";
 import type { JobRequirements } from "./types";
@@ -33,7 +34,7 @@ export function requirementsFromJob(job: Pick<JobRow, "title" | "description" | 
 
 export function audit(request: Request, action: string, targetType: string, targetId: string, detail = "") {
   return db().prepare("INSERT INTO audit_events (id, actor_id, action, target_type, target_id, detail) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(crypto.randomUUID(), request.headers.get("oai-authenticated-user-id") ?? "owner", action, targetType, targetId, detail.slice(0, 200));
+    .bind(crypto.randomUUID(), adminActor(request), action, targetType, targetId, detail.slice(0, 200));
 }
 
-export const actor = (request: Request) => request.headers.get("oai-authenticated-user-id") ?? "owner";
+export const actor = (request: Request) => adminActor(request);

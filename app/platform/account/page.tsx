@@ -1,7 +1,7 @@
 import { requirePlatformPage } from "@/lib/platform/auth";
 import { LEVEL_LABEL, TOOLS } from "@/lib/platform/tools";
 import Shell from "../shell";
-import { ChangePasswordForm } from "../forms";
+import { ChangePasswordForm, TwoFactorForm } from "../forms";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My account" };
@@ -18,5 +18,6 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       <p className="hint">Tool access: {tools.length ? tools.map(t => `${t.name} (${LEVEL_LABEL[user.access[t.key]]})`).join(", ") : "none yet"}. Ask an administrator to change your name or access.</p>
     </section>
     <section className="wp-card"><h2>Change password</h2><ChangePasswordForm initial={initial} /></section>
+    <section className="wp-card"><h2>Two-step sign-in</h2><TwoFactorForm on={user.twoFactor} /></section>
   </Shell>;
 }

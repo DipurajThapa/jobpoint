@@ -3,6 +3,8 @@ declare namespace Cloudflare {
     DB?: D1Database;
     BUCKET?: R2Bucket;
     PLATFORM_SECRET_KEY?: string;
+    /** Dedicated key for stored credentials (integration tokens, two-step sign-in secrets). 43 base64url characters. Falls back to PLATFORM_SECRET_KEY. */
+    INTEGRATION_SECRET_KEY?: string;
     /** Optional. Enables Claude-assisted CV extraction in the admin screening tool. */
     ANTHROPIC_API_KEY?: string;
     /** Secret for per-company candidate references and CV watermark trace IDs (32+ characters). */

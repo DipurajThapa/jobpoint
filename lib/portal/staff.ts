@@ -126,6 +126,42 @@ export async function staffCommitmentLink(db: Db, staff: Staff, pipelineId: stri
   return reissueCommitmentLink(db, pipelineId, staff.id);
 }
 
+/**
+ * How many different candidates' phone and email a person may open in a day.
+ * Staff see names and CV summaries freely, but contact details are shown one
+ * person at a time, each time on record, and never as a list or a file.
+ */
+export const CONTACT_VIEWS_PER_DAY = { recruiter: 25, manager: 50 } as const;
+
+/**
+ * A recruiter opens one candidate's phone and email to call them. Allowed only
+ * for a candidate currently shown to them for this job, or already in this
+ * job's pipeline. Every view is written to the access log.
+ */
+export async function staffContact(db: Db, staff: Staff, input: { jdId: string; candidateId: string }) {
+  await jobForStaff(db, staff, input.jdId);
+  const scope = await staffScope(db, staff);
+  const shown = (await staffCandidates(db, staff, input.jdId)).some(c => c.candidate_id === input.candidateId);
+  const inPipeline = !!await db.prepare("SELECT 1 AS x FROM pipeline WHERE jd_id = ? AND candidate_id = ?").bind(input.jdId, input.candidateId).first();
+  if (!shown && !inPipeline) throw new PortalError("NOT_FOUND", "Candidate not found.", 404);
+  const today = nowIso().slice(0, 10);
+  if (!scope.admin) {
+    const limit = CONTACT_VIEWS_PER_DAY[scope.role === "manager" ? "manager" : "recruiter"];
+    const seen = await db.prepare("SELECT COUNT(DISTINCT detail) AS n, SUM(detail = ?) AS this_one FROM access_log WHERE actor_kind = 'staff' AND actor_id = ? AND action = 'contact_view' AND at >= ?").bind(input.candidateId, staff.id, today).first<{ n: number; this_one: number | null }>();
+    if (!seen?.this_one && (seen?.n ?? 0) >= limit) {
+      await audit(db, `staff:${staff.id}`, "contact.limit_reached", "jd", input.jdId, `${limit} per day`);
+      throw new PortalError("CONTACT_LIMIT", `You have opened ${limit} candidates' contact details today, which is the daily limit. Ask the administrator if you need more.`, 429);
+    }
+  }
+  const row = await db.prepare(`SELECT k.display_name, p.data FROM candidates k JOIN cvs v ON v.candidate_id = k.id AND v.is_primary = 1
+      JOIN cv_profiles p ON p.cv_id = v.id WHERE k.id = ? AND k.status = 'active' ORDER BY p.version DESC LIMIT 1`).bind(input.candidateId).first<{ display_name: string; data: string }>();
+  if (!row) throw new PortalError("NOT_FOUND", "Candidate not found.", 404);
+  let contact: { email?: string; phone?: string } = {};
+  try { contact = (JSON.parse(row.data) as { contact?: { email?: string; phone?: string } }).contact ?? {}; } catch { /* unreadable profile */ }
+  await db.prepare("INSERT INTO access_log (id, actor_kind, actor_id, action, jd_id, detail, at) VALUES (?, 'staff', ?, 'contact_view', ?, ?, ?)").bind(newId(), staff.id, input.jdId, input.candidateId, nowIso()).run();
+  return { name: row.display_name, phone: contact.phone ?? "", email: contact.email ?? "" };
+}
+
 export async function staffSubmit(db: Db, secret: string, staff: Staff, input: { jdId: string; candidateId: string; note: string }) {
   const job = await jobForStaff(db, staff, input.jdId);
   // Staff can submit only a candidate currently shown to them.

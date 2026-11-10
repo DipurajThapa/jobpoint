@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { isOwnerRequest } from "@/lib/admin";
+import { adminActor, isOwnerRequest } from "@/lib/admin";
 import { clean, errorJson, json, sameOrigin } from "@/lib/http";
 import { portalDb } from "@/lib/portal/session";
 import { eraseByEmail } from "@/lib/portal/candidate";
@@ -26,7 +26,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (status !== "completed" || body.identityVerified !== true) return errorJson("Verify the requester and mark the request completed to erase their data.");
       if (existing.erased_at) return errorJson("The data for this request has already been erased.", 409);
       if (!env.BUCKET) return errorJson("File storage is unavailable; nothing has been erased.", 503);
-      const actor = request.headers.get("oai-authenticated-user-id") ?? "owner";
+      const actor = adminActor(request);
       const out = await eraseByEmail(portalDb(), existing.email, actor);
       for (const key of out.r2Keys) await env.BUCKET.delete(key);
       erased = `${out.candidates} candidate record(s), ${out.applications} website application(s), ${out.r2Keys.length} stored file(s)`;
@@ -34,7 +34,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
     await env.DB!.batch([
       env.DB!.prepare("UPDATE privacy_requests SET status = ?, resolution_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(status, note, id),
-      env.DB!.prepare("INSERT INTO audit_events (id, actor_id, action, target_type, target_id) VALUES (?, ?, 'privacy_request.updated', 'privacy_request', ?)").bind(crypto.randomUUID(), request.headers.get("oai-authenticated-user-id"), id),
+      env.DB!.prepare("INSERT INTO audit_events (id, actor_id, action, target_type, target_id) VALUES (?, ?, 'privacy_request.updated', 'privacy_request', ?)").bind(crypto.randomUUID(), adminActor(request), id),
     ]);
     return json({ message: erased ? `Privacy request completed. Erased: ${erased}.` : "Privacy request updated." });
   } catch { return errorJson("The request could not be updated.", 503); }

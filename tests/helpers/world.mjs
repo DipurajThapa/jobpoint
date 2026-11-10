@@ -11,6 +11,7 @@ register("./hooks.mjs", import.meta.url);
 export const root = resolve(import.meta.dirname, "../..");
 export const ORIGIN = "http://localhost:3000";
 export const PASSWORD = "harbour lantern 4471 quiet";
+export const PLATFORM_KEY = "A".repeat(42) + "E", INTEGRATION_KEY = "B".repeat(42) + "E";
 export const SECRET = "test-secret-test-secret-test-secret-123";
 
 // The code under test must behave as it does in production.
@@ -57,7 +58,7 @@ export function bucket() {
 export function freshDb() {
   const db = createD1(root);
   const BUCKET = bucket();
-  globalThis.__TEST_ENV__ = { DB: db, BUCKET, PORTAL_SECRET: SECRET };
+  globalThis.__TEST_ENV__ = { DB: db, BUCKET, PORTAL_SECRET: SECRET, PLATFORM_SECRET_KEY: PLATFORM_KEY };
   globalThis.__TEST_HEADERS__ = undefined; globalThis.__TEST_COOKIES__ = undefined;
   return { db, BUCKET };
 }
