@@ -28,9 +28,17 @@ export async function GET(request: Request) {
         (SELECT COUNT(*) FROM pipeline p WHERE p.candidate_id = s.candidate_id) AS submissions
       FROM candidate_sources s WHERE s.kind = 'website_application'`).all<{ id: string; stage: string | null; submissions: number }>()).results ?? [];
     const stageOf = new Map(stages.map(r => [r.id, r]));
+    // What was read from each applicant's CV (the form no longer asks them to type it).
+    const profiles = (await env.DB!.prepare(`SELECT s.ref_id AS id, k.current_city AS city, (SELECT p.data FROM cvs v JOIN cv_profiles p ON p.cv_id = v.id WHERE v.candidate_id = k.id AND v.is_primary = 1 ORDER BY p.version DESC LIMIT 1) AS data
+      FROM candidate_sources s JOIN candidates k ON k.id = s.candidate_id WHERE s.kind = 'website_application'`).all<{ id: string; city: string; data: string | null }>()).results ?? [];
+    const fromCv = new Map(profiles.map(r => {
+      let p: { headline?: string; skills?: { name: string }[]; education?: { qualification: string }[]; india?: { yearsExperience?: number; noticeDays?: number | null } } = {};
+      try { p = JSON.parse(r.data ?? "{}"); } catch { /* unreadable profile */ }
+      return [r.id, { city: r.city ?? "", title: p.headline ?? "", years: p.india?.yearsExperience ?? null, skills: (p.skills ?? []).slice(0, 6).map(k => k.name), education: p.education?.[0]?.qualification ?? "", noticeDays: p.india?.noticeDays ?? null }];
+    }));
     const duplicateEmails = new Set(duplicates.map(d => d.email));
     const reviewCutoff = Date.now() - 365 * 24 * 60 * 60 * 1000;
     const reviewDue = (value: string) => Date.parse(value.replace(" ", "T") + (value.includes("Z") || value.includes("+") ? "" : "Z")) < reviewCutoff;
-    return json({ applications: candidateApplications.map(a => ({ ...a, hasResume: !!a.hasResume, possibleDuplicate: duplicateEmails.has(a.email), inCandidateList: stageOf.has(a.id), stage: stageOf.get(a.id)?.stage ?? null, submissions: stageOf.get(a.id)?.submissions ?? 0, reviewDue: reviewDue(a.updatedAt) })), enquiries: enquiries.map(q => ({ ...q, reviewDue: reviewDue(q.updatedAt) })), jobs: roleList, clients });
+    return json({ applications: candidateApplications.map(a => ({ ...a, hasResume: !!a.hasResume, possibleDuplicate: duplicateEmails.has(a.email), inCandidateList: stageOf.has(a.id), fromCv: fromCv.get(a.id) ?? null, stage: stageOf.get(a.id)?.stage ?? null, submissions: stageOf.get(a.id)?.submissions ?? 0, reviewDue: reviewDue(a.updatedAt) })), enquiries: enquiries.map(q => ({ ...q, reviewDue: reviewDue(q.updatedAt) })), jobs: roleList, clients });
   } catch { return errorJson("Enquiry records are temporarily unavailable.", 503); }
 }

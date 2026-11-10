@@ -6,6 +6,9 @@ ALTER TABLE applications ADD COLUMN whatsapp_consent INTEGER NOT NULL DEFAULT 0;
 --> statement-breakpoint
 ALTER TABLE candidates ADD COLUMN whatsapp_consent_at TEXT;
 --> statement-breakpoint
+-- Which wording the person agreed to (the form or notice version), kept with the time.
+ALTER TABLE candidates ADD COLUMN whatsapp_consent_version TEXT NOT NULL DEFAULT '';
+--> statement-breakpoint
 ALTER TABLE employer_enquiries ADD COLUMN whatsapp_consent INTEGER NOT NULL DEFAULT 0;
 --> statement-breakpoint
 -- 2. An employer enquiry can ask for a call with a consultant at a chosen time.

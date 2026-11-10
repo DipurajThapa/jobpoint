@@ -60,8 +60,8 @@ export async function notifyCandidate(db: Db, candidateId: string, kind: string,
 }
 
 /** Record (or withdraw) a candidate's consent to WhatsApp updates. */
-export async function setWhatsappConsent(db: Db, candidateId: string, agreed: boolean) {
-  await db.prepare("UPDATE candidates SET whatsapp_consent_at = CASE WHEN ? = 1 THEN COALESCE(whatsapp_consent_at, ?) ELSE NULL END WHERE id = ?").bind(agreed ? 1 : 0, nowIso(), candidateId).run();
+export async function setWhatsappConsent(db: Db, candidateId: string, agreed: boolean, version = "") {
+  await db.prepare("UPDATE candidates SET whatsapp_consent_at = CASE WHEN ? = 1 THEN COALESCE(whatsapp_consent_at, ?) ELSE NULL END, whatsapp_consent_version = CASE WHEN ? = 1 THEN ? ELSE '' END WHERE id = ?").bind(agreed ? 1 : 0, nowIso(), agreed ? 1 : 0, version, candidateId).run();
 }
 
 export async function notifyCompany(db: Db, companyId: string, kind: string, title: string, body: string) {

@@ -76,7 +76,7 @@ await step("U1.1", "the home page opens and the \"Send a hiring enquiry\" button
 }, { severity: "blocker" });
 await step("U1.2", "the employer sends a short enquiry, books a call and sees a confirmation that matches what was really sent", async () => {
   const d = visitor.page.locator("[role=dialog]");
-  await fill(d, { contactName: CLIENT.owner, company: CLIENT.name, email: CLIENT.email, phone: "+91 90000 56001", details: "One accounts executive with Tally and GST for our Durgapur office, to start next month.", consent: true, whatsappConsent: true });
+  await fill(d, { contactName: CLIENT.owner, company: CLIENT.name, email: CLIENT.email, phone: "+91 90000 56001", details: "One accounts executive with Tally and GST for our Durgapur office, to start next month.", consent: true, terms: true, whatsappConsent: true });
   // Book a call: the first day offered, then a time on that day.
   await d.getByLabel("Day for the call").selectOption({ index: 1 });
   await d.getByLabel("Time for the call").selectOption({ index: 2 });
@@ -299,7 +299,7 @@ await step("U6.1", "the visitor finds the role on the home page and opens it", a
 }, { severity: "blocker" });
 await step("U6.2", "the visitor fills the application, attaches a CV and gets a reference", async () => {
   const f = visitor.page.locator("form.apply-form");
-  await fill(f, { fullName: APPLICANT.name, email: APPLICANT.email, phone: APPLICANT.phone, agree: true, shareConsent: true, whatsappConsent: true });
+  await fill(f, { fullName: APPLICANT.name, email: APPLICANT.email, phone: APPLICANT.phone, declaration: true, consent: true, shareConsent: true, whatsappConsent: true });
   await f.locator("[name=resume]").setInputFiles(await cvFor(APPLICANT.name, APPLICANT.email, APPLICANT.phone));
   await f.getByRole("button", { name: "Apply for this role" }).click();
   await visitor.page.locator(".apply-form .form-confirmation").waitFor({ timeout: 30_000 });
@@ -655,7 +655,7 @@ await step("U11.3", "a visitor registers a general CV from \"Upload your CV\" an
   await visitor.page.getByRole("button", { name: /Upload your CV/ }).first().click();
   const d = visitor.page.locator("[role=dialog]");
   const g = { name: `Ishita Paul${U.replace(/\d/g, "")}`.slice(0, 40), email: mail("ishita") };
-  await fill(d, { fullName: g.name, email: g.email, phone: "+91 90000 58001", agree: true });
+  await fill(d, { fullName: g.name, email: g.email, phone: "+91 90000 58001", declaration: true, consent: true });
   await d.locator("[name=resume]").setInputFiles(await cvFor(g.name, g.email, "+91 90000 58001"));
   await d.getByRole("button", { name: /Upload my CV/ }).click();
   await d.locator(".form-confirmation").waitFor({ timeout: 30_000 });

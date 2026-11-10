@@ -69,7 +69,8 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
   const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" });
   const days = [...new Map(slots.map(s => [dayOf(s), dayLabel(s)])).entries()];
 
-  return <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+  // Closed only by the close button or Escape: a stray tap outside must not throw away what was typed.
+  return <div className="modal-backdrop">
     <section ref={dialog} className="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-intro">
       <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
       <span className="eyebrow">{candidate ? "FOR JOB SEEKERS" : "FOR EMPLOYERS"}</span>
@@ -86,16 +87,17 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
               <label>Your name<input name="contactName" required maxLength={120} autoComplete="name" /></label>
               <label>Company<input name="company" required maxLength={160} autoComplete="organization" /></label>
               <label>Work email<input name="email" type="email" required maxLength={254} autoComplete="email" /></label>
-              <label>Phone <span className="label-note">with WhatsApp, if you use it</span><input name="phone" type="tel" required maxLength={30} autoComplete="tel" placeholder="+91" /></label>
+              <label>Phone <span className="label-note">with country code if you want WhatsApp messages</span><input name="phone" type="tel" required maxLength={30} autoComplete="tel" placeholder="+91" /></label>
               <label className="full-field">What are you looking for?<textarea name="details" required maxLength={1800} rows={4} placeholder="For example: two accounts executives for our Durgapur office, to start next month." /></label>
               <fieldset className="call-picker full-field"><legend>Book a call with a consultant <span className="label-note">optional · 30 minutes · India time</span></legend>
                 {days.length === 0 ? <p className="label-note">No times are showing right now. Send the enquiry and a consultant will contact you within one working day.</p> : <div className="form-grid">
-                  <label>Day<select value={day} onChange={e => setDay(e.target.value)} aria-label="Day for the call"><option value="">No call for now</option>{days.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                  <label>Day<select value={day} onChange={e => setDay(e.target.value)} aria-label="Day for the call"><option value="">No call for now: contact me instead</option>{days.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                   <label>Time<select name="meetingAt" key={day} defaultValue="" disabled={!day} required={!!day} aria-label="Time for the call"><option value="" disabled>{day ? "Choose a time" : "Choose a day first"}</option>{slots.filter(s => dayOf(s) === day).map(s => <option key={s} value={s}>{timeLabel(s)}</option>)}</select></label>
                 </div>}
               </fieldset>
-              <label className="consent full-field"><input name="consent" type="checkbox" value="yes" required /> <span>I am authorised to enquire for this company. Jobboard300 may contact me about this enquiry, as set out in the <a href="/privacy" target="_blank" rel="noopener noreferrer">privacy notice</a> and the <a href="/terms/employers" target="_blank" rel="noopener noreferrer">terms for employers</a>.</span></label>
-              <label className="consent full-field"><input name="whatsappConsent" type="checkbox" value="yes" /> <span>You may also message me on WhatsApp at this number. <span className="label-note">Optional</span></span></label>
+              <label className="consent full-field"><input name="consent" type="checkbox" value="yes" required /> <span>Jobboard300 may contact me about this enquiry. <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy notice</a>.</span></label>
+              <label className="consent full-field"><input name="terms" type="checkbox" value="yes" required /> <span>I am authorised to act for this company, and I have read and agree to the <a href="/terms/employers" target="_blank" rel="noopener noreferrer">terms for employers</a>.</span></label>
+              <label className="consent full-field"><input name="whatsappConsent" type="checkbox" value="yes" /> <span>You may also message me on WhatsApp at this number. <span className="label-note">(optional)</span></span></label>
             </div>
           </>}
           {!DEMO_MODE && <button className="button" disabled={busy}>{busy ? "Sending…" : candidate ? "Upload my CV" : "Send enquiry"} <Icon name="north_east" /></button>}

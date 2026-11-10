@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { CONSENT_NOTICE_VERSION } from "@/lib/portal/notice";
 import { candidateInbox, markInboxRead, resolveSender, setWhatsappConsent } from "@/lib/portal/notify";
 import { portalDb, portalSecret, json, fail, failFrom, requireApi, ipHash } from "@/lib/portal/session";
 import { recordConsent, withdrawSharing, consentActive } from "@/lib/portal/consent";
@@ -69,7 +70,7 @@ export async function POST(request: Request, context: Ctx) {
       if (form.get("consentShare") === "yes") await recordConsent(db, id, "share_with_companies", "granted", ip);
       if (form.get("consentOffers") === "yes") await recordConsent(db, id, "service_offers", "granted", ip);
       // WhatsApp follows the latest upload form: ticked turns it on, unticked turns it off.
-      await setWhatsappConsent(db, id, form.get("consentWhatsapp") === "yes");
+      await setWhatsappConsent(db, id, form.get("consentWhatsapp") === "yes", CONSENT_NOTICE_VERSION);
       const cand = await db.prepare("SELECT display_name, current_city FROM candidates WHERE id = ?").bind(id).first<{ display_name: string; current_city: string }>();
       let result;
       try { result = await ingestCv(db, env.BUCKET ?? null, id, { bytes: new Uint8Array(await file.arrayBuffer()), fileName: file.name.replace(/[\\/\r\n\0]/g, "_").slice(0, 140), knownName: cand?.display_name, knownLocation: cand?.current_city }); }

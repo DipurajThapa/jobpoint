@@ -9,6 +9,7 @@ import { portalDb } from "@/lib/portal/session";
 import { linkWebsiteApplication } from "@/lib/portal/website";
 import { applicationAckText, confirmation, sendApplicationAck } from "@/lib/public-forms";
 import { resolveSender } from "@/lib/portal/notify";
+import { WEBSITE_FORM, WEBSITE_FORM_VERSION } from "@/lib/portal/notice";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -29,12 +30,16 @@ export async function POST(request: Request) {
     const desiredRole = clean(form.get("desiredRole"), 160), skills = clean(form.get("skills"), 500);
     const education = clean(form.get("education"), 160), availability = clean(form.get("availability"), 100);
     const jobId = clean(form.get("jobId"), 60) || null;
-    const shareConsent = form.get("shareConsent") === "yes", futureConsent = form.get("futureConsent") === "yes", whatsappConsent = form.get("whatsappConsent") === "yes";
-    // One tick covers the three statements the form shows together: use of the details, being 18 or older, and the terms for job seekers.
-    const agreed = form.get("agree") === "yes" || (form.get("consent") === "yes" && form.get("adult") === "yes" && form.get("terms") === "yes");
+    const shareConsent = form.get("shareConsent") === "yes", whatsappConsent = form.get("whatsappConsent") === "yes";
+    // Registering a CV without a role is the request to be matched and contacted (that is the consent sentence on that form).
+    const futureConsent = !jobId || form.get("futureConsent") === "yes";
+    // Two required ticks, kept apart: a declaration (18 or older, terms for job seekers) and the consent to use the data.
+    // A page opened before this change still sends the three earlier ticks.
+    const agreed = form.get("consent") === "yes" && (form.get("declaration") === "yes" || (form.get("adult") === "yes" && form.get("terms") === "yes"));
     // The CV carries the experience, skills and education; the form asks only for who the person is and how to reach them.
-    if (!fullName || !validEmail(email) || phone.replace(/\D/g, "").length < 7 || !agreed) return errorJson("Please give your name, email and phone number, confirm you are at least 18 and accept the terms for job seekers.");
-    if (!jobId && !futureConsent) return errorJson("Please opt in to future opportunities to register your profile.");
+    if (!fullName || !validEmail(email) || phone.replace(/\D/g, "").length < 7 || !agreed) return errorJson("Please give your name, email and phone number, and tick the two required boxes.");
+    // WhatsApp needs a number it can reach: ten digits, or a number with its country code.
+    if (whatsappConsent && phone.replace(/\D/g, "").length < 10) return errorJson("To get WhatsApp updates, enter your full mobile number (10 digits, or with the country code), or untick the WhatsApp box.");
     if (jobId && !await isJobOpen(jobId)) return errorJson("This role is no longer accepting applications.", 410);
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().replace("T", " ").slice(0, 19);
     const db = getDb();
@@ -58,23 +63,23 @@ export async function POST(request: Request) {
       cvBytes = bytes;
     }
     const id = crypto.randomUUID();
-    try { await db.insert(applications).values({ id, jobId, fullName, email, phone, location, experience, desiredRole, skills, education, availability, message, resumeKey, resumeName, resumeType, resumeSize, consent: true, shareConsent, futureConsent, whatsappConsent, termsVersion: CANDIDATE_TERMS_VERSION, privacyVersion: "2026-11-09", consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); }
+    try { await db.insert(applications).values({ id, jobId, fullName, email, phone, location, experience, desiredRole, skills, education, availability, message, resumeKey, resumeName, resumeType, resumeSize, consent: true, shareConsent, futureConsent, whatsappConsent, termsVersion: CANDIDATE_TERMS_VERSION, privacyVersion: WEBSITE_FORM_VERSION, consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); }
     catch (e) { if (resumeKey && env.BUCKET) await env.BUCKET.delete(resumeKey); throw e; }
     // One candidate list: the applicant also joins the shared candidate records, within what they ticked.
     // A failure here never loses the application; the admin can add it later from the Job portal tab.
     let candidateId: string | null = null;
-    try { candidateId = (await linkWebsiteApplication(portalDb(), env.BUCKET ?? null, { id, jobId, fullName, email, phone, location, shareConsent, futureConsent, privacyVersion: "2026-11-09", resumeName }, cvBytes)).candidateId; }
+    try { candidateId = (await linkWebsiteApplication(portalDb(), env.BUCKET ?? null, { id, jobId, fullName, email, phone, location, shareConsent, futureConsent, privacyVersion: WEBSITE_FORM_VERSION, resumeName }, cvBytes)).candidateId; }
     catch (error) { console.error("candidate list link failed", id, error instanceof Error ? error.message : error); }
     const reference = `JP-${id.slice(0, 13).replaceAll("-", "").toUpperCase()}`;
     // Acknowledge by email, and on WhatsApp only if the box was ticked. Neither can fail the application.
     const roleTitle = jobId ? (await env.DB!.prepare("SELECT title FROM jobs WHERE id = ?").bind(jobId).first<{ title: string }>())?.title ?? null : null;
-    const ack = { name: fullName, reference, roleTitle, whatsapp: whatsappConsent };
+    const ack = { name: fullName, reference, roleTitle, whatsapp: whatsappConsent, share: shareConsent, future: futureConsent };
     const emailed = await sendApplicationAck(email, ack);
     try {
       if (candidateId) {
         const pdb = portalDb(), text = applicationAckText(ack), at = new Date().toISOString();
         // A form's tick is recorded on a website-only record; an account holder sets their own preference when signed in.
-        if (whatsappConsent) await pdb.prepare("UPDATE candidates SET whatsapp_consent_at = COALESCE(whatsapp_consent_at, ?) WHERE id = ? AND account_id IS NULL").bind(at, candidateId).run();
+        if (whatsappConsent) await pdb.prepare("UPDATE candidates SET whatsapp_consent_at = COALESCE(whatsapp_consent_at, ?), whatsapp_consent_version = ? WHERE id = ? AND account_id IS NULL").bind(at, `website-${WEBSITE_FORM_VERSION}: ${WEBSITE_FORM.whatsapp}`, candidateId).run();
         const sender = whatsappConsent ? await resolveSender(pdb, null) : null;
         await pdb.batch([
           pdb.prepare("INSERT INTO messages (id, recipient_kind, recipient_id, channel, kind, title, body, status, status_detail, created_at, sent_at) VALUES (?, 'candidate', ?, 'email', 'application.received', ?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), candidateId, text.subject, text.text.slice(0, 1200), emailed === "sent" ? "sent" : emailed === "failed" ? "failed" : "skipped", emailed === "sent" ? "" : emailed === "failed" ? "the email service refused the message" : "email is not configured", at, emailed === "sent" ? at : null),

@@ -80,7 +80,7 @@ const recruiter = await staffSession(browser, recruiterU.email), outsider = awai
 
 // ------------------------------------------------------------------ 2. employer enquiry
 section("2. Employer enquiry (public form) -> owner console");
-const ENQ = { contactName: "Meera Banerjee", company: `Demo Ferro Alloys ${S}`, email: mail("meera.owner"), phone: "+91 90000 20001", details: "We need two accounts executives with Tally and GST experience for our Durgapur works office.", consent: "yes", whatsappConsent: "yes" };
+const ENQ = { contactName: "Meera Banerjee", company: `Demo Ferro Alloys ${S}`, email: mail("meera.owner"), phone: "+91 90000 20001", details: "We need two accounts executives with Tally and GST experience for our Durgapur works office.", consent: "yes", terms: "yes", whatsappConsent: "yes" };
 let enquiryId;
 let callSlot;
 await step("F2.1", "an employer sends a short enquiry (no job description) and asks for a call at a free time", async () => {
@@ -103,7 +103,10 @@ await step("F2.1", "an employer sends a short enquiry (no job description) and a
   const bad = await anon.post("/api/employer-enquiries", { ...ENQ, email: "not-an-email" });
   check("F2.5", "an enquiry with an invalid email is refused with a message", bad.status === 400 && !!bad.body?.error, { severity: "medium" });
   const noTick = await anon.post("/api/employer-enquiries", { ...ENQ, email: mail("x"), consent: undefined });
-  check("F2.6", "an enquiry without the agreement tick is refused", noTick.status === 400, { severity: "medium" });
+  const noTerms = await anon.post("/api/employer-enquiries", { ...ENQ, email: mail("x2"), terms: undefined });
+  check("F2.6", "an enquiry without either required tick (contact consent, terms for employers) is refused", noTick.status === 400 && noTerms.status === 400, { severity: "medium", detail: `${noTick.status}/${noTerms.status}` });
+  const badPhone = await anon.post("/api/employer-enquiries", { ...ENQ, email: mail("x3"), phone: "abc" });
+  check("F2.6e", "a phone number that is not a phone number is refused", badPhone.status === 400, { severity: "medium", detail: `status ${badPhone.status}` });
   const again = (await anon.get("/api/employer-enquiries")).body?.slots ?? [];
   const clash = await anon.post("/api/employer-enquiries", { ...ENQ, email: mail("clash"), meetingAt: callSlot });
   check("F2.6a", "a call time that has been asked for is no longer offered, and cannot be booked twice", !again.includes(callSlot) && clash.status === 409 && count("employer_enquiries", "meeting_at = ?", callSlot) === 1, { severity: "high", detail: `still offered: ${again.includes(callSlot)}, second booking -> ${clash.status}` });
@@ -247,7 +250,7 @@ await step("F5.9", "the owner posts and publishes a public role for the same cli
 }
 async function websiteApply(cv, fields) {
   const name = nameOf(cv);
-  const base = { fullName: name, email: fields.email, phone: "+91 90000 41001", agree: "yes", whatsappConsent: "yes", resume: pdfFile(`${cv.key}.pdf`, await pdfFromText(browser, textOf(cv))) };
+  const base = { fullName: name, email: fields.email, phone: "+91 90000 41001", declaration: "yes", consent: "yes", whatsappConsent: "yes", resume: pdfFile(`${cv.key}.pdf`, await pdfFromText(browser, textOf(cv))) };
   const r = await anon.form("/api/applications", { ...base, ...fields });
   return { r, name, email: fields.email };
 }
@@ -260,7 +263,7 @@ if (webApp) {
   const a = row("SELECT * FROM applications WHERE email = ?", webApp.email);
   webApp.appId = a?.id;
   check("F5.15", "the application row holds what was typed, the consents and the terms version", !!a && a.full_name === webApp.name && a.job_id === roleId && a.phone === "+91 90000 41001" && Number(a.whatsapp_consent) === 1 && Number(a.share_consent) === 1 && Number(a.consent) === 1 && !!a.terms_version && !!a.resume_key, { severity: "blocker", detail: JSON.stringify({ job: a?.job_id, share: a?.share_consent, terms: a?.terms_version, resume: !!a?.resume_key }) });
-  check("F5.15a", "the short form (name, email, phone, CV, one agreement tick) is accepted, and the city is read from the CV", webApp.r.status === 201 && !!webApp.r.body?.title && a?.location === "" && (row("SELECT k.current_city FROM candidates k JOIN candidate_sources s ON s.candidate_id = k.id WHERE s.ref_id = ?", a?.id ?? "")?.current_city ?? "") !== "", { severity: "high", detail: JSON.stringify({ title: webApp.r.body?.title, city: row("SELECT k.current_city FROM candidates k JOIN candidate_sources s ON s.candidate_id = k.id WHERE s.ref_id = ?", a?.id ?? "")?.current_city }) });
+  check("F5.15a", "the short form (name, email, phone, CV, one agreement tick) is accepted, and the city is read from the CV", webApp.r.status === 201 && !!webApp.r.body?.title && (row("SELECT k.current_city FROM candidates k JOIN candidate_sources s ON s.candidate_id = k.id WHERE s.ref_id = ?", a?.id ?? "")?.current_city ?? "") !== "", { severity: "high", detail: JSON.stringify({ title: webApp.r.body?.title, city: row("SELECT k.current_city FROM candidates k JOIN candidate_sources s ON s.candidate_id = k.id WHERE s.ref_id = ?", a?.id ?? "")?.current_city }) });
   const acks = rows("SELECT m.channel, m.status FROM messages m JOIN candidate_sources s ON s.candidate_id = m.recipient_id WHERE s.ref_id = ? AND m.kind = 'application.received'", a?.id ?? "").map(m => `${m.channel}:${m.status}`);
   check("F5.15b", "the acknowledgement is recorded: an email, and a WhatsApp message because the box was ticked", acks.some(x => x.startsWith("email:")) && acks.some(x => x.startsWith("whatsapp:")) && !!row("SELECT k.whatsapp_consent_at FROM candidates k JOIN candidate_sources s ON s.candidate_id = k.id WHERE s.ref_id = ?", a?.id ?? "")?.whatsapp_consent_at, { severity: "high", detail: acks.join(", ") });
   const cv = await owner.get(`/api/admin/resumes/${a?.id}`);
@@ -287,21 +290,25 @@ if (webApp) {
   check("F5.21", "sending the same application again within a day is refused and the first CV is kept", again.r.status === 409 && count("applications", "email = ?", webApp.email) === 1, { severity: "medium", detail: `status ${again.r.status}` });
 }
 await step("F5.22", "a visitor registers a general profile (no role) and allows future contact and sharing", async () => {
-  const out = await websiteApply(seedCvs[7] ?? seedCvs[1], { email: mail("web.general"), futureConsent: "yes", shareConsent: "yes", whatsappConsent: undefined });
+  const out = await websiteApply(seedCvs[7] ?? seedCvs[1], { email: mail("web.general"), shareConsent: "yes", whatsappConsent: undefined, location: "Bengaluru" });
   if (out.r.status !== 201) throw new Error(`${out.r.status} ${out.r.text.slice(0, 300)}`);
   webGeneral = out;
   const a = row("SELECT id, job_id, future_consent FROM applications WHERE email = ?", out.email);
   webGeneral.appId = a.id; webGeneral.id = row("SELECT candidate_id FROM candidate_sources WHERE ref_id = ?", a.id)?.candidate_id;
+  const place = row("SELECT current_city, preferred_cities FROM candidates WHERE id = ?", webGeneral.id ?? "");
+  if (place?.current_city === "Bengaluru" || !String(place?.preferred_cities ?? "").includes("Bengaluru")) throw new Error(`"where you would like to work" must be kept as a preferred city, with the current city read from the CV: ${JSON.stringify(place)}`);
+  const said = rows("SELECT purpose FROM candidate_consents WHERE candidate_id = ? AND action = 'granted'", webGeneral.id ?? "").map(r => r.purpose);
+  if (!said.includes("profile_processing") || !said.includes("recruiter_sharing")) throw new Error(`the consents given on the general form are not in the ledger: ${said.join(", ")}`);
   const wa = rows("SELECT status, status_detail FROM messages WHERE recipient_id = ? AND channel = 'whatsapp'", webGeneral.id ?? "");
   if (wa.some(m => m.status === "queued")) throw new Error("a WhatsApp message was queued for someone who did not tick the WhatsApp box");
   return a.job_id === null && Number(a.future_consent) === 1 && !!webGeneral.id;
 }, { severity: "high" });
 {
-  const noCv = await anon.form("/api/applications", { fullName: "No Cv", email: mail("nocv"), phone: "+91 90000 41009", agree: "yes", futureConsent: "yes" });
+  const noCv = await anon.form("/api/applications", { fullName: "No Cv", email: mail("nocv"), phone: "+91 90000 41009", declaration: "yes", consent: "yes", futureConsent: "yes" });
   check("F5.23", "an application without a CV is refused with a clear message", noCv.status === 400 && /CV/i.test(noCv.body?.error ?? ""), { severity: "medium", detail: `${noCv.status} ${noCv.text.slice(0, 120)}` });
-  const fake = await anon.form("/api/applications", { fullName: "Fake File", email: mail("fake"), phone: "+91 90000 41010", agree: "yes", futureConsent: "yes", resume: { name: "cv.pdf", mimeType: "application/pdf", buffer: Buffer.from("this is not a pdf") } });
+  const fake = await anon.form("/api/applications", { fullName: "Fake File", email: mail("fake"), phone: "+91 90000 41010", declaration: "yes", consent: "yes", futureConsent: "yes", resume: { name: "cv.pdf", mimeType: "application/pdf", buffer: Buffer.from("this is not a pdf") } });
   check("F5.24", "a file that only claims to be a PDF is refused", fake.status === 400, { severity: "high", detail: `status ${fake.status}` });
-  const closed = await anon.form("/api/applications", { fullName: "Late", email: mail("late"), phone: "+91 90000 41011", agree: "yes", jobId: "no-such-role", resume: pdfFile("cv.pdf", await pdfFromText(browser, cvText(seedCvs[0].key))) });
+  const closed = await anon.form("/api/applications", { fullName: "Late", email: mail("late"), phone: "+91 90000 41011", declaration: "yes", consent: "yes", jobId: "no-such-role", resume: pdfFile("cv.pdf", await pdfFromText(browser, cvText(seedCvs[0].key))) });
   check("F5.25", "an application to a role that does not exist or is closed is refused", closed.status === 410, { severity: "medium", detail: `status ${closed.status}` });
 }
 
@@ -524,7 +531,7 @@ if (A?.pipelineId && entry) {
     const page = await anon.get(`/commit?token=${token}`);
     check("F9.8", "the candidate opens the commitment page without an account and reads the text", read.ok && read.body.body.includes("60 days") && page.status === 200, { severity: "high", detail: `api ${read.status}, page ${page.status}` });
     const noTick = await anon.post("/api/portal/public/commitment-accept", { token, agree: false });
-    const acc = await anon.post("/api/portal/public/commitment-accept", { token, agree: true });
+    const acc = await anon.post("/api/portal/public/commitment-accept", { token, declaration: true, consent: true });
     check("F9.9", "the candidate accepts the commitment (ticking is required) and the acceptance is stored with its time", noTick.status === 400 && acc.ok && !!row("SELECT accepted_at FROM candidate_commitments WHERE pipeline_id = ?", A.pipelineId)?.accepted_at, { severity: "high", detail: `${noTick.status}/${acc.status}` });
     check("F9.10", "the recruiter sees the commitment as accepted", (await recruiter.get(`/api/platform/recruiting/pipeline?jd=${jdId}`)).body?.pipeline?.find(e => e.id === A.pipelineId)?.commitment === "accepted", { severity: "medium" });
   }

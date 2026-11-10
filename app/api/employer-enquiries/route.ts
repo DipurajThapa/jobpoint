@@ -35,7 +35,9 @@ export async function POST(request: Request) {
     // Kept for older callers; the form no longer asks for them.
     const roleTitle = clean(body.roleTitle, 160), location = clean(body.location, 120), headcount = Math.trunc(Math.max(1, Math.min(500, Number(body.headcount) || 1)));
     const whatsappConsent = body.whatsappConsent === "yes" || body.whatsappConsent === true;
-    if (!contactName || !company || !validEmail(email) || phone.replace(/\D/g, "").length < 7 || !details || body.consent !== "yes") return errorJson("Please give your name, company, work email and phone number, tell us what you are looking for, and tick the box to agree.");
+    if (!contactName || !company || !validEmail(email) || phone.replace(/\D/g, "").length < 7 || !details) return errorJson("Please give your name, company, work email and phone number, and tell us what you are looking for.");
+    if (body.consent !== "yes" || body.terms !== "yes") return errorJson("Please tick the two required boxes: that we may contact you, and that you accept the terms for employers.");
+    if (whatsappConsent && phone.replace(/\D/g, "").length < 10) return errorJson("To get WhatsApp messages, enter your full mobile number (10 digits, or with the country code), or untick the WhatsApp box.");
     const meetingAt = clean(body.meetingAt, 40) || null;
     if (meetingAt && !(await freeSlots()).includes(meetingAt)) return errorJson("That time is no longer free. Please choose another time for the call.", 409);
     const id = crypto.randomUUID(), at = new Date().toISOString();

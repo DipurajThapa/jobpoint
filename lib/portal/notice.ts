@@ -14,7 +14,21 @@ export const CONSENT_NOTICE = {
  * wording, never against the portal notice they did not see.
  */
 export const WEBSITE_NOTICE = {
-  profile_processing: "Contact me about other suitable roles later.",
-  recruiter_sharing: "You may share my CV with an employer for a suitable role after reviewing the fit.",
+  // Ticked on a job application to stay on file for other roles.
+  profile_processing: "Keep my CV and contact me about other suitable roles.",
+  // The data consent of the general "Upload your CV" form: being matched and contacted is what registering is for.
+  registration: "Jobboard300 may store my CV and details, match them to roles and contact me about roles that fit.",
+  recruiter_sharing: "You may share my CV with an employer for a role that suits me, after a recruiter has reviewed the fit.",
+} as const;
+/** The sentences on the website's candidate form, word for word. The form shows these and the records keep their version. */
+export const WEBSITE_FORM_VERSION = "2026-11-11";
+export const WEBSITE_FORM = {
+  declaration: "I am 18 or older and I accept the terms for job seekers.",
+  dataJob: "Jobboard300 may store my CV and details and use them to consider me for this role.",
+  dataGeneral: WEBSITE_NOTICE.registration,
+  shareJob: "You may share my CV with the employer for this role, after a recruiter has reviewed the fit.",
+  shareGeneral: WEBSITE_NOTICE.recruiter_sharing,
+  future: WEBSITE_NOTICE.profile_processing,
+  whatsapp: "Send me updates on WhatsApp at this number, as well as by email.",
 } as const;
 export const websiteNoticeVersion = (privacyVersion: string) => `website-${privacyVersion}`;

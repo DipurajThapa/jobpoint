@@ -13,21 +13,22 @@ export type WhatsappStatus = "queued" | "no_consent" | "not_configured";
 
 // ---------------------------------------------------------------- call slots
 
-/** Calls are offered Monday to Saturday, 10:00 to 18:00 India time, in 30-minute slots, from the next working day, two weeks ahead. */
-export const CALL = { minutes: 30, firstHour: 10, lastHour: 18, days: 14, leadHours: 4 } as const;
+/** Calls are offered Monday to Saturday, 10:00 to 18:00 India time (not 13:00 to 14:00), in 30-minute slots, from the next day, two weeks ahead. */
+export const CALL = { minutes: 30, firstHour: 10, lastHour: 18, lunchHour: 13, days: 14 } as const;
 const IST_OFFSET_MS = 5.5 * 3_600_000;
 
 /** Every slot that may be asked for, as UTC instants (ISO strings), earliest first. */
 export function callSlots(now = new Date()): string[] {
-  const out: string[] = [], earliest = now.getTime() + CALL.leadHours * 3_600_000;
+  const out: string[] = [];
   // Work in India time by shifting the clock, then shift back.
   const ist = new Date(now.getTime() + IST_OFFSET_MS);
-  for (let d = 0; d <= CALL.days; d++) {
+  // From tomorrow, so that a consultant always has notice of a call.
+  for (let d = 1; d <= CALL.days; d++) {
     const day = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate() + d));
     if (day.getUTCDay() === 0) continue; // Sunday
     for (let m = CALL.firstHour * 60; m < CALL.lastHour * 60; m += CALL.minutes) {
-      const at = day.getTime() + m * 60_000 - IST_OFFSET_MS;
-      if (at >= earliest) out.push(new Date(at).toISOString());
+      if (Math.floor(m / 60) === CALL.lunchHour) continue;
+      out.push(new Date(day.getTime() + m * 60_000 - IST_OFFSET_MS).toISOString());
     }
   }
   return out;
@@ -45,17 +46,18 @@ async function email(to: string, subject: string, text: string): Promise<AckStat
 
 const SIGN_OFF = `Jobboard300\n${SITE_URL}`;
 
-export function applicationAckText(input: { name: string; reference: string; roleTitle: string | null; whatsapp: boolean }) {
+export function applicationAckText(input: { name: string; reference: string; roleTitle: string | null; whatsapp: boolean; share?: boolean; future?: boolean }) {
   const subject = input.roleTitle ? `We have your application for ${input.roleTitle}` : "We have your CV";
   const text = [
     `Dear ${input.name},`,
     input.roleTitle ? `Thank you for applying for ${input.roleTitle}. Your CV is with Jobboard300.` : "Thank you for registering your CV with Jobboard300.",
     `Your reference is ${input.reference}. Please quote it if you write to us.`,
-    "What happens next:\n- A recruiter reviews your CV against the roles we are filling.\n- We contact you when a role fits. We ask you before your CV is shared with an employer, unless you already agreed to that for this role.\n- You will hear from us by email" + (input.whatsapp ? " and on WhatsApp, as you chose." : "."),
+    `What happens next:\n- A recruiter reviews your CV against the roles we are filling.\n- We contact you when a role fits.${input.share ? "" : " We will ask you before your CV goes to an employer."}`,
+    `Your choices on the form:\n- Share my CV with ${input.roleTitle ? "the employer for this role" : "an employer for a role that suits me"}: ${input.share ? "yes" : "no"}\n- Keep my CV and contact me about other roles: ${input.future ? "yes" : "no"}\n- WhatsApp updates: ${input.whatsapp ? "yes" : "no"}`,
     `Registering and applying are free. To correct your details, replace your CV, or withdraw your consent, use the request form at ${SITE_URL}/privacy#privacy-request.`,
     SIGN_OFF,
   ].join("\n\n");
-  const whatsapp = `Jobboard300: we have your ${input.roleTitle ? `application for ${input.roleTitle}` : "CV"}. Reference ${input.reference}. A recruiter will review it and contact you when a role fits. Reply STOP to stop WhatsApp updates.`;
+  const whatsapp = `Jobboard300: we have your ${input.roleTitle ? `application for ${input.roleTitle}` : "CV"}. Reference ${input.reference}. A recruiter will review it and contact you when a role fits. To stop WhatsApp updates, use the request form at ${SITE_URL}/privacy#privacy-request`;
   return { subject, text, whatsapp };
 }
 
@@ -65,13 +67,13 @@ export function enquiryAckText(input: { name: string; company: string; reference
     `Dear ${input.name},`,
     `Thank you for your enquiry on behalf of ${input.company}. Your reference is ${input.reference}.`,
     input.meetingAt
-      ? `You asked for a call on ${callTimeText(input.meetingAt)}. A Jobboard300 consultant will confirm this time, or offer another, by email${input.whatsapp ? " or WhatsApp" : ""}.`
+      ? `You asked for a call on ${callTimeText(input.meetingAt)}. A Jobboard300 consultant will confirm this time, or offer another, by email.`
       : `A Jobboard300 consultant will contact you within one working day to arrange a call.`,
     "On the call we go through the role, the salary range, the location and your timeline. If we are a fit, we then agree the terms in a recruitment services agreement before we start. Nothing is charged for the enquiry, the call or a shortlist: the fee applies only when a person you choose joins.",
     `Our terms for employers: ${SITE_URL}/terms/employers`,
     SIGN_OFF,
   ].join("\n\n");
-  const whatsapp = `Jobboard300: we have your hiring enquiry for ${input.company}. Reference ${input.reference}. ${input.meetingAt ? `Call requested for ${callTimeText(input.meetingAt)}; a consultant will confirm.` : "A consultant will contact you within one working day."} Reply STOP to stop WhatsApp updates.`;
+  const whatsapp = `Jobboard300: we have your hiring enquiry for ${input.company}. Reference ${input.reference}. ${input.meetingAt ? `Call requested for ${callTimeText(input.meetingAt)}; a consultant will confirm.` : "A consultant will contact you within one working day."} To stop WhatsApp messages, reply to our email.`;
   return { subject, text, whatsapp };
 }
 
@@ -82,8 +84,10 @@ export const sendEnquiryAck = (to: string, input: Parameters<typeof enquiryAckTe
 export function confirmation(kind: "application" | "enquiry", input: { email: string; reference: string; emailed: AckStatus; meetingAt?: string | null }) {
   const sent = input.emailed === "sent";
   const title = kind === "application" ? "Thank you. Your CV is with us." : "Thank you. Your enquiry is with us.";
+  // The reference always stays on the page: an email handed to the mail service may still not arrive.
   const lines = [
-    sent ? `We have emailed the details to ${input.email}.` : `Your reference is ${input.reference}. Please keep it.`,
+    `Your reference is ${input.reference}.`,
+    ...(sent ? [`We have sent the details to ${input.email}. Check your spam folder if you do not see it.`] : []),
     kind === "application" ? "A recruiter will review your CV and contact you when a role fits."
       : input.meetingAt ? `You asked for a call on ${callTimeText(input.meetingAt)}. A consultant will confirm the time.` : "A consultant will contact you within one working day to arrange a call.",
   ];
