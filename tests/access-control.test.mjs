@@ -168,7 +168,7 @@ test("staff see contact details one candidate at a time, only for people in fron
   assert.equal((await contact(null, w.A.jdId, shown[0])).status, 401);
   // A candidate already in this job's pipeline can be contacted.
   assert.equal((await contact(rec, w.A.jdId, w.asha.id)).status, 200);
-  const log = (await w.db.prepare("SELECT actor_id, jd_id, detail FROM access_log WHERE action = 'contact_view' ORDER BY at").all()).results;
+  const log = (await w.db.prepare("SELECT actor_id, jd_id, detail FROM audit_events WHERE kind = 'access' AND action = 'contact_view' ORDER BY created_at").all()).results;
   assert.deepEqual(log.map(l => [l.actor_id, l.jd_id, l.detail]), [["rec-one", w.A.jdId, shown[0]], ["rec-one", w.A.jdId, w.asha.id]], "refused attempts must not be logged as views, and every real view must be");
 });
 
@@ -178,7 +178,7 @@ test("contact views have a daily limit, lower for team members than for team man
   assert.ok(CONTACT_VIEWS_PER_DAY.recruiter < CONTACT_VIEWS_PER_DAY.manager && CONTACT_VIEWS_PER_DAY.manager <= 100);
   const people = await pool(w, 4);
   await makeStaff(w.db, "rec-one", { team: "team-one" }); await makeStaff(w.db, "mgr-one", { team: "team-one", manager: true }); await makeStaff(w.db, "boss", { admin: true, level: null });
-  const fill = async (staffId, n) => { for (let i = 0; i < n; i++) await w.db.prepare("INSERT INTO access_log (id, actor_kind, actor_id, action, jd_id, detail, at) VALUES (?, 'staff', ?, 'contact_view', ?, ?, ?)").bind(`${staffId}-${i}`, staffId, w.A.jdId, `earlier-${i}`, new Date().toISOString()).run(); };
+  const fill = async (staffId, n) => { for (let i = 0; i < n; i++) await w.db.prepare("INSERT INTO audit_events (id, kind, target_type, target_id, actor_kind, actor_id, action, jd_id, detail, created_at) VALUES (?, 'access', 'access', '', 'staff', ?, 'contact_view', ?, ?, ?)").bind(`${staffId}-${i}`, staffId, w.A.jdId, `earlier-${i}`, new Date().toISOString()).run(); };
   const open = (id, admin = false) => mods.staff.staffContact(w.db, { id, admin }, { jdId: w.A.jdId, candidateId: w.asha.id });
   await fill("rec-one", CONTACT_VIEWS_PER_DAY.recruiter - 1);
   await open("rec-one");                                                    // the last one allowed today
@@ -190,7 +190,7 @@ test("contact views have a daily limit, lower for team members than for team man
   await fill("boss", 500);
   await open("boss", true);
   // Yesterday's views do not count today.
-  await w.db.prepare("UPDATE access_log SET at = ? WHERE actor_id = 'rec-one'").bind(new Date(Date.now() - 86_400_000).toISOString()).run();
+  await w.db.prepare("UPDATE audit_events SET created_at = ? WHERE kind = 'access' AND actor_id = 'rec-one'").bind(new Date(Date.now() - 86_400_000).toISOString()).run();
   await mods.staff.staffContact(w.db, { id: "rec-one", admin: false }, { jdId: w.A.jdId, candidateId: shown });
   assert.ok(people.length && (await w.db.prepare("SELECT COUNT(*) AS n FROM audit_events WHERE action = 'contact.limit_reached'").first()).n === 1);
 });
@@ -238,7 +238,7 @@ test("a client cannot bulk-download: only people in its open pipeline, each copy
   let refused = 0;
   for (let i = 0; i < hourly + 5; i++) if ((await download(w.A.pipeline.candidate_ref)).status === 429) refused++;
   assert.ok(refused >= 3, `the download limit did not hold (${refused} refused)`);
-  assert.ok((await w.db.prepare("SELECT COUNT(*) AS n FROM access_log WHERE action = 'download' AND company_id = ?").bind(w.A.id).first()).n >= hourly);
+  assert.ok((await w.db.prepare("SELECT COUNT(*) AS n FROM audit_events WHERE kind = 'access' AND action = 'download' AND company_id = ?").bind(w.A.id).first()).n >= hourly);
   assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM abuse_flags WHERE company_id = ? AND rule = 'rate:download'").bind(w.A.id).first()).n, 1, "hitting the limit should raise a flag for the administrator");
 });
 

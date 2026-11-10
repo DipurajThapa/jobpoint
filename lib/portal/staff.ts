@@ -147,7 +147,7 @@ export async function staffContact(db: Db, staff: Staff, input: { jdId: string; 
   const today = nowIso().slice(0, 10);
   if (!scope.admin) {
     const limit = CONTACT_VIEWS_PER_DAY[scope.role === "manager" ? "manager" : "recruiter"];
-    const seen = await db.prepare("SELECT COUNT(DISTINCT detail) AS n, SUM(detail = ?) AS this_one FROM access_log WHERE actor_kind = 'staff' AND actor_id = ? AND action = 'contact_view' AND at >= ?").bind(input.candidateId, staff.id, today).first<{ n: number; this_one: number | null }>();
+    const seen = await db.prepare("SELECT COUNT(DISTINCT detail) AS n, SUM(detail = ?) AS this_one FROM audit_events WHERE kind = 'access' AND actor_kind = 'staff' AND actor_id = ? AND action = 'contact_view' AND created_at >= ?").bind(input.candidateId, staff.id, today).first<{ n: number; this_one: number | null }>();
     if (!seen?.this_one && (seen?.n ?? 0) >= limit) {
       await audit(db, `staff:${staff.id}`, "contact.limit_reached", "jd", input.jdId, `${limit} per day`);
       throw new PortalError("CONTACT_LIMIT", `You have opened ${limit} candidates' contact details today, which is the daily limit. Ask the administrator if you need more.`, 429);
@@ -158,7 +158,7 @@ export async function staffContact(db: Db, staff: Staff, input: { jdId: string; 
   if (!row) throw new PortalError("NOT_FOUND", "Candidate not found.", 404);
   let contact: { email?: string; phone?: string } = {};
   try { contact = (JSON.parse(row.data) as { contact?: { email?: string; phone?: string } }).contact ?? {}; } catch { /* unreadable profile */ }
-  await db.prepare("INSERT INTO access_log (id, actor_kind, actor_id, action, jd_id, detail, at) VALUES (?, 'staff', ?, 'contact_view', ?, ?, ?)").bind(newId(), staff.id, input.jdId, input.candidateId, nowIso()).run();
+  await db.prepare("INSERT INTO audit_events (id, kind, target_type, target_id, actor_kind, actor_id, action, jd_id, detail, created_at) VALUES (?, 'access', 'access', ?, 'staff', ?, 'contact_view', ?, ?, ?)").bind(newId(), input.jdId ?? "", staff.id, input.jdId, input.candidateId, nowIso()).run();
   return { name: row.display_name, phone: contact.phone ?? "", email: contact.email ?? "" };
 }
 
@@ -251,7 +251,7 @@ export async function staffMessaging(db: Db, staff: Staff) {
     : scope.managedTeams.length ? (await db.prepare(`SELECT id, name FROM platform_teams WHERE id IN (${marks(scope.managedTeams)}) ORDER BY name`).bind(...scope.managedTeams).all<{ id: string; name: string }>()).results : [];
   const scopes = [...(scope.admin ? ["admin"] : []), ...teams.map(t => `team:${t.id}`)];
   const saved = await messagingFor(db, scopes);
-  const queue = scope.admin ? await db.prepare("SELECT status, COUNT(*) AS n FROM outbound_messages WHERE channel = 'whatsapp' GROUP BY status").all() : { results: [] };
+  const queue = scope.admin ? await db.prepare("SELECT status, COUNT(*) AS n FROM messages WHERE channel = 'whatsapp' GROUP BY status").all() : { results: [] };
   return { scopes: scopes.map(s => ({ scope: s, label: s === "admin" ? "Jobboard300 (admin)" : teams.find(t => `team:${t.id}` === s)?.name ?? s, ...(saved.find(x => x.scope === s) ?? { whatsapp_number: "", whatsapp_enabled: 0, admin_override: 0 }) })), queue: queue.results };
 }
 

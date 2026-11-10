@@ -100,8 +100,8 @@ export async function unlockCandidate(db: Db, args: { companyId: string; userId:
     db.prepare(`INSERT INTO quota_ledger (id, company_id, subscription_id, delta, reason, unlock_id, created_by, created_at)
       SELECT ?, ?, ?, -1, 'unlock', ?, ?, ? WHERE EXISTS (SELECT 1 FROM unlocks WHERE id = ?)`).bind(newId(), companyId, sub.id, unlockId, userId, at, unlockId),
     db.prepare(`UPDATE portal_applications SET status = 'viewed', updated_at = ? WHERE candidate_id = ? AND status IN ('applied','released') AND jd_id IN (SELECT id FROM jds WHERE company_id = ?)`).bind(at, release.candidate_id, companyId),
-    db.prepare("INSERT INTO access_log (id, actor_kind, actor_id, company_id, action, jd_id, candidate_ref, ip_hash, at) SELECT ?, 'company_user', ?, ?, 'unlock', ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM unlocks WHERE id = ?)")
-      .bind(newId(), userId, companyId, jdId, candidateRef, args.ipHash ?? "", at, unlockId),
+    db.prepare("INSERT INTO audit_events (id, kind, target_type, target_id, actor_kind, actor_id, company_id, action, jd_id, candidate_ref, ip_hash, created_at) SELECT ?, 'access', 'access', ?, 'company_user', ?, ?, 'unlock', ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM unlocks WHERE id = ?)")
+      .bind(newId(), candidateRef, userId, companyId, jdId, candidateRef, args.ipHash ?? "", at, unlockId),
   ]);
   const row = await db.prepare("SELECT id, trace_id FROM unlocks WHERE company_id = ? AND candidate_id = ?").bind(companyId, release.candidate_id).first<{ id: string; trace_id: string }>();
   if (!row) throw new PortalError("QUOTA_EXHAUSTED", "Your unlock quota is used up. Upgrade your plan to unlock more profiles.", 402);

@@ -62,9 +62,11 @@ export const employerEnquiries = sqliteTable("employer_enquiries", {
   termsVersion: text("terms_version").notNull().default(""),
   consentAt: text("consent_at"),
   status: text("status", { enum: ["new", "contacted", "in_progress", "closed"] }).notNull().default("new"),
+  // The client (companies.id) this enquiry became, once it has.
+  companyId: text("company_id"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [index("enquiries_status_created_idx").on(table.status, table.createdAt)]);
+}, (table) => [index("enquiries_status_created_idx").on(table.status, table.createdAt), index("employer_enquiries_company_idx").on(table.companyId)]);
 
 export const privacyRequests = sqliteTable("privacy_requests", {
   id: text("id").primaryKey(),
@@ -88,7 +90,14 @@ export const auditEvents = sqliteTable("audit_events", {
   targetId: text("target_id").notNull(),
   detail: text("detail").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [index("audit_events_created_idx").on(table.createdAt)]);
+  // "change": who changed what. "access": who viewed what (the former access_log).
+  kind: text("kind", { enum: ["change", "access"] }).notNull().default("change"),
+  actorKind: text("actor_kind").notNull().default(""),
+  companyId: text("company_id"),
+  jdId: text("jd_id"),
+  candidateRef: text("candidate_ref"),
+  ipHash: text("ip_hash").notNull().default(""),
+}, (table) => [index("audit_events_created_idx").on(table.createdAt), index("audit_events_kind_created_idx").on(table.kind, table.createdAt)]);
 
 export const rateLimits = sqliteTable("rate_limits", {
   key: text("key").primaryKey(),

@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   try {
     const [requests, activity] = await Promise.all([
       env.DB!.prepare("SELECT id, request_type AS requestType, requester_name AS requesterName, email, details, status, resolution_note AS resolutionNote, erased_at AS erasedAt, erasure_summary AS erasureSummary, created_at AS createdAt FROM privacy_requests ORDER BY created_at DESC LIMIT 100").all(),
-      env.DB!.prepare("SELECT action, target_type AS targetType, target_id AS targetId, created_at AS createdAt FROM audit_events ORDER BY created_at DESC LIMIT 50").all(),
+      env.DB!.prepare("SELECT action, target_type AS targetType, target_id AS targetId, created_at AS createdAt FROM audit_events WHERE kind = 'change' ORDER BY created_at DESC LIMIT 50").all(),
     ]);
     return json({ requests: requests.results, activity: activity.results });
   } catch { return errorJson("Privacy records are temporarily unavailable.", 503); }

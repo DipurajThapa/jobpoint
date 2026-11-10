@@ -106,6 +106,20 @@
       "when": 1794614900000,
       "tag": "0014_two_factor",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1794701300000,
+      "tag": "0015_link_employers",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794787700000,
+      "tag": "0016_one_message_and_audit_table",
+      "breakpoints": true
     }
   ]
 }

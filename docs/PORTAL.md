@@ -160,7 +160,7 @@ This is a small hand-made set. It shows the engine behaves sensibly, not that it
   | Register | 10/hour |
   | CV upload | 3 per 30 days |
 
-- `access_log` records every list, view, unlock and download. A high browse count with few unlocks raises an `abuse_flags` row for the admin.
+- `audit_events` (rows of kind `access`; formerly `access_log`) records every list, view, unlock and download. A high browse count with few unlocks raises an `abuse_flags` row for the admin.
 - Every company query is scoped to its approved, released or unlocked set. The end-to-end check probes for leaks (section 8).
 - Contract terms are still needed: hiring-only use, no resale or scraping, deletion on notice, and a direct-hire clause. The research suggests a 6-month introduction window. Counsel should confirm enforceability under s.27 of the Contract Act.
 
@@ -214,10 +214,10 @@ The research treats a company that unlocks a CV as most likely a **separate data
 
 Every update writes a message, in `lib/portal/notify.ts` (migration `0009_notifications.sql`).
 
-- **Candidate inbox** (`candidate_messages`, shown on "My CV and privacy"): CV received / incomplete (lists what is missing) / needs review, application received, submitted to a client, profile opened, CV downloaded, each stage change, interview scheduled (India time and link), offer, hire, not selected. Messages state the **outcome only**: never the interviewer's feedback, a rating or a score.
-- **Client updates** (`company_notices`, shown on the client dashboard until marked read): new submission, stage changes made by Jobboard300 staff, interviews scheduled.
+- **Candidate inbox** (`messages`, candidate inbox, shown on "My CV and privacy"): CV received / incomplete (lists what is missing) / needs review, application received, submitted to a client, profile opened, CV downloaded, each stage change, interview scheduled (India time and link), offer, hire, not selected. Messages state the **outcome only**: never the interviewer's feedback, a rating or a score.
+- **Client updates** (`messages`, client inbox, shown on the client dashboard until marked read): new submission, stage changes made by Jobboard300 staff, interviews scheduled.
 - **Weekly summary**: the queue run adds one counts-only summary per candidate per 7 days (times seen, opened, downloaded).
-- **WhatsApp** is provider-ready but sends nothing yet. Each candidate message also writes a row to `outbound_messages` (`queued` when a sender number is set up, otherwise `skipped`). To go live, a sender reads the `queued` rows, calls the provider API and marks them sent; nothing else changes.
+- **WhatsApp** is provider-ready but sends nothing yet. Each candidate message also writes a queue row to `messages` (`queued` when a sender number is set up, otherwise `skipped`). To go live, a sender reads the `queued` rows, calls the provider API and marks them sent; nothing else changes.
 - **Whose number is used** (`messaging_settings`, `resolveSender`): the client's team number first; the admin's number when the team has none; the admin's number for everyone when the admin turns on "override". Team managers set their own team's number in Recruiting → WhatsApp set-up; only the admin sets the main number and the override.
 - **Team managers** invite recruiters into their own team (Recruiting tool only, one-time 72-hour link) and remove them. They cannot invite into, or see, another team.
 - Deleting a candidate deletes their inbox and queued messages.

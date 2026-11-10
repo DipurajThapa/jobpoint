@@ -1,4 +1,4 @@
-// Notifications. Every hiring event writes one message to the candidate's inbox
+// Notifications, all in one table (messages). Every hiring event writes one message to the candidate's inbox
 // and, where the client should know, one notice for the company. Each candidate
 // message is also placed on an outbound queue for WhatsApp so that a provider
 // can be plugged in later without touching the events: today nothing is sent,
@@ -51,14 +51,14 @@ export async function messagingFor(db: Db, scopes: string[]) {
 export async function notifyCandidate(db: Db, candidateId: string, kind: string, title: string, body: string, companyId: string | null = null) {
   const sender = await resolveSender(db, companyId), at = nowIso();
   await db.batch([
-    db.prepare("INSERT INTO candidate_messages (id, candidate_id, kind, title, body, created_at) VALUES (?, ?, ?, ?, ?, ?)").bind(newId(), candidateId, kind, title.slice(0, 160), body.slice(0, 1200), at),
-    db.prepare("INSERT INTO outbound_messages (id, channel, recipient_kind, recipient_id, sender_scope, kind, body, status, status_detail, created_at) VALUES (?, 'whatsapp', 'candidate', ?, ?, ?, ?, ?, ?, ?)")
+    db.prepare("INSERT INTO messages (id, recipient_kind, recipient_id, channel, kind, title, body, created_at) VALUES (?, 'candidate', ?, 'inbox', ?, ?, ?, ?)").bind(newId(), candidateId, kind, title.slice(0, 160), body.slice(0, 1200), at),
+    db.prepare("INSERT INTO messages (id, channel, recipient_kind, recipient_id, sender_scope, kind, body, status, status_detail, created_at) VALUES (?, 'whatsapp', 'candidate', ?, ?, ?, ?, ?, ?, ?)")
       .bind(newId(), candidateId, sender?.scope ?? "", kind, `${title}\n${body}`.slice(0, 1200), sender ? "queued" : "skipped", sender ? "waiting for a WhatsApp provider" : "no WhatsApp number configured", at),
   ]);
 }
 
 export async function notifyCompany(db: Db, companyId: string, kind: string, title: string, body: string) {
-  await db.prepare("INSERT INTO company_notices (id, company_id, kind, title, body, created_at) VALUES (?, ?, ?, ?, ?, ?)").bind(newId(), companyId, kind, title.slice(0, 160), body.slice(0, 1200), nowIso()).run();
+  await db.prepare("INSERT INTO messages (id, recipient_kind, recipient_id, channel, kind, title, body, created_at) VALUES (?, 'company', ?, 'inbox', ?, ?, ?, ?)").bind(newId(), companyId, kind, title.slice(0, 160), body.slice(0, 1200), nowIso()).run();
 }
 
 const STAGE_TEXT: Record<string, (job: string) => [string, string]> = {
@@ -87,18 +87,18 @@ export async function notifyStage(db: Db, p: { candidateId: string; companyId: s
 }
 
 export async function candidateInbox(db: Db, candidateId: string) {
-  const { results } = await db.prepare("SELECT id, kind, title, body, created_at, read_at FROM candidate_messages WHERE candidate_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 100").bind(candidateId).all();
+  const { results } = await db.prepare("SELECT id, kind, title, body, created_at, read_at FROM messages WHERE recipient_kind = 'candidate' AND recipient_id = ? AND channel = 'inbox' ORDER BY created_at DESC, rowid DESC LIMIT 100").bind(candidateId).all();
   return results;
 }
 export async function markInboxRead(db: Db, candidateId: string) {
-  await db.prepare("UPDATE candidate_messages SET read_at = ? WHERE candidate_id = ? AND read_at IS NULL").bind(nowIso(), candidateId).run();
+  await db.prepare("UPDATE messages SET read_at = ? WHERE recipient_kind = 'candidate' AND recipient_id = ? AND channel = 'inbox' AND read_at IS NULL").bind(nowIso(), candidateId).run();
 }
 export async function companyNotices(db: Db, companyId: string) {
-  const { results } = await db.prepare("SELECT id, kind, title, body, created_at, read_at FROM company_notices WHERE company_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 50").bind(companyId).all();
+  const { results } = await db.prepare("SELECT id, kind, title, body, created_at, read_at FROM messages WHERE recipient_kind = 'company' AND recipient_id = ? AND channel = 'inbox' ORDER BY created_at DESC, rowid DESC LIMIT 50").bind(companyId).all();
   return results;
 }
 export async function markNoticesRead(db: Db, companyId: string) {
-  await db.prepare("UPDATE company_notices SET read_at = ? WHERE company_id = ? AND read_at IS NULL").bind(nowIso(), companyId).run();
+  await db.prepare("UPDATE messages SET read_at = ? WHERE recipient_kind = 'company' AND recipient_id = ? AND channel = 'inbox' AND read_at IS NULL").bind(nowIso(), companyId).run();
 }
 
 /**
@@ -109,7 +109,7 @@ export async function markNoticesRead(db: Db, companyId: string) {
 export async function weeklySummaries(db: Db) {
   const since = new Date(Date.parse(nowIso()) - 7 * 86_400_000).toISOString();
   const { results } = await db.prepare(`SELECT r.candidate_id, COUNT(*) AS shown FROM releases r JOIN candidates k ON k.id = r.candidate_id AND k.status = 'active'
-    WHERE r.released_at >= ? AND NOT EXISTS (SELECT 1 FROM candidate_messages m WHERE m.candidate_id = r.candidate_id AND m.kind = 'summary.weekly' AND m.created_at >= ?)
+    WHERE r.released_at >= ? AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.recipient_kind = 'candidate' AND m.recipient_id = r.candidate_id AND m.channel = 'inbox' AND m.kind = 'summary.weekly' AND m.created_at >= ?)
     GROUP BY r.candidate_id LIMIT 200`).bind(since, since).all<{ candidate_id: string; shown: number }>();
   for (const r of results) await notifyCandidate(db, r.candidate_id, "summary.weekly", "Your profile this week", `Your anonymous profile was shown for ${r.shown} job${r.shown === 1 ? "" : "s"} in the last 7 days. Employers see your name and contact details only if they take your profile forward.`);
   return results.length;

@@ -45,7 +45,7 @@ async function fillEverything(w, person, co) {
   await db.prepare("INSERT INTO payment_intents (id, payer_kind, payer_id, purpose, ref_id, amount_inr, created_at) VALUES (?, 'candidate', ?, 'service_order', 'x', 499, ?)").bind(`pi-${tag}`, id, at).run();
   await db.prepare("INSERT INTO duplicate_flags (id, kind, a_id, b_id, signal, created_at) VALUES (?, 'account', ?, 'someone-else', 'same_phone', ?)").bind(`df-${tag}`, id, at).run();
   await db.prepare("INSERT INTO abuse_flags (id, subject_kind, subject_id, rule, detail, created_at) VALUES (?, 'candidate', ?, 'rate:cv_upload', ?, ?)").bind(`af-${tag}`, id, `${person.email} uploaded too often`, at).run();
-  await db.prepare("INSERT INTO outbound_messages (id, channel, recipient_kind, recipient_id, kind, body, status, created_at) VALUES (?, 'whatsapp', 'candidate', ?, 'x', ?, 'queued', ?)").bind(`om-${tag}`, id, `Hello ${person.name}`, at).run();
+  await db.prepare("INSERT INTO messages (id, channel, recipient_kind, recipient_id, kind, body, status, created_at) VALUES (?, 'whatsapp', 'candidate', ?, 'x', ?, 'queued', ?)").bind(`om-${tag}`, id, `Hello ${person.name}`, at).run();
   await db.prepare("INSERT INTO score_queue (id, kind, ref_id, reason, enqueued_at) VALUES (?, 'candidate', ?, 'x', ?) ON CONFLICT DO NOTHING").bind(`sq-${tag}`, id, at).run();
 }
 
@@ -90,7 +90,7 @@ test("deleting a candidate leaves no personal data anywhere in the database, and
   // 1. No name, email, phone or profile link anywhere.
   assert.deepEqual(findAnywhere(w.db, personal), []);
   // 2. The candidate id survives only where a rule says "keep", in the stub itself, and in the audit trail of the deletion.
-  const allowed = new Set(["candidates.id", "audit_events.target_id", "access_log.detail", ...KEPT.map(t => `${t}.candidate_id`)]);
+  const allowed = new Set(["candidates.id", "audit_events.target_id", "audit_events.detail", ...KEPT.map(t => `${t}.candidate_id`)]);
   const leftovers = findAnywhere(w.db, [w.asha.id]).map(h => h.split(" ")[0]).filter(h => !allowed.has(h));
   assert.deepEqual(leftovers, [], "the candidate id is still referenced");
   // 3. Stored files are gone: both the portal CV and the website CV.
@@ -119,7 +119,7 @@ test("the stub is removed after a year, with the last references to the person",
   assert.equal(await mods.candidate.purgeExpiredStubs(w.db), 0, "a fresh stub must be kept for the retention year");
   await w.db.prepare("UPDATE candidates SET last_active_at = ? WHERE id = ?").bind(new Date(Date.now() - 367 * 86_400_000).toISOString(), w.asha.id).run();
   assert.equal(await mods.candidate.purgeExpiredStubs(w.db), 1);
-  const left = findAnywhere(w.db, [w.asha.id]).map(h => h.split(" ")[0]).filter(h => !["audit_events.target_id", "placements.candidate_id", "access_log.detail"].includes(h));
+  const left = findAnywhere(w.db, [w.asha.id]).map(h => h.split(" ")[0]).filter(h => !["audit_events.target_id", "placements.candidate_id", "audit_events.detail"].includes(h));
   assert.deepEqual(left, []);
   assert.equal((await w.db.prepare("SELECT status FROM candidates WHERE id = ?").bind(w.bikram.id).first()).status, "active");
 });
