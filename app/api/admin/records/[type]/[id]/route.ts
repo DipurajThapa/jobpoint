@@ -77,12 +77,10 @@ export async function DELETE(request: Request, context: { params: Promise<{ type
       const linked = await unlinkWebsiteApplication(portalDb(), id, adminActor(request));
       for (const key of linked.r2Keys) await env.BUCKET!.delete(key);
       await env.DB!.batch([
-        // Screening results hold the parsed CV, so they go with the application.
-        env.DB!.prepare("DELETE FROM retired_ats_screenings WHERE application_id = ?").bind(id),
         env.DB!.prepare("DELETE FROM applications WHERE id = ?").bind(id),
         audit(request, "record.deleted", "application", id),
       ]);
-      return json({ message: "Application, stored CV and screening results deleted." });
+      return json({ message: "Application and stored CV deleted." });
     }
     if (type === "enquiries") {
       const existing = await env.DB!.prepare("SELECT id FROM employer_enquiries WHERE id = ?").bind(id).first();

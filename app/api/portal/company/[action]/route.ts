@@ -1,24 +1,22 @@
 import { env } from "cloudflare:workers";
 import { portalDb, json, fail, failFrom, requireApi, ipHash } from "@/lib/portal/session";
-import { createJd, currentParams, requestParamChange, submitJd, updateJdRequirements } from "@/lib/portal/company";
-import { unlockCandidate } from "@/lib/portal/quota";
-import { companyDashboard, companyMatches, unlockedCandidate } from "@/lib/portal/views";
-import { detectScraping, guard } from "@/lib/portal/access";
+import { createJd, submitJd, updateJdRequirements } from "@/lib/portal/company";
+import { companyDashboard, unlockedCandidate } from "@/lib/portal/views";
+import { guard } from "@/lib/portal/access";
 import { renderCvPdf, watermarkPdf } from "@/lib/portal/watermark";
 import { revokeJdReleases } from "@/lib/portal/release";
-import { audit, newId, nowIso, PortalError } from "@/lib/portal/db";
+import { audit, nowIso, PortalError } from "@/lib/portal/db";
 import { extractText } from "@/lib/ats/extract";
-import { addToPipeline, clientOverview, inviteMember, moveStage, pipelineView, recordInterview, reissueInvite, removeMember, reportPlacementExit, scheduleInterview, setJdService, teamList, REASONS, STAGE_LABEL } from "@/lib/portal/client";
+import { clientOverview, inviteMember, moveStage, pipelineView, recordInterview, reissueInvite, removeMember, reportPlacementExit, scheduleInterview, setJdOpenings, teamList, REASONS, STAGE_LABEL } from "@/lib/portal/client";
 import { sendMail } from "@/lib/portal/mailer";
 import { companyNotices, markNoticesRead, notifyCandidate } from "@/lib/portal/notify";
-import { redactContacts, selfService } from "@/lib/portal/policy";
+import { redactContacts } from "@/lib/portal/policy";
 
-// Placement-fee model (default): clients do not browse, unlock or add candidates themselves.
-const managedOnly = () => fail("Jobboard300 recruiters shortlist and submit candidates for your jobs. You will see each candidate in your pipeline.", 403, "MANAGED_ONLY");
+// Placement-fee model: clients do not browse, unlock or add candidates themselves.
+// A Jobboard300 recruiter submits each candidate, and the client works them in the pipeline.
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ action: string }> };
-const COMPANY_STAGES = ["shortlisted", "interview", "offer", "hired", "rejected"];
 
 export async function GET(request: Request, context: Ctx) {
   const account = await requireApi(request, "company");
@@ -26,36 +24,27 @@ export async function GET(request: Request, context: Ctx) {
   const { action } = await context.params;
   const db = portalDb(), companyId = account.companyId!, url = new URL(request.url), ip = await ipHash(request);
   try {
-    const self = selfService(env.CLIENT_SELF_SERVICE);
     if (action === "dashboard") {
       const dash = await companyDashboard(db, companyId), overview = await clientOverview(db, companyId);
       const terms = await db.prepare("SELECT fee_percent, guarantee_days FROM companies WHERE id = ?").bind(companyId).first<{ fee_percent: number; guarantee_days: number }>();
       // No match counts in the placement-fee model: they would show how requirement changes move the matching.
-      if (!self) { dash.jds = dash.jds.map(j => ({ ...j, released: 0, unlocked: 0 })); overview.jobs = overview.jobs.map(j => ({ ...j, released: 0 })); }
+      dash.jds = dash.jds.map(j => ({ ...j, released: 0, unlocked: 0 })); overview.jobs = overview.jobs.map(j => ({ ...j, released: 0 }));
       // The matching rules (minimum score, filters, release caps) are internal in the placement-fee model.
-      const params = self || !dash.params ? dash.params : { version: 0, params: { maxLiveJds: dash.params.params.maxLiveJds } };
-      return json({ ...dash, params, pendingRequest: self ? dash.pendingRequest : null, quota: self ? dash.quota : { remaining: 0, unlockedTotal: 0, plans: [] }, overview, role: account.companyRole, notices: await companyNotices(db, companyId), selfService: self, terms: { feePercent: terms?.fee_percent, guaranteeDays: terms?.guarantee_days } });
+      const params = !dash.params ? dash.params : { version: 0, params: { maxLiveJds: dash.params.params.maxLiveJds } };
+      return json({ ...dash, params, overview, role: account.companyRole, notices: await companyNotices(db, companyId), terms: { feePercent: terms?.fee_percent, guaranteeDays: terms?.guarantee_days } });
     }
-    if (action === "pipeline") return json({ pipeline: await pipelineView(db, companyId, url.searchParams.get("jd") || undefined, !self), reasons: REASONS, labels: STAGE_LABEL });
+    if (action === "pipeline") return json({ pipeline: await pipelineView(db, companyId, url.searchParams.get("jd") || undefined, true), reasons: REASONS, labels: STAGE_LABEL });
     if (action === "team") return json({ team: await teamList(db, companyId), you: account.id, owner: account.companyRole === "owner" });
-    if (action === "matches") {
-      if (!self) return managedOnly();
-      const jdId = url.searchParams.get("jd") ?? "";
-      if (!await guard(db, { userId: account.id, companyId, action: "list", jdId, ipHash: ip })) return fail("You are browsing too fast. Wait a while and try again.", 429, "RATE_LIMIT");
-      await detectScraping(db, account.id, companyId);
-      const out = await companyMatches(db, companyId, jdId);
-      return json({ ...out, message: out.matches.length ? "" : "No strong matches yet. Candidates are released here automatically as soon as they meet this role's approved requirements." });
-    }
     if (action === "candidate") {
       const ref = url.searchParams.get("ref") ?? "";
       if (!await guard(db, { userId: account.id, companyId, action: "view_full", candidateRef: ref, ipHash: ip })) return fail("You are viewing profiles too fast. Wait a while and try again.", 429, "RATE_LIMIT");
-      const out = await unlockedCandidate(db, companyId, ref, !self);
+      const out = await unlockedCandidate(db, companyId, ref, true);
       return json({ traceId: out.traceId, unlockedAt: out.unlockedAt, profile: out.profile, applications: out.applications, contactsHidden: out.contactsHidden });
     }
     if (action === "download") {
       const ref = url.searchParams.get("ref") ?? "";
       if (!await guard(db, { userId: account.id, companyId, action: "download", candidateRef: ref, ipHash: ip })) return fail("Too many downloads. Wait a while and try again.", 429, "RATE_LIMIT");
-      const out = await unlockedCandidate(db, companyId, ref, !self);
+      const out = await unlockedCandidate(db, companyId, ref, true);
       const company = await db.prepare("SELECT display_name FROM companies WHERE id = ?").bind(companyId).first<{ display_name: string }>();
       const stamp = { company: company?.display_name ?? "Company", traceId: out.traceId, date: nowIso().slice(0, 10) };
       const object = env.BUCKET ? await env.BUCKET.get(out.cv.r2Key) : null;
@@ -73,7 +62,7 @@ export async function GET(request: Request, context: Ctx) {
     if (action === "jd") {
       const jd = await db.prepare("SELECT id, title, raw_text, requirements, status, decision_note, params_version FROM jds WHERE id = ? AND company_id = ?").bind(url.searchParams.get("id") ?? "", companyId).first();
       if (!jd) return fail("JD not found.", 404);
-      return json({ jd, params: self ? await currentParams(db, companyId) : null });
+      return json({ jd, params: null });
     }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }
@@ -81,23 +70,19 @@ export async function GET(request: Request, context: Ctx) {
 
 export async function POST(request: Request, context: Ctx) {
   const { action } = await context.params;
-  const account = await requireApi(request, ["params-request", "team-invite", "team-reinvite", "team-remove"].includes(action) ? "company_owner" : "company", true);
+  const account = await requireApi(request, ["team-invite", "team-reinvite", "team-remove"].includes(action) ? "company_owner" : "company", true);
   if (account instanceof Response) return account;
-  const db = portalDb(), companyId = account.companyId!, ip = await ipHash(request);
+  const db = portalDb(), companyId = account.companyId!;
   try {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const s = (v: unknown, max = 200) => typeof v === "string" ? v.slice(0, max) : "";
-    const self = selfService(env.CLIENT_SELF_SERVICE);
-    if (!self && (["unlock", "pipeline-add", "application-status"].includes(action) || (action === "jd-service" && body.service !== "managed"))) return managedOnly();
-    if (!self && action === "params-request") return fail("Ask your Jobboard300 recruiter to change how candidates are shortlisted for you.", 403, "MANAGED_ONLY");
     if (action === "jd-create") {
       const out = await createJd(db, companyId, account.id, { title: s(body.title, 160), text: s(body.text, 12_000), location: s(body.location, 120), workMode: s(body.workMode, 20) });
-      await setJdService(db, companyId, out.id, self ? s(body.service, 10) || "self" : "managed", Number(body.openings ?? 1) || 1, account.id);
+      await setJdOpenings(db, companyId, out.id, Number(body.openings ?? 1) || 1, account.id);
       return json(out, 201);
     }
     if (action === "notices-read") { await markNoticesRead(db, companyId); return json({ message: "ok" }); }
-    if (action === "jd-service") { await setJdService(db, companyId, s(body.jdId, 60), s(body.service, 10), Number(body.openings ?? 1), account.id); return json({ message: body.service === "managed" ? "Jobboard300 will recruit for this job and submit candidates here." : "Saved." }); }
-    if (action === "pipeline-add") { const out = await addToPipeline(db, companyId, account.id, s(body.ref, 40), s(body.jdId, 60)); return json({ ...out, message: out.created ? "Added to your pipeline as shortlisted." : "Already in your pipeline for this job." }, out.created ? 201 : 200); }
+    if (action === "jd-openings") { await setJdOpenings(db, companyId, s(body.jdId, 60), Number(body.openings ?? 1), account.id); return json({ message: "Saved." }); }
     if (action === "pipeline-stage") {
       const out = await moveStage(db, companyId, account.id, s(body.pipelineId, 60), { stage: s(body.stage, 20), reason: s(body.reason, 40), note: s(body.note, 1000), offerCtcInr: body.offerCtcInr == null || body.offerCtcInr === "" ? null : Number(body.offerCtcInr), offerDate: s(body.offerDate, 10), joiningDate: s(body.joiningDate, 10), lastWorkingDay: s(body.lastWorkingDay, 10), competingOffers: s(body.competingOffers, 300) });
       return json({ ...out, message: `Moved to “${STAGE_LABEL[out.stage]}”.` });
@@ -120,26 +105,7 @@ export async function POST(request: Request, context: Ctx) {
       const r = await db.prepare("UPDATE jds SET status = 'closed', updated_at = ? WHERE id = ? AND company_id = ?").bind(nowIso(), jdId, companyId).run();
       if (!r.meta.changes) return fail("JD not found.", 404);
       await revokeJdReleases(db, jdId, "jd_closed");
-      return json({ message: self ? "JD closed. Unlocked profiles stay available to you." : "Job closed." });
-    }
-    if (action === "params-request") return json({ id: await requestParamChange(db, companyId, body.params, account.id), message: "Request sent. Your current parameters stay in force until Jobboard300 approves the change." }, 201);
-    if (action === "unlock") {
-      if (!await guard(db, { userId: account.id, companyId, action: "unlock", jdId: s(body.jdId, 60), candidateRef: s(body.ref, 40), ipHash: ip })) return fail("Too many unlocks in a short time. Wait a while.", 429, "RATE_LIMIT");
-      const out = await unlockCandidate(db, { companyId, userId: account.id, candidateRef: s(body.ref, 40), jdId: s(body.jdId, 60), ipHash: ip });
-      return json({ ...out, message: out.charged ? `Unlocked. ${out.remaining} unlock(s) left.` : "Already unlocked by your company; no unlock was used." });
-    }
-    if (action === "application-status") {
-      const status = s(body.status, 20);
-      if (!COMPANY_STAGES.includes(status)) return fail("Choose a valid stage.");
-      // Only applications to this company's JDs by candidates it has unlocked.
-      const app = await db.prepare(`SELECT a.id FROM portal_applications a JOIN jds j ON j.id = a.jd_id JOIN unlocks u ON u.company_id = j.company_id AND u.candidate_id = a.candidate_id AND u.access_revoked_at IS NULL
-        WHERE a.id = ? AND j.company_id = ?`).bind(s(body.applicationId, 60), companyId).first<{ id: string }>();
-      if (!app) return fail("Application not found.", 404);
-      await db.batch([
-        db.prepare("UPDATE portal_applications SET status = ?, updated_at = ? WHERE id = ?").bind(status, nowIso(), app.id),
-        db.prepare("INSERT INTO portal_application_events (id, application_id, status, actor, at) VALUES (?, ?, ?, ?, ?)").bind(newId(), app.id, status, `company:${account.id}`, nowIso()),
-      ]);
-      return json({ message: "Stage updated. The candidate can see it." });
+      return json({ message: "Job closed." });
     }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }

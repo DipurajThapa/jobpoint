@@ -16,7 +16,6 @@
     "check:platform": "node scripts/check-platform.mjs",
     "check:ats": "node scripts/check-ats.mjs",
     "check:portal": "node scripts/check-portal.mjs && node scripts/check-portal-ranking.mjs",
-    "check:portal-e2e": "node scripts/check-portal-e2e.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-transform-types --no-warnings --test tests/*.test.mjs",
     "test:all": "npm run typecheck && npm run lint && npm test && npm run check:portal && npm run check:ats"

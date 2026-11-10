@@ -14,7 +14,7 @@ const company = await route("portal/company/[action]");
 const candidate = await route("portal/candidate/[action]");
 const recruiting = await route("platform/recruiting/[action]");
 
-const COMPANY_GETS = ["dashboard", "pipeline", "team", "matches", "candidate", "download", "jd"];
+const COMPANY_GETS = ["dashboard", "pipeline", "team", "candidate", "download", "jd"];
 const CANDIDATE_GETS = ["jobs", "tests", "test", "applications", "inbox", "profile", "export", "companies"];
 
 function routeFiles(dir = resolve(root, "app/api"), out = []) {
@@ -148,7 +148,7 @@ test("company A cannot change anything of company B's, and B's data is untouched
     ["jd-update", { jdId: w.B.jdId, requirements: {} }],
     ["jd-submit", { jdId: w.B.jdId }],
     ["jd-close", { jdId: w.B.jdId }],
-    ["jd-service", { jdId: w.B.jdId, service: "managed", openings: 9 }],
+    ["jd-openings", { jdId: w.B.jdId, openings: 9 }],
     ["team-remove", { memberId: w.B.userId }],
     ["team-reinvite", { memberId: w.B.userId }],
   ];
@@ -169,11 +169,13 @@ test("before an offer the client gets no contact details, no scores and no brows
   assert.equal(profile.json.contactsHidden, true);
   const everything = [profile.text, (await get("dashboard")).text, (await get("pipeline")).text].join("\n");
   for (const hidden of [w.asha.email, w.asha.phone, "linkedin.com/in/ashamukherjee", "INTERNAL-MATCH-REASON", "87.5", "81.25"]) assert.ok(!everything.includes(hidden), `client can see "${hidden}"`);
-  assert.equal((await get("matches", `?jd=${w.A.jdId}`)).json.code, "MANAGED_ONLY");
-  for (const action of ["unlock", "pipeline-add", "application-status", "params-request"]) {
-    const res = await call(company, "POST", `/api/portal/company/${action}`, { cookie, action, body: { ref: w.B.pipeline.candidate_ref, jdId: w.A.jdId } });
-    assert.equal(res.status, 403, action);
+  // Self-service is removed: there is no browsing, unlocking or adding candidates, for anyone's candidates.
+  assert.equal((await get("matches", `?jd=${w.A.jdId}`)).status, 404);
+  for (const action of ["unlock", "pipeline-add", "application-status", "params-request", "jd-service"]) {
+    const res = await call(company, "POST", `/api/portal/company/${action}`, { cookie, action, body: { ref: w.B.pipeline.candidate_ref, jdId: w.A.jdId, service: "self" } });
+    assert.equal(res.status, 404, action);
   }
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM pipeline WHERE company_id = ? AND candidate_id = ?").get(w.A.id, w.bikram.id).n, 0);
   // From the offer stage the client does get the contact details.
   await mods.client.moveStage(w.db, w.A.id, w.A.userId, w.A.pipeline.id, { stage: "shortlisted" });
   await mods.client.moveStage(w.db, w.A.id, w.A.userId, w.A.pipeline.id, { stage: "offered", offerCtcInr: 420000 });
@@ -243,7 +245,7 @@ test("only the company owner manages the team", async () => {
   const invited = await mods.client.inviteMember(w.db, w.A.id, w.A.userId, "recruiter@alpha-steel.example", "Recruiter");
   await mods.accounts.redeemToken(w.db, invited.token, "invite", "harbour lantern 4471 quiet");
   const cookie = await portalCookie("recruiter@alpha-steel.example");
-  for (const [action, body] of [["team-invite", { email: "x@alpha-steel.example", name: "x" }], ["team-remove", { memberId: w.A.userId }], ["team-reinvite", { memberId: w.A.userId }], ["params-request", { params: {} }]])
+  for (const [action, body] of [["team-invite", { email: "x@alpha-steel.example", name: "x" }], ["team-remove", { memberId: w.A.userId }], ["team-reinvite", { memberId: w.A.userId }]])
     assert.equal((await call(company, "POST", `/api/portal/company/${action}`, { cookie, action, body })).status, 403, action);
   assert.equal((await w.db.prepare("SELECT status FROM portal_accounts WHERE id = ?").bind(w.A.userId).first()).status, "active");
 });

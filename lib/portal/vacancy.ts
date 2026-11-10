@@ -9,8 +9,6 @@
 
 import { audit, newId, nowIso, PortalError, type Db } from "./db";
 import { activateCompany, enqueue } from "./company";
-import { upsertPlans } from "./quota";
-import { DEFAULT_PLANS } from "./plans";
 import { parsePortalJd } from "./jd";
 import { ROLE_FAMILIES } from "./roles";
 import { SENIORITY_ORDER } from "./india";
@@ -27,9 +25,8 @@ export async function ensureHouseClient(db: Db, actor: string): Promise<string> 
   const row = await db.prepare("SELECT status FROM companies WHERE id = ?").bind(HOUSE_CLIENT_ID).first<{ status: string }>();
   if (row?.status === "active") return HOUSE_CLIENT_ID;
   if (!row) await db.prepare("INSERT OR IGNORE INTO companies (id, legal_name, display_name, city, status, notes, created_at) VALUES (?, 'Jobboard300', 'Jobboard300', '', 'applied', 'House client: holds website roles that belong to no client.', ?)").bind(HOUSE_CLIENT_ID, nowIso()).run();
-  if (!(await db.prepare("SELECT COUNT(*) AS n FROM plans").first<{ n: number }>())?.n) await upsertPlans(db, DEFAULT_PLANS);
   if (row && row.status !== "applied") throw new PortalError("COMPANY_NOT_ACTIVE", "The house client (Jobboard300) is suspended. Reactivate it under Job portal → Companies first.");
-  await activateCompany(db, HOUSE_CLIENT_ID, HOUSE_PARAMS, actor, "free");
+  await activateCompany(db, HOUSE_CLIENT_ID, HOUSE_PARAMS, actor);
   return HOUSE_CLIENT_ID;
 }
 

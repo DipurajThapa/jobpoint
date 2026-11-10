@@ -33,12 +33,17 @@ export function similarity(a: string, b: string): number {
   return same / (a.length / 8);
 }
 
+/** Contact details as stored on the candidate record. */
+export const contactEmail = (value: string | null | undefined) => (value ?? "").trim().toLowerCase().slice(0, 254);
+export const contactPhone = (value: string | null | undefined) => (value ?? "").trim().replace(/[^\d+\-() ]/g, "").slice(0, 30);
+
 export async function createCandidate(db: Db, input: { accountId: string | null; displayName: string; email: string; phone: string; currentCity?: string }) {
   const id = newId(), at = nowIso();
   const emailHash = input.email ? await sha256Hex(normEmail(input.email)) : "";
   const phoneHash = normPhone(input.phone).length === 10 ? await sha256Hex(normPhone(input.phone)) : "";
-  await db.prepare("INSERT INTO candidates (id, account_id, display_name, current_city, dedupe_email_hash, dedupe_phone_hash, last_active_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, input.accountId, input.displayName.trim().slice(0, 120), (input.currentCity ?? "").slice(0, 80), emailHash, phoneHash, at, at).run();
+  // The email and phone are kept on the record so the person can be contacted; the hashes find duplicates.
+  await db.prepare("INSERT INTO candidates (id, account_id, display_name, current_city, email, phone, dedupe_email_hash, dedupe_phone_hash, last_active_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, input.accountId, input.displayName.trim().slice(0, 120), (input.currentCity ?? "").slice(0, 80), contactEmail(input.email), contactPhone(input.phone), emailHash, phoneHash, at, at).run();
   // Duplicate accounts: same normalised email or phone as another live candidate.
   const { results } = await db.prepare("SELECT id, CASE WHEN dedupe_email_hash = ? AND ? != '' THEN 'same_email' ELSE 'same_phone' END AS signal FROM candidates WHERE id != ? AND status NOT IN ('merged','deleted') AND ((dedupe_email_hash = ? AND ? != '') OR (dedupe_phone_hash = ? AND ? != ''))")
     .bind(emailHash, emailHash, id, emailHash, emailHash, phoneHash, phoneHash).all<{ id: string; signal: string }>();
@@ -143,8 +148,6 @@ export async function mergeCandidates(db: Db, survivorId: string, duplicateId: s
 export const CANDIDATE_DATA: Record<string, "erase" | "keep"> = {
   cvs: "erase", matches: "erase", pipeline: "erase", portal_applications: "erase",
   adaptive_tests: "erase", orders: "erase",
-  // Retired by merges 4 and 5: no longer written, still erased with the person.
-  retired_assessment_attempts: "erase", retired_service_orders: "erase", retired_service_enrolments: "erase",
   candidate_commitments: "erase", shortlist_passes: "erase", candidate_sources: "erase",
   candidate_consents: "keep", // the consent ledger must be kept for at least a year (DPDP Rules)
   unlocks: "keep",            // the record of which companies received the CV
@@ -159,7 +162,6 @@ export async function eraseWebsiteApplications(db: Db, applicationIds: string[])
     const row = await db.prepare("SELECT resume_key FROM applications WHERE id = ?").bind(id).first<{ resume_key: string | null }>();
     if (row?.resume_key) keys.push(row.resume_key);
     await db.batch([
-      db.prepare("DELETE FROM retired_ats_screenings WHERE application_id = ?").bind(id),
       db.prepare("DELETE FROM candidate_sources WHERE kind = 'website_application' AND ref_id = ?").bind(id),
       db.prepare("DELETE FROM applications WHERE id = ?").bind(id),
     ]);
@@ -197,8 +199,7 @@ export async function deleteCandidateData(db: Db, candidateId: string, actor: st
     db.prepare("DELETE FROM score_queue WHERE kind = 'candidate' AND ref_id = ?").bind(candidateId),
     db.prepare("DELETE FROM duplicate_flags WHERE a_id = ? OR b_id = ?").bind(candidateId, candidateId),
     db.prepare("DELETE FROM abuse_flags WHERE subject_kind = 'candidate' AND subject_id = ?").bind(candidateId),
-    db.prepare("DELETE FROM retired_payment_intents WHERE payer_kind = 'candidate' AND payer_id = ?").bind(candidateId),
-    db.prepare("UPDATE candidates SET status = 'deleted', account_id = NULL, display_name = '', current_city = '', preferred_cities = '[]', hidden_company_ids = '[]', hidden_company_names = '[]', dedupe_email_hash = '', dedupe_phone_hash = '', merged_into = NULL, fast_track_at = NULL, last_active_at = ? WHERE id = ?").bind(at, candidateId),
+    db.prepare("UPDATE candidates SET status = 'deleted', account_id = NULL, display_name = '', email = '', phone = '', current_city = '', preferred_cities = '[]', hidden_company_ids = '[]', hidden_company_names = '[]', dedupe_email_hash = '', dedupe_phone_hash = '', merged_into = NULL, fast_track_at = NULL, last_active_at = ? WHERE id = ?").bind(at, candidateId),
     ...(account?.account_id ? [db.prepare("UPDATE portal_accounts SET status = 'deleted', email = 'deleted-' || id || '@invalid', phone = '', password_hash = NULL WHERE id = ?").bind(account.account_id), db.prepare("DELETE FROM portal_sessions WHERE account_id = ?").bind(account.account_id), db.prepare("DELETE FROM portal_tokens WHERE account_id = ?").bind(account.account_id)] : []),
   ]);
   await audit(db, actor, "candidate.deleted", "candidate", candidateId, `${results.length} CV file(s) and ${apps.length} website application(s) erased`);

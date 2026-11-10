@@ -89,7 +89,7 @@ export async function POST(request: Request, context: Ctx) {
       if (purpose === "service_offers") { await recordConsent(db, id, purpose, "withdrawn", ip); return json({ message: "You will not receive service offers." }); }
       const { companiesToNotify } = await withdrawSharing(db, id, account.id, ip);
       await notifyCompanies(db, companiesToNotify);
-      return json({ message: "Sharing stopped. Companies can no longer see your profile, and companies that unlocked it have been asked to delete their copies." });
+      return json({ message: "Sharing stopped. Companies can no longer see your profile, and companies that received it have been asked to delete their copies." });
     }
     if (action === "block") {
       // The candidate types an employer's name. The reply is the same whether or not that employer is a client.
@@ -123,7 +123,7 @@ export async function POST(request: Request, context: Ctx) {
   } catch (error) { return failFrom(error); }
 }
 
-/** Ask companies that unlocked the CV to delete their copies (contractual duty). */
+/** Ask companies that received the CV to delete their copies (contractual duty). */
 async function notifyCompanies(db: ReturnType<typeof portalDb>, companyIds: string[]) {
   for (const companyId of companyIds) {
     const { results } = await db.prepare("SELECT a.email FROM company_users cu JOIN portal_accounts a ON a.id = cu.account_id WHERE cu.company_id = ? AND a.status = 'active'").bind(companyId).all<{ email: string }>();

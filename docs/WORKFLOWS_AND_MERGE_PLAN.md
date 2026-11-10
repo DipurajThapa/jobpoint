@@ -79,11 +79,18 @@ and tests. They are ordered so each one makes the next smaller.
 | 5 | **Done** (migration `0018`). `fast_track_orders` is now `orders` with a `kind`; a later paid service is a new kind. The unused services catalogue and payment stub are renamed `retired_…`, not dropped. |
 | 1 | **Done** (no migration). A website-only record is merged into a portal account's record once the portal has verified the same email: at verification, and at each sign-in for records made earlier. A website form sent later with a verified account's email joins that record as an application only; its ticks and CV are not applied to the account, and the person is told in their inbox. The application row keeps the details typed into the form, as the record of what was submitted: the candidate table stores no email or phone by design, only a one-way match code. |
 | 2 | **Done** (migration `0019`). Every website role is one vacancy: a client job (`jds`) with the same id, under the client chosen when posting or the house client "Jobboard300". `jobs` is now only that vacancy's website listing. Publishing, unpublishing or closing a role moves the same vacancy. Roles posted earlier get their vacancy record when the owner opens "Open roles". A website application to a role enters that job's shortlist in the Recruiting tool, is scored for that role only unless the person ticked the general matching box, and can be submitted to that role's client only if they ticked the sharing box for it. The owner console's 12-stage list is read-only (it shows the Recruiting tool's stage), and the CV screening tab is removed; its tables are renamed `retired_…`. |
-| 3 | **Not started: needs a yes or no.** The plan has no recommendation here. Remove self-service mode only if the placement-fee model is final; keep it (switched off, as now) if CV access might be sold later. |
+| 3 | **Done** (migration `0020`). The owner confirmed on 10 Nov 2026 that the placement-fee model is final. Removed: browsing matches, unlocking, plans, subscriptions, the unlock quota, client parameter requests, automatic release after scoring, and the `CLIENT_SELF_SERVICE` switch. Every job is a managed search. `plans`, `company_subscriptions` and `quota_ledger` are dropped. `releases` and `unlocks` stay as the record of which client a recruiter showed which candidate; `company_parameters` stays as the matching rules the owner sets per client. |
 
-The `retired_…` tables hold whatever the old tables held. They are dropped in a
-later migration once the data inventory shows nothing in them is needed.
+The owner confirmed on 10 Nov 2026 that the site holds no live data, so
+migration `0020` drops every `retired_…` table.
 
-Before merges 1 to 5 I need one fact from the live database: the row counts of
-the tables being retired. Run the data inventory once this is live and
-paste me the text.
+**Contact details.** A candidate record now stores the person's email and phone
+(`candidates.email`, `candidates.phone`), filled at portal sign-up and from the
+website form, corrected with the application in the owner console, and cleared
+when the person is deleted. Staff read them through the logged, rate-limited
+contact view in the Recruiting tool.
+
+**Still to decide.** The portal's consent wording for "share with companies"
+(`lib/portal/notice.ts`) still describes the removed design: an anonymous summary
+shown automatically and a company unlocking the profile. It is legal text with a
+version, so it was not changed here.

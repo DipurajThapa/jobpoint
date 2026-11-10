@@ -4,7 +4,6 @@
 import { audit, newId, nowIso, parseJson, PortalError, type Db } from "./db";
 import { jdConflicts, sanitiseParams, type CompanyParams } from "./params";
 import { parsePortalJd, sanitisePortalRequirements, type JdInput, type PortalRequirements } from "./jd";
-import { assignPlan } from "./quota";
 import { FEE, REQUIREMENT_EDITS } from "./policy";
 
 export async function applyCompany(db: Db, input: { accountId: string; legalName: string; displayName: string; city: string; website?: string; gstin?: string }) {
@@ -22,8 +21,8 @@ export async function currentParams(db: Db, companyId: string): Promise<{ versio
   return row ? { version: row.version, params: parseJson<CompanyParams>(row.params, null as unknown as CompanyParams) } : null;
 }
 
-/** Admin onboarding: approve the company with its first parameter set and the free plan. */
-export async function activateCompany(db: Db, companyId: string, rawParams: unknown, adminId: string, planCode = "free") {
+/** Admin onboarding: approve the company with its first set of matching rules. */
+export async function activateCompany(db: Db, companyId: string, rawParams: unknown, adminId: string) {
   const company = await db.prepare("SELECT status FROM companies WHERE id = ?").bind(companyId).first<{ status: string }>();
   if (!company) throw new PortalError("NOT_FOUND", "Company not found.", 404);
   if (company.status === "active") throw new PortalError("ALREADY_ACTIVE", "The company is already active.");
@@ -35,8 +34,7 @@ export async function activateCompany(db: Db, companyId: string, rawParams: unkn
       .bind(newId(), companyId, JSON.stringify(params), adminId, adminId, at, at),
     db.prepare("UPDATE companies SET status = 'active' WHERE id = ?").bind(companyId),
   ]);
-  await assignPlan(db, companyId, planCode, adminId);
-  await audit(db, adminId, "company.activated", "company", companyId, `params v1, plan ${planCode}`);
+  await audit(db, adminId, "company.activated", "company", companyId, "params v1");
 }
 
 /** A company asks for different parameters. Nothing changes until the admin approves. */

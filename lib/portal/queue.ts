@@ -1,14 +1,13 @@
 // Scoring work queue. Every CV upload or correction, JD approval or change,
 // parameter approval, application and assessment result enqueues work; the
 // queue is drained in small, request-sized batches (and by a cron if the host
-// provides one), then releases are re-evaluated for every affected JD.
+// provides one). Nothing is shown to a client by scoring: a recruiter submits.
 
 import { nowIso, parseJson, type Db } from "./db";
 import { ACTIVE_CONSENT_SQL } from "./consent";
 import { currentParams } from "./company";
 import { adaptiveEvidence } from "./adaptive";
 import { scoreMatch, type MatchResult } from "./match";
-import { runReleases } from "./release";
 import type { PortalProfile } from "./profile";
 import type { PortalRequirements } from "./jd";
 
@@ -102,8 +101,6 @@ export async function drainQueue(db: Db, secret: string, maxPairs = MAX_PAIRS_PE
     await db.prepare("DELETE FROM score_queue WHERE id = ?").bind(item.id).run();
     done++;
   }
-  const releases: Record<string, unknown> = {};
-  for (const jdId of touched) releases[jdId] = await runReleases(db, jdId, secret);
   const left = await db.prepare("SELECT COUNT(*) AS n FROM score_queue").first<{ n: number }>();
-  return { processed: done, pairs, remaining: left?.n ?? 0, releases };
+  return { processed: done, pairs, remaining: left?.n ?? 0, jobs: touched.size };
 }

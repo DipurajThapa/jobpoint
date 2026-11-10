@@ -36,13 +36,6 @@ async function fillEverything(w, person, co) {
   await db.prepare("INSERT INTO orders (id, candidate_id, reference, amount_inr, created_at) VALUES (?, ?, ?, 499, ?)").bind(`ft-${tag}`, id, `FT-${tag}`, at).run();
   await db.prepare("UPDATE candidates SET fast_track_at = ? WHERE id = ?").bind(at, id).run();
   await db.prepare("INSERT INTO shortlist_passes (id, jd_id, candidate_id, staff_id, reason, note, created_at) VALUES (?, 'other-jd', ?, 'rec', 'other', ?, ?)").bind(`sp-${tag}`, id, `${person.name} did not answer`, at).run();
-  await db.prepare("INSERT INTO retired_assessments (id, owner_kind, title, items_per_form, time_limit_sec, status, created_by, created_at) VALUES (?, 'platform', 'Excel', 5, 600, 'approved', 'admin', ?)").bind(`as-${tag}`, at).run();
-  await db.prepare("INSERT INTO retired_assessment_attempts (id, assessment_id, candidate_id, form, started_at, deadline_at, status, items) VALUES (?, ?, ?, '[]', ?, ?, 'submitted', 5)").bind(`at-${tag}`, `as-${tag}`, id, at, at).run();
-  await db.prepare("INSERT INTO retired_assessment_responses (attempt_id, item_id, position) VALUES (?, 'i', 1)").bind(`at-${tag}`).run();
-  await db.prepare("INSERT INTO retired_services (id, code, category, name, created_at) VALUES (?, ?, 'cv_writing', 'CV writing', ?)").bind(`sv-${tag}`, `sv-${tag}`, at).run();
-  await db.prepare("INSERT INTO retired_service_orders (id, candidate_id, service_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").bind(`so-${tag}`, id, `sv-${tag}`, at, at).run();
-  await db.prepare("INSERT INTO retired_service_enrolments (id, order_id, candidate_id, created_at) VALUES (?, ?, ?, ?)").bind(`se-${tag}`, `so-${tag}`, id, at).run();
-  await db.prepare("INSERT INTO retired_payment_intents (id, payer_kind, payer_id, purpose, ref_id, amount_inr, created_at) VALUES (?, 'candidate', ?, 'service_order', 'x', 499, ?)").bind(`pi-${tag}`, id, at).run();
   await db.prepare("INSERT INTO duplicate_flags (id, kind, a_id, b_id, signal, created_at) VALUES (?, 'account', ?, 'someone-else', 'same_phone', ?)").bind(`df-${tag}`, id, at).run();
   await db.prepare("INSERT INTO abuse_flags (id, subject_kind, subject_id, rule, detail, created_at) VALUES (?, 'candidate', ?, 'rate:cv_upload', ?, ?)").bind(`af-${tag}`, id, `${person.email} uploaded too often`, at).run();
   await db.prepare("INSERT INTO messages (id, channel, recipient_kind, recipient_id, kind, body, status, created_at) VALUES (?, 'whatsapp', 'candidate', ?, 'x', ?, 'queued', ?)").bind(`om-${tag}`, id, `Hello ${person.name}`, at).run();
@@ -55,8 +48,6 @@ async function websiteApplication(w, id, name, email, phone) {
   await w.BUCKET.put(key, new TextEncoder().encode(`website CV of ${name}`));
   await w.db.prepare("INSERT INTO applications (id, full_name, email, phone, location, experience, consent, future_consent, resume_key, resume_name, recruiter_notes) VALUES (?, ?, ?, ?, 'Kolkata', ?, 1, 1, ?, 'cv.pdf', ?)")
     .bind(id, name, email, phone, `${name} has five years in accounts`, key, `${name} sounded keen on the phone`).run();
-  await w.db.prepare("INSERT INTO retired_ats_screenings (id, application_id, method, engine_version, cv_sha256, score, verdict, profile, requirements, result, created_at, created_by) VALUES (?, ?, 'rules', 't', 'x', 70, 'possible', ?, '{}', '{}', ?, 'owner')")
-    .bind(`scr-${id}`, id, JSON.stringify({ contact: { name, email, phone } }), new Date().toISOString()).run();
   return key;
 }
 
@@ -66,7 +57,7 @@ test("every table that holds a candidate id has a stated deletion rule", async (
   const rules = mods.candidate.CANDIDATE_DATA;
   for (const table of withCandidate) assert.ok(rules[table], `table "${table}" has a candidate_id column but no rule in CANDIDATE_DATA (erase or keep)`);
   for (const table of Object.keys(rules)) assert.ok(withCandidate.includes(table), `CANDIDATE_DATA names "${table}", which has no candidate_id column`);
-  assert.ok(withCandidate.length >= 15);
+  assert.ok(withCandidate.length >= 12);
   // The only records allowed to outlive a deletion. Adding to this list is a privacy decision, so the test holds its own copy.
   assert.deepEqual(Object.entries(rules).filter(([, rule]) => rule === "keep").map(([t]) => t).sort(), KEPT);
 });
@@ -159,7 +150,6 @@ test("a verified deletion request erases the person from both the website record
   assert.equal((await patch("pr-del", done)).status, 409, "a second erasure of the same request must be refused");
   // Nobody else was touched.
   assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM applications WHERE id = 'app-other'").first()).n, 1);
-  assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM retired_ats_screenings WHERE application_id = 'app-other'").first()).n, 1);
   for (const person of [w.asha, w.bikram]) assert.equal((await w.db.prepare("SELECT status FROM candidates WHERE id = ?").bind(person.id).first()).status, "active");
 });
 

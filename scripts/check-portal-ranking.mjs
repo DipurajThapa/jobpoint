@@ -19,8 +19,7 @@ export async function resolve(specifier, context, next) {
 }`));
 const root = resolve(import.meta.dirname, "..");
 const mod = name => import(resolve(root, "lib/portal", name));
-const [dbm, quota, company, candidate, consent, ingest, queue, views] = await Promise.all(["db.ts", "quota.ts", "company.ts", "candidate.ts", "consent.ts", "ingest.ts", "queue.ts", "views.ts"].map(mod));
-const { DEFAULT_PLANS } = await mod("plans.ts");
+const [dbm, company, candidate, consent, ingest, queue, client] = await Promise.all(["db.ts", "company.ts", "candidate.ts", "consent.ts", "ingest.ts", "queue.ts", "client.ts"].map(mod));
 dbm.setClock(() => new Date("2026-11-09T06:00:00Z"));
 const SECRET = "ranking-check-secret-ranking-check-secret";
 
@@ -55,7 +54,6 @@ function docx(text) {
 
 // ---------- Build the portal ----------
 const db = createD1(root);
-await quota.upsertPlans(db, DEFAULT_PLANS);
 const companyIds = {}, jdIds = {};
 for (const c of COMPANIES) {
   const { createAccount } = await mod("accounts.ts");
@@ -100,7 +98,9 @@ for (const jd of JDS) {
   const ideal = Object.values(jd.relevance).sort((a, b) => b - a).slice(0, 10);
   const ndcg = dcg(top10) / (dcg(ideal) || 1);
   const p5 = ranked.slice(0, 5).filter(r => rel(r) >= 2).length / Math.max(1, Math.min(5, ranked.length));
-  const released = (await db.prepare("SELECT candidate_id FROM releases WHERE jd_id = ? AND revoked_at IS NULL").bind(id).all()).results.map(r => r.candidate_id);
+  // "Released" here means clearing the client's shortlist bar (hard filters passed and the lower bound at or above the
+  // minimum score). Nothing reaches a client automatically any more: a recruiter submits from this shortlist.
+  const released = ranked.filter(r => r.lower_bound >= params.minScore).slice(0, params.maxReleasePerJd).map(r => r.candidate_id);
   const relPrecision = released.length ? released.filter(c => (jd.relevance[byCand[c].key] ?? 0) >= 2).length / released.length : 1;
   const strongMissed = Object.entries(jd.relevance).filter(([k, r]) => r >= 2 && !released.includes(candIds[k])).map(([k]) => k);
   summary.push({ jd: jd.key, eligible: ranked.length, released: released.length, p5: +p5.toFixed(2), ndcg10: +ndcg.toFixed(2), releasePrecision: +relPrecision.toFixed(2), strongNotReleased: strongMissed.join(", ") });
@@ -124,20 +124,17 @@ const stuffed = await db.prepare("SELECT score, hard_pass FROM matches WHERE jd_
 assert.ok(!stuffed || stuffed.hard_pass === 0 || stuffed.score < 60, `keyword-stuffed support CV is not an accounts match: ${JSON.stringify(stuffed)}`);
 const leaks = [];
 for (const jd of JDS) {
-  const out = await views.companyMatches(db, companyIds[jd.company], jdIds[jd.key]);
-  for (const m of out.matches) {
-    const cand = Object.values(byCand).find(c => c.profile && JSON.stringify(m).length && candIds[c.key] && true);
-    void cand;
-  }
-  const text = JSON.stringify(out.matches);
+  // What a recruiter sees in the shortlist: a summary for every row, and no contact details in it.
+  const shortlist = await client.submissionCandidates(db, jdIds[jd.key]);
+  const text = JSON.stringify(shortlist.map(r => r.explanation));
   for (const cv of CVS) {
     const email = cv.text.match(/[A-Za-z0-9._%+-]+@example\.(?:com|in)/)?.[0];
     const phone = cv.text.match(/\+91 90000 1\d{4}/)?.[0];
     if ((email && text.includes(email)) || (phone && text.includes(phone))) leaks.push(`${jd.key}:${cv.key}`);
   }
-  for (const m of out.matches) assert.ok(m.explanation.summary && m.explanation.why, "every released CV carries an explanation");
+  for (const r of shortlist) assert.ok(r.explanation, "every shortlisted CV carries an explanation");
 }
-assert.deepEqual(leaks, [], `contact details leaked into previews: ${leaks}`);
+assert.deepEqual(leaks, [], `contact details leaked into shortlist summaries: ${leaks}`);
 for (const s of summary) assert.ok(s.p5 >= 0.6 && s.ndcg10 >= 0.6 && s.releasePrecision >= 0.75, `ranking quality too low for ${s.jd}: ${JSON.stringify(s)}`);
 lines.push("Edge cases: scanned CVs are in manual review; the duplicate pair is flagged; the keyword-stuffed support CV is not an accounts match; previews contain no contact details.");
 if (process.argv[2]) writeFileSync(resolve(process.argv[2]), lines.join("\n") + "\n");
