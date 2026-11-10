@@ -2,7 +2,7 @@
 
 Working Platform is the internal team area of the Jobboard300 website. Team
 members open **`/platform`** (for example
-`https://job-point-consultancy.dippurajthapa.chatgpt.site/platform`), sign in,
+`https://jobboard300.dippurajthapa.chatgpt.site/platform`), sign in,
 and see only the tools an administrator has given them. The first tool is
 **Email Kit** (formerly Usha).
 

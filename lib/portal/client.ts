@@ -15,6 +15,7 @@ import { audit, candidateRef, newId, now, nowIso, parseJson, PortalError, type D
 import { ACTIVE_CONSENT_SQL, consentActive } from "./consent";
 import { issuePortalToken } from "./accounts";
 import { activateCompany, currentParams } from "./company";
+import { notifyCandidate, notifyCompany, notifyStage } from "./notify";
 
 export const STAGES = ["submitted", "shortlisted", "interview", "offered", "offer_accepted", "joined", "rejected", "offer_declined", "no_show", "withdrawn"] as const;
 export type Stage = typeof STAGES[number];
@@ -200,6 +201,7 @@ export async function addToPipeline(db: Db, companyId: string, actorId: string, 
     db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, at) VALUES (?, ?, 'shortlisted', ?, ?)").bind(newId(), id, actorLabel(actorId), at),
     ...await syncApplication(db, u.candidate_id, jdId, "shortlisted", actorLabel(actorId), { pipelineId: id, at }),
   ]);
+  await notifyStage(db, { candidateId: u.candidate_id, companyId, jdId, stage: "shortlisted", byStaff: false });
   return { id, created: true };
 }
 
@@ -241,6 +243,8 @@ export async function submitByRecruiter(db: Db, secret: string, input: { company
     db.prepare("INSERT INTO access_log (id, actor_kind, actor_id, company_id, action, jd_id, candidate_ref, ip_hash, at) VALUES (?, 'admin', ?, ?, 'submit', ?, ?, '', ?)").bind(newId(), adminId, companyId, jdId, ref, at),
   ]);
   await audit(db, adminId, "candidate.submitted", "company", companyId, `jd ${jdId}, ref ${ref}`);
+  await notifyCandidate(db, candidateId, "stage.submitted", `Your profile was put forward for ${jd.title}`, "A Jobboard300 recruiter reviewed your CV and shared it with the employer for this role. We will tell you what they decide.", companyId);
+  await notifyCompany(db, companyId, "submission", `New candidate for ${jd.title}`, "Jobboard300 has submitted a candidate with a recruiter's note. Review them in your pipeline.");
   return { id, ref };
 }
 
@@ -292,6 +296,7 @@ export async function moveStage(db: Db, companyId: string, actorId: string, pipe
   const results = await db.batch(statements) as { meta: { changes?: number } }[];
   if (!results[0]?.meta.changes) throw new PortalError("CONFLICT", "Someone else updated this candidate just now. Reload and try again.", 409);
   await audit(db, actorId, "pipeline.stage", "pipeline", row.id, `${row.stage} → ${stage}`);
+  await notifyStage(db, { candidateId: row.candidate_id, companyId, jdId: row.jd_id, stage, byStaff: actorId.startsWith("staff:") });
   return { stage };
 }
 
@@ -317,6 +322,11 @@ export async function scheduleInterview(db: Db, companyId: string, actorId: stri
       ...await syncApplication(db, row.candidate_id, row.jd_id, "interview", actorLabel(actorId), { pipelineId: row.id, at }),
     ] : []),
   ]);
+  const jdTitle = (await db.prepare("SELECT title FROM jds WHERE id = ?").bind(row.jd_id).first<{ title: string }>())?.title ?? "your application";
+  const whenText = new Date(when).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit" });
+  const where = (input.location ?? "").trim();
+  await notifyCandidate(db, row.candidate_id, "interview.scheduled", `Interview for ${jdTitle}: ${round}`, `${whenText} India time, ${input.mode === "in_person" ? "in person" : input.mode === "phone" ? "by phone" : "by video"}${where ? `. ${input.mode === "in_person" ? "Address" : "Link"}: ${where.slice(0, 300)}` : ""}. Reply to your recruiter if you cannot attend.`, companyId);
+  if (actorId.startsWith("staff:")) await notifyCompany(db, companyId, "interview.scheduled", `Interview scheduled for ${jdTitle}`, `Jobboard300 scheduled “${round}” on ${whenText} India time.`);
   return { id };
 }
 

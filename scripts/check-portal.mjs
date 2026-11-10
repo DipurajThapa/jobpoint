@@ -32,6 +32,7 @@ const queue = await mod("queue.ts");
 const client = await mod("client.ts");
 const website = await mod("website.ts");
 const staffMod = await mod("staff.ts");
+const notify = await mod("notify.ts");
 
 const SECRET = "test-secret-test-secret-test-secret-123";
 let clock = new Date("2026-11-09T06:00:00Z");
@@ -844,6 +845,85 @@ await check("A recruiter can submit, update stages and schedule interviews only 
   const actors = (await t.db.prepare("SELECT actor FROM pipeline_events WHERE pipeline_id = ? ORDER BY rowid").bind(sub.id).all()).results.map(r => r.actor);
   assert.ok(actors.includes(`staff:${t.recA.id}`), "history records which staff member acted");
   assert.equal((await client.pipelineView(t.db, t.compK.id))[0].stage, "interview", "the client sees the same pipeline");
+});
+
+// ---------- notifications ----------
+const kinds = async (db, id) => (await notify.candidateInbox(db, id)).map(m => m.kind).reverse();
+
+await check("Each hiring event writes exactly one inbox message for the right candidate, with the outcome only", async () => {
+  const t = await staffSetup();
+  await client.setJdService(t.db, t.compK.id, t.jdK, "managed", 1, t.compK.userId);
+  const cand = await makeCandidate(t.db, "Inbox Candidate"), other = await makeCandidate(t.db, "Other Candidate");
+  const sub = await staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: cand, note: "Private recruiter note: salary flexible" });
+  await staffMod.staffMoveStage(t.db, t.recA, sub.id, { stage: "shortlisted" });
+  const iv = await staffMod.staffScheduleInterview(t.db, t.recA, sub.id, { round: "Technical 1", scheduledAt: "2026-11-20T05:30:00Z", mode: "video", location: "https://meet.example/x" });
+  await client.recordInterview(t.db, t.compK.id, t.compK.userId, iv.id, { status: "completed", outcome: "reject", rating: 2, feedback: "Weak on reconciliation" });
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "rejected", reason: "skills_gap", note: "Internal: not strong enough" });
+  assert.deepEqual(await kinds(t.db, cand), ["stage.submitted", "stage.shortlisted", "interview.scheduled", "stage.rejected"]);
+  assert.equal((await notify.candidateInbox(t.db, other)).length, 0, "nobody else is told");
+  const text = JSON.stringify(await notify.candidateInbox(t.db, cand));
+  for (const secret of ["Private recruiter note", "Weak on reconciliation", "Internal: not strong", "skills_gap", "rating"]) assert.ok(!text.includes(secret), `inbox never carries ${secret}`);
+  assert.ok(text.includes("11:00") && text.includes("https://meet.example/x"), "the interview message gives India time and the link");
+  const notices = (await notify.companyNotices(t.db, t.compK.id)).map(n => n.kind).reverse();
+  assert.deepEqual(notices, ["submission", "stage.shortlisted", "interview.scheduled"], "the client is told about staff updates, not about its own");
+  assert.equal((await notify.companyNotices(t.db, t.compF.id)).length, 0);
+  await notify.markInboxRead(t.db, cand);
+  assert.ok((await notify.candidateInbox(t.db, cand)).every(m => m.read_at));
+});
+
+await check("CV intake and applications message the candidate, naming what is missing", async () => {
+  const db = await setup();
+  const cand = await candidate.createCandidate(db, { accountId: null, displayName: "Riya Sen", email: "riya.inbox@example.com", phone: "" });
+  const ingest = await mod("ingest.ts");
+  await ingest.ingestCv(db, null, cand, { bytes: accountantPdf, fileName: "riya-sen.pdf" });
+  const first = (await notify.candidateInbox(db, cand))[0];
+  assert.ok(["cv.received", "cv.incomplete"].includes(first.kind));
+  if (first.kind === "cv.incomplete") assert.match(first.body, /expected CTC|notice period|current city/);
+  const comp = await makeCompany(db); const jd = await liveJd(db, comp);
+  await consent.recordConsent(db, cand, "share_with_companies", "granted");
+  await candidate.applyToJd(db, cand, jd);
+  assert.equal((await kinds(db, cand)).at(-1), "application.received");
+});
+
+await check("WhatsApp sender: the client's team number first, admin as fallback, admin override wins; nothing is sent without a provider", async () => {
+  const t = await staffSetup();
+  const cand = await makeCandidate(t.db, "Queue Candidate");
+  const last = async () => t.db.prepare("SELECT sender_scope, status, status_detail FROM outbound_messages ORDER BY rowid DESC LIMIT 1").first();
+  await notify.notifyCandidate(t.db, cand, "test", "T", "B", t.compK.id);
+  assert.deepEqual([(await last()).status, (await last()).sender_scope], ["skipped", ""], "no number configured: recorded, not sent");
+  await rejects(staffMod.setStaffMessaging(t.db, t.mgrK, "admin", { number: "+919830012345", enabled: true }), "ADMIN_ONLY");
+  await rejects(staffMod.setStaffMessaging(t.db, t.mgrK, "team:franchise", { number: "+919830012345", enabled: true }), "NOT_FOUND");
+  await rejects(staffMod.setStaffMessaging(t.db, t.recA, "team:kolkata", { number: "+919830012345", enabled: true }), "NOT_FOUND");
+  await rejects(staffMod.setStaffMessaging(t.db, t.mgrK, "team:kolkata", { number: "12", enabled: true }), "NUMBER");
+  await staffMod.setStaffMessaging(t.db, t.admin, "admin", { number: "+91 90000 00001", enabled: true });
+  assert.equal((await notify.resolveSender(t.db, t.compK.id)).scope, "admin", "admin number is the fallback");
+  await staffMod.setStaffMessaging(t.db, t.mgrK, "team:kolkata", { number: "+91 98300 12345", enabled: true });
+  assert.deepEqual(await notify.resolveSender(t.db, t.compK.id), { scope: "team:kolkata", number: "+919830012345" }, "the team's own number takes priority");
+  assert.equal((await notify.resolveSender(t.db, t.compF.id)).scope, "admin", "another team falls back to admin");
+  await notify.notifyCandidate(t.db, cand, "test", "T", "B", t.compK.id);
+  assert.deepEqual([(await last()).status, (await last()).sender_scope], ["queued", "team:kolkata"]);
+  await staffMod.setStaffMessaging(t.db, t.admin, "admin", { number: "+91 90000 00001", enabled: true, override: true });
+  assert.equal((await notify.resolveSender(t.db, t.compK.id)).scope, "admin", "admin override wins");
+  assert.equal((await t.db.prepare("SELECT COUNT(*) AS n FROM outbound_messages WHERE status = 'sent'").first()).n, 0);
+  const seen = await staffMod.staffMessaging(t.db, t.mgrK);
+  assert.deepEqual(seen.scopes.map(x => x.scope), ["team:kolkata"], "a manager sees only their own team's set-up");
+});
+
+await check("A manager manages only their own team's members; deleting a candidate removes their messages", async () => {
+  const t = await staffSetup();
+  assert.equal(await staffMod.canManageTeam(t.db, t.mgrK, "kolkata"), true);
+  assert.equal(await staffMod.canManageTeam(t.db, t.mgrK, "franchise"), false);
+  assert.equal(await staffMod.canManageTeam(t.db, t.recA, "kolkata"), false);
+  await staffMod.assignJobRecruiter(t.db, t.mgrK, t.jdK, t.recA.id);
+  await rejects(staffMod.removeTeamMember(t.db, t.mgrK, "franchise", t.recF.id), "NOT_FOUND");
+  await rejects(staffMod.removeTeamMember(t.db, t.mgrK, "kolkata", t.mgrK.id), "SELF");
+  await staffMod.removeTeamMember(t.db, t.mgrK, "kolkata", t.recA.id);
+  assert.equal((await t.db.prepare("SELECT recruiter_id FROM jds WHERE id = ?").bind(t.jdK).first()).recruiter_id, null, "their job assignment is cleared");
+  assert.equal((await staffMod.staffWork(t.db, t.recA)).clients.length, 0, "a removed member sees nothing");
+  const cand = await makeCandidate(t.db, "Erase Me");
+  await notify.notifyCandidate(t.db, cand, "test", "T", "B");
+  await candidate.deleteCandidateData(t.db, cand, "candidate");
+  assert.equal((await t.db.prepare("SELECT (SELECT COUNT(*) FROM candidate_messages WHERE candidate_id = ?) + (SELECT COUNT(*) FROM outbound_messages WHERE recipient_id = ?) AS n").bind(cand, cand).first()).n, 0);
 });
 
 console.log(`\n${passed} portal checks passed.`);

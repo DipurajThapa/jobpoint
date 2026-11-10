@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { candidateInbox, markInboxRead, resolveSender } from "@/lib/portal/notify";
 import { portalDb, portalSecret, json, fail, failFrom, requireApi, ipHash } from "@/lib/portal/session";
 import { recordConsent, withdrawSharing, consentActive } from "@/lib/portal/consent";
 import { applyToJd, correctProfile, deleteCandidateData, primaryProfile } from "@/lib/portal/candidate";
@@ -26,6 +27,7 @@ export async function GET(request: Request, context: Ctx) {
       return json({ jobs: await candidateJobs(db, id, { city: url.searchParams.get("city") ?? undefined, role: url.searchParams.get("role") ?? undefined, minCtcInr: n("minCtc"), maxYears: n("maxYears") }) });
     }
     if (action === "applications") return json({ applications: await candidateApplications(db, id) });
+    if (action === "inbox") { const sender = await resolveSender(db, null); return json({ messages: await candidateInbox(db, id), whatsapp: sender?.number ?? "" }); }
     if (action === "profile") {
       const p = await primaryProfile(db, id);
       return json({ profile: p?.profile ?? null, status: p?.status ?? "none", sharing: await consentActive(db, id, "share_with_companies") });
@@ -105,6 +107,7 @@ export async function POST(request: Request, context: Ctx) {
       ]);
       return json({ message: body.block === false ? "Company unblocked." : "That company will not see your profile, even anonymously." });
     }
+    if (action === "inbox-read") { await markInboxRead(db, id); return json({ message: "ok" }); }
     if (action === "apply") { await applyToJd(db, id, String(body.jdId ?? "")); await drainQueue(db, portalSecret(), 300); return json({ message: "Application recorded." }); }
     if (action === "delete") {
       if (body.confirm !== "DELETE") return fail("Type DELETE to confirm.", 400, "CONFIRM");

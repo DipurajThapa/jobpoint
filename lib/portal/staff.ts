@@ -9,6 +9,7 @@
 // outside the caller's scope is reported as "not found", never "forbidden".
 
 import { audit, PortalError, type Db } from "./db";
+import { messagingFor, saveMessaging } from "./notify";
 import { moveStage, pipelineView, scheduleInterview, submissionCandidates, submitByRecruiter, type InterviewInput, type StageInput } from "./client";
 
 export type Staff = { id: string; admin: boolean };
@@ -124,4 +125,46 @@ export async function setTeamManager(db: Db, staff: Staff, teamId: string, userI
   const r = await db.prepare("UPDATE platform_team_members SET is_manager = ? WHERE team_id = ? AND user_id = ?").bind(manager ? 1 : 0, teamId, userId).run();
   if (!r.meta.changes) throw new PortalError("NOT_FOUND", "That person is not a member of the team.", 404);
   await audit(db, `staff:${staff.id}`, manager ? "team.manager_set" : "team.manager_removed", "team", teamId, userId);
+}
+
+// ---------------------------------------------------------------- team managers
+
+/** Admin, or the manager of this team. */
+export async function canManageTeam(db: Db, staff: Staff, teamId: string) {
+  if (staff.admin) return !!await db.prepare("SELECT id FROM platform_teams WHERE id = ?").bind(teamId).first();
+  return !!await db.prepare("SELECT 1 AS x FROM platform_team_members WHERE team_id = ? AND user_id = ? AND is_manager = 1").bind(teamId, staff.id).first();
+}
+
+/** A manager removes someone from their own team. The person's account stays; their job assignments in the team are cleared. */
+export async function removeTeamMember(db: Db, staff: Staff, teamId: string, userId: string) {
+  if (!await canManageTeam(db, staff, teamId)) throw new PortalError("NOT_FOUND", "Team not found.", 404);
+  if (userId === staff.id) throw new PortalError("SELF", "You cannot remove yourself from the team.");
+  const member = await db.prepare("SELECT is_manager FROM platform_team_members WHERE team_id = ? AND user_id = ?").bind(teamId, userId).first<{ is_manager: number }>();
+  if (!member) throw new PortalError("NOT_FOUND", "That person is not in the team.", 404);
+  if (member.is_manager && !staff.admin) throw new PortalError("ADMIN_ONLY", "Only an administrator can remove a team manager.", 403);
+  await db.batch([
+    db.prepare("DELETE FROM platform_team_members WHERE team_id = ? AND user_id = ?").bind(teamId, userId),
+    db.prepare("UPDATE jds SET recruiter_id = NULL WHERE recruiter_id = ? AND company_id IN (SELECT id FROM companies WHERE team_id = ?)").bind(userId, teamId),
+  ]);
+  await audit(db, `staff:${staff.id}`, "team.member_removed", "team", teamId, userId);
+}
+
+// ---------------------------------------------------------------- WhatsApp set-up
+
+/** WhatsApp set-ups this person may see: the admin sees the admin's and every team's; a manager sees their teams'. */
+export async function staffMessaging(db: Db, staff: Staff) {
+  const scope = await staffScope(db, staff);
+  const teams = scope.admin ? (await db.prepare("SELECT id, name FROM platform_teams ORDER BY name").all<{ id: string; name: string }>()).results
+    : scope.managedTeams.length ? (await db.prepare(`SELECT id, name FROM platform_teams WHERE id IN (${marks(scope.managedTeams)}) ORDER BY name`).bind(...scope.managedTeams).all<{ id: string; name: string }>()).results : [];
+  const scopes = [...(scope.admin ? ["admin"] : []), ...teams.map(t => `team:${t.id}`)];
+  const saved = await messagingFor(db, scopes);
+  const queue = scope.admin ? await db.prepare("SELECT status, COUNT(*) AS n FROM outbound_messages WHERE channel = 'whatsapp' GROUP BY status").all() : { results: [] };
+  return { scopes: scopes.map(s => ({ scope: s, label: s === "admin" ? "Jobboard300 (admin)" : teams.find(t => `team:${t.id}` === s)?.name ?? s, ...(saved.find(x => x.scope === s) ?? { whatsapp_number: "", whatsapp_enabled: 0, admin_override: 0 }) })), queue: queue.results };
+}
+
+export async function setStaffMessaging(db: Db, staff: Staff, scope: string, input: { number: string; enabled: boolean; override?: boolean }) {
+  if (scope === "admin") { if (!staff.admin) throw new PortalError("ADMIN_ONLY", "Only an administrator can change the main WhatsApp set-up.", 403); }
+  else if (!scope.startsWith("team:") || !await canManageTeam(db, staff, scope.slice(5))) throw new PortalError("NOT_FOUND", "Team not found.", 404);
+  await saveMessaging(db, scope, input, `staff:${staff.id}`);
+  await audit(db, `staff:${staff.id}`, "messaging.saved", "messaging", scope, input.enabled ? "enabled" : "disabled");
 }

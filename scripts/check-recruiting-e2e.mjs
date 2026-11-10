@@ -78,6 +78,21 @@ ok((await admin.post("/api/platform/recruiting/team-manager", { teamId: kolkata,
 ok((await noor.post("/api/platform/recruiting/assign-recruiter", { jdId: managed.id, userId: rinaId })).status() === 400, "a manager cannot assign a job to someone outside the team");
 ok((await noor.post("/api/platform/recruiting/assign-recruiter", { jdId: managed.id, userId: noorId })).ok(), "a manager assigns a job within the team");
 
+// Team managers invite their own staff and set their team's WhatsApp number.
+const inv = await noor.post("/api/platform/recruiting/team-invite", { teamId: kolkata, name: "New Recruiter", email: `new.${stamp}@example.test` });
+const invBody = await inv.json();
+ok(inv.status() === 201 && invBody.link.includes("/platform/accept?token="), "a team manager invites a recruiter into their own team and gets a one-time link");
+ok((await rina.post("/api/platform/recruiting/team-invite", { teamId: kolkata, name: "X", email: `x.${stamp}@example.test` })).status() === 404, "a recruiter from another team cannot invite into this team");
+ok((await noor.post("/api/platform/recruiting/team-invite", { teamId: franchise, name: "X", email: `y.${stamp}@example.test` })).status() === 404, "a manager cannot invite into another team");
+const accepted = await (await browser.newContext()).request.post(`${BASE}/api/platform/auth/accept`, { data: { token: new URL(invBody.link).searchParams.get("token"), name: "New Recruiter", password: PASSWORD }, headers: { origin: BASE } });
+const fresh = await signedIn(`new.${stamp}@example.test`, PASSWORD);
+const fw = await (await fresh.get("/api/platform/recruiting/work")).json();
+ok(accepted.ok() && fw.role === "recruiter" && fw.clients.length === 1 && fw.clients[0].id === ferro.id, "the invited recruiter signs in and sees only that team's client");
+ok((await fresh.get("/api/platform/email-kit/state")).status() === 403, "the invited recruiter has the Recruiting tool only");
+ok((await noor.post("/api/platform/recruiting/messaging", { scope: `team:${kolkata}`, number: "+91 98300 12345", enabled: true })).ok(), "a manager sets their team's WhatsApp number");
+ok((await noor.post("/api/platform/recruiting/messaging", { scope: "admin", number: "+91 90000 00001", enabled: true })).status() === 403 && (await rina.post("/api/platform/recruiting/messaging", { scope: `team:${kolkata}`, number: "+91 90000 00002", enabled: true })).status() === 404, "nobody else can change the admin's or another team's WhatsApp set-up");
+ok((await admin.post("/api/platform/recruiting/messaging", { scope: "admin", number: "+91 90000 00001", enabled: true, override: false })).ok(), "the admin sets the main WhatsApp number");
+
 const page = await noor.ctx.newPage();
 await page.goto(`${BASE}/platform/recruiting`, { waitUntil: "networkidle" });
 await page.getByRole("heading", { name: "Jobs" }).waitFor();
@@ -86,6 +101,8 @@ await page.locator(".pj-item", { has: page.getByText(managed.title, { exact: tru
 await page.getByText("Candidates to submit").waitFor();
 await page.getByText("Interviewing").first().waitFor();
 ok(true, "the job shows its pipeline with the updated stage");
+await page.getByRole("heading", { name: "WhatsApp set-up" }).waitFor();
+ok(await page.getByRole("heading", { name: "Invite a recruiter to your team" }).isVisible(), "the manager sees team invitations and the WhatsApp set-up");
 await page.screenshot({ path: `${OUT}/recruiting.png`, fullPage: true });
 await admin.ctx.request.fetch(`${BASE}/api/platform/admin/users/${rinaId}`, { method: "PATCH", data: { access: { recruiting: "none" } }, headers: { origin: BASE } });
 ok((await rina.get("/api/platform/recruiting/work")).status() === 403, "removing the tool removes access at once");

@@ -1,5 +1,6 @@
 // Candidate records, CV versions, duplicate detection and applications.
 
+import { notifyCandidate } from "./notify";
 import { audit, newId, nowIso, parseJson, PortalError, sha256Hex, type Db } from "./db";
 import { enqueue } from "./company";
 import { applyCorrection, type Correction, type PortalProfile } from "./profile";
@@ -146,6 +147,8 @@ export async function deleteCandidateData(db: Db, candidateId: string, actor: st
     // Pipeline notes and interview feedback are about the person: erased. A placement
     // row (company, role, dates, fee basis) is kept as the consultancy's business record.
     db.prepare("DELETE FROM pipeline WHERE candidate_id = ?").bind(candidateId),
+    db.prepare("DELETE FROM candidate_messages WHERE candidate_id = ?").bind(candidateId),
+    db.prepare("DELETE FROM outbound_messages WHERE recipient_kind = 'candidate' AND recipient_id = ?").bind(candidateId),
     db.prepare("DELETE FROM portal_applications WHERE candidate_id = ?").bind(candidateId),
     db.prepare("DELETE FROM assessment_attempts WHERE candidate_id = ?").bind(candidateId),
     db.prepare("DELETE FROM service_orders WHERE candidate_id = ?").bind(candidateId),
@@ -175,4 +178,6 @@ export async function applyToJd(db: Db, candidateId: string, jdId: string) {
     db.prepare("INSERT INTO portal_application_events (id, application_id, status, actor, at) SELECT ?, id, 'applied', 'candidate', ? FROM portal_applications WHERE candidate_id = ? AND jd_id = ?").bind(newId(), at, candidateId, jdId),
     enqueue(db, "jd", jdId, "application"),
   ]);
+  const job = await db.prepare("SELECT title, company_id FROM jds WHERE id = ?").bind(jdId).first<{ title: string; company_id: string }>();
+  await notifyCandidate(db, candidateId, "application.received", `Application received: ${job?.title ?? "job"}`, "We have your application. If your profile fits the role's requirements it is shared with the employer, and we will tell you each time its status changes.", job?.company_id ?? null);
 }

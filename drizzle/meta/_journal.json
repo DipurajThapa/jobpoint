@@ -64,6 +64,13 @@
       "when": 1794182800000,
       "tag": "0008_staff_assignment",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794182900000,
+      "tag": "0009_notifications",
+      "breakpoints": true
     }
   ]
 }

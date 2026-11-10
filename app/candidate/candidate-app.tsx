@@ -36,10 +36,28 @@ export default function CandidateApp() {
       {notice && <p className={`pj-notice ${notice.bad ? "bad" : "good"}`} role="status">{notice.text}</p>}
       {profile?.status === "needs_review" && <p className="pj-notice">We could not read your CV automatically. A Jobboard300 reviewer will check it shortly; nothing has been lost.</p>}
       {profile?.profile && <p className="pj-notice">{profile.sharing ? "Your CV is on file. When a role fits, Jobboard300 shares an anonymous summary with the employer, and a recruiter contacts you before anything else happens." : "Your CV is on file, but sharing with employers is off, so no employer can see your profile. You can turn it on below."}</p>}
+      <Inbox />
       <Cv data={profile} reload={loadProfile} say={say} />
       {profile?.profile && <Privacy data={profile} reload={loadProfile} say={say} />}
     </main>
   </>;
+}
+
+type Message = { id: string; kind: string; title: string; body: string; created_at: string; read_at: string | null };
+
+function Inbox() {
+  const [data, setData] = useState<{ messages: Message[]; whatsapp: string } | null>(null);
+  useEffect(() => {
+    get<{ messages: Message[]; whatsapp: string }>("/api/portal/candidate/inbox").then(d => { setData(d); if (d.messages.some(m => !m.read_at)) post("/api/portal/candidate/inbox-read", {}).catch(() => undefined); }).catch(() => setData({ messages: [], whatsapp: "" }));
+  }, []);
+  if (!data) return null;
+  const unread = data.messages.filter(m => !m.read_at).length;
+  return <section className="pj-card"><h2>Inbox{unread ? ` (${unread} new)` : ""}</h2>
+    <p className="pj-muted">Every update about your CV and applications appears here.{data.whatsapp && <> You can also <a href={`https://wa.me/${data.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer">message us on WhatsApp</a>.</>}</p>
+    {data.messages.length === 0 ? <p className="pj-muted">No messages yet. Upload your CV to get started.</p> : <div className="pj-list">{data.messages.map(m => <article className="pj-note" key={m.id} style={m.read_at ? undefined : { borderLeftColor: "#14603e" }}>
+      <b>{m.title}</b>{!m.read_at && <span className="pj-pill strong">New</span>} <span className="pj-muted">· {new Date(m.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
+      <p>{m.body}</p></article>)}</div>}
+  </section>;
 }
 
 function Cv({ data, reload, say }: { data: { profile: Profile | null; status: string } | null; reload: () => void; say: (t: string, bad?: boolean) => void }) {

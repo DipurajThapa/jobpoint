@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Row = Record<string, string | number | null>;
-type Work = { role: "admin" | "manager" | "recruiter"; clients: Row[]; jobs: Row[]; members: Row[]; teams: Row[]; canEdit: boolean; me: string };
+type Work = { role: "admin" | "manager" | "recruiter"; clients: Row[]; jobs: Row[]; members: Row[]; teams: Row[]; canEdit: boolean; me: string; messaging: { scopes: Row[]; queue: Row[] } };
 type Entry = { id: string; name: string; stage: string; stageLabel: string; stageReason: string; source: string; available: boolean; recruiterNote: string; next: string[]; interviews: { id: string; round: string; scheduled_at: string; mode: string; status: string; outcome: string }[] };
 type Pipe = { pipeline: Entry[]; reasons: Record<string, string[]>; labels: Record<string, string> };
 
@@ -22,7 +22,7 @@ export default function Recruiting() {
   const [work, setWork] = useState<Work | null>(null), [notice, setNotice] = useState(""), [open, setOpen] = useState<string | null>(null);
   const load = useCallback(() => api<Work>("work").then(setWork).catch(e => setNotice(e.message)), []);
   useEffect(() => { load(); }, [load]);
-  const act = async (action: string, body: object) => { try { setNotice((await api<{ message: string }>(action, body)).message); await load(); return true; } catch (e) { setNotice((e as Error).message); return false; } };
+  const act = async (action: string, body: object) => { try { const d = await api<{ message: string; link?: string }>(action, body); setNotice(d.link ? `${d.message} ${d.link}` : d.message); await load(); return true; } catch (e) { setNotice((e as Error).message); return false; } };
   if (!work) return <p className="pj-muted">{notice || "Loading…"}</p>;
   const canAssign = work.role !== "recruiter" && work.canEdit;
   return <div className="pj-main" style={{ padding: 0 }}>
@@ -51,8 +51,28 @@ export default function Recruiting() {
       <p className="pj-muted">A team manager sees all of the team&apos;s jobs and assigns them to its members. {work.role === "admin" ? "Create teams and add people under Operations." : "An administrator adds people to your team."}</p>
       {work.members.length === 0 ? <p className="pj-muted">No team members yet.</p> : <table className="pj-table"><thead><tr><th>Team</th><th>Person</th><th>Role</th></tr></thead><tbody>{work.members.map(m => <tr key={`${m.team_id}:${m.user_id}`}>
         <td>{m.team}</td><td>{m.name || m.email}</td>
-        <td>{work.role === "admin" && work.canEdit ? <label><input type="checkbox" checked={!!m.is_manager} onChange={e => act("team-manager", { teamId: m.team_id, userId: m.user_id, manager: e.target.checked })} /> Team manager</label> : m.is_manager ? "Team manager" : "Recruiter"}</td>
+        <td>{work.role === "admin" && work.canEdit ? <label><input type="checkbox" checked={!!m.is_manager} onChange={e => act("team-manager", { teamId: m.team_id, userId: m.user_id, manager: e.target.checked })} /> Team manager</label> : m.is_manager ? "Team manager" : "Recruiter"}
+          {work.canEdit && m.user_id !== work.me && (work.role === "admin" || !m.is_manager) && <> <button className="pj-link" onClick={() => window.confirm(`Remove ${m.name || m.email} from ${m.team}? Their job assignments in this team are cleared.`) && act("team-remove", { teamId: m.team_id, userId: m.user_id })}>Remove</button></>}</td>
       </tr>)}</tbody></table>}
+      {work.canEdit && <form className="pj-form" onSubmit={async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const form = e.currentTarget, f = Object.fromEntries(new FormData(form).entries()); if (await act("team-invite", f)) form.reset(); }}>
+        <h3 className="full">Invite a recruiter to your team</h3>
+        <label>Team<select name="teamId" required>{[...new Map((work.role === "admin" ? work.teams.map(t => [t.id, t.name]) : work.members.map(m => [m.team_id, m.team])) as [string, string][]).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+        <label>Name<input name="name" required maxLength={120} /></label>
+        <label>Work email<input name="email" type="email" required maxLength={254} /></label>
+        <div className="full"><button className="pj-btn">Invite and get link</button> <span className="pj-muted">They get the Recruiting tool only, and see only this team&apos;s work.</span></div>
+      </form>}
+    </section>}
+
+    {work.role !== "recruiter" && work.messaging.scopes.length > 0 && <section className="pj-card"><h2>WhatsApp set-up</h2>
+      <p className="pj-muted">Candidates hear from the team that owns the client. If a team has no number, the admin&apos;s number is used. No WhatsApp provider is connected yet: messages are recorded in a queue and will be sent once one is plugged in. Candidates always get the same message in their inbox.</p>
+      {work.messaging.scopes.map(m => <form className="pj-form" key={String(m.scope)} onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); act("messaging", { scope: m.scope, number: f.get("number"), enabled: f.get("enabled") === "on", override: f.get("override") === "on" }); }}>
+        <h3 className="full">{m.label}</h3>
+        <label>WhatsApp number (with country code)<input name="number" defaultValue={String(m.whatsapp_number ?? "")} placeholder="+91 98300 12345" maxLength={30} /></label>
+        <label className="pj-row"><input type="checkbox" name="enabled" defaultChecked={!!m.whatsapp_enabled} /> Use this number</label>
+        {m.scope === "admin" && <label className="pj-row full"><input type="checkbox" name="override" defaultChecked={!!m.admin_override} /> Override team numbers: send every message from this number</label>}
+        {work.canEdit && <div className="full"><button className="pj-btn quiet">Save</button></div>}
+      </form>)}
+      {work.messaging.queue.length > 0 && <p className="pj-muted">Queue: {work.messaging.queue.map(q => `${q.n} ${q.status}`).join(" · ")}</p>}
     </section>}
   </div>;
 }

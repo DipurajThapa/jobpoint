@@ -2,7 +2,7 @@ import { DEMO_MODE } from "@/lib/demo";
 import type { Metadata } from "next";
 import "./globals.css";
 
-const siteUrl = "https://job-point-consultancy.dippurajthapa.chatgpt.site";
+const siteUrl = "https://jobboard300.dippurajthapa.chatgpt.site";
 const fontsUrl = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0,0&display=swap";
 
 export const metadata: Metadata = {

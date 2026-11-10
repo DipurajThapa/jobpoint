@@ -11,6 +11,7 @@ import { audit, newId, nowIso, PortalError } from "@/lib/portal/db";
 import { extractText } from "@/lib/ats/extract";
 import { addToPipeline, clientOverview, inviteMember, moveStage, pipelineView, recordInterview, reissueInvite, removeMember, reportPlacementExit, scheduleInterview, setJdService, teamList, REASONS, STAGE_LABEL } from "@/lib/portal/client";
 import { sendMail } from "@/lib/portal/mailer";
+import { companyNotices, markNoticesRead, notifyCandidate } from "@/lib/portal/notify";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ action: string }> };
@@ -22,7 +23,7 @@ export async function GET(request: Request, context: Ctx) {
   const { action } = await context.params;
   const db = portalDb(), companyId = account.companyId!, url = new URL(request.url), ip = await ipHash(request);
   try {
-    if (action === "dashboard") return json({ ...await companyDashboard(db, companyId), overview: await clientOverview(db, companyId), role: account.companyRole });
+    if (action === "dashboard") return json({ ...await companyDashboard(db, companyId), overview: await clientOverview(db, companyId), role: account.companyRole, notices: await companyNotices(db, companyId) });
     if (action === "pipeline") return json({ pipeline: await pipelineView(db, companyId, url.searchParams.get("jd") || undefined), reasons: REASONS, labels: STAGE_LABEL });
     if (action === "team") return json({ team: await teamList(db, companyId), you: account.id, owner: account.companyRole === "owner" });
     if (action === "matches") {
@@ -51,6 +52,7 @@ export async function GET(request: Request, context: Ctx) {
       // DOCX originals are never handed out: a stamped PDF rendering is produced instead.
       const pdf = (isPdf ? await watermarkPdf(bytes, stamp) : null) ?? await renderCvPdf(out.profile, (await extractText(bytes, isPdf ? "pdf" : "docx")).text, stamp);
       await audit(db, account.id, "cv.downloaded", "candidate_ref", ref, `trace ${out.traceId}`);
+      await notifyCandidate(db, out.candidateId, "cv.downloaded", "An employer downloaded your CV", "An employer considering you for a role downloaded a copy of your CV. Each copy carries a watermark that identifies who downloaded it.", companyId);
       return new Response(pdf as Uint8Array<ArrayBuffer>, { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="cv-${ref}.pdf"`, "cache-control": "private, no-store", "x-content-type-options": "nosniff" } });
     }
     if (action === "jd") {
@@ -75,6 +77,7 @@ export async function POST(request: Request, context: Ctx) {
       await setJdService(db, companyId, out.id, s(body.service, 10) || "self", Number(body.openings ?? 1) || 1, account.id);
       return json(out, 201);
     }
+    if (action === "notices-read") { await markNoticesRead(db, companyId); return json({ message: "ok" }); }
     if (action === "jd-service") { await setJdService(db, companyId, s(body.jdId, 60), s(body.service, 10), Number(body.openings ?? 1), account.id); return json({ message: body.service === "managed" ? "Jobboard300 will recruit for this job and submit candidates here." : "Saved." }); }
     if (action === "pipeline-add") { const out = await addToPipeline(db, companyId, account.id, s(body.ref, 40), s(body.jdId, 60)); return json({ ...out, message: out.created ? "Added to your pipeline as shortlisted." : "Already in your pipeline for this job." }, out.created ? 201 : 200); }
     if (action === "pipeline-stage") {

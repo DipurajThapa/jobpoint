@@ -16,7 +16,7 @@ type Overview = {
   placements: { id: string; title: string; joined_on: string; guarantee_ends_on: string; status: string; left_on: string | null; name: string; inGuarantee: boolean }[];
   metrics: { daysToOffer: number | null; daysToJoin: number | null; offerAcceptance: number | null; noShows: number };
 };
-type Dashboard = { company: { display_name: string; status: string; city: string }; params: { version: number; params: Params } | null; pendingRequest: { version: number } | null; quota: { remaining: number; unlockedTotal: number; plans: { plan: string; remaining: number; total: number; endsAt: string }[] }; jds: { id: string; title: string; status: string; decision_note: string; released: number; unlocked: number }[]; overview: Overview; role: string };
+type Dashboard = { company: { display_name: string; status: string; city: string }; params: { version: number; params: Params } | null; pendingRequest: { version: number } | null; quota: { remaining: number; unlockedTotal: number; plans: { plan: string; remaining: number; total: number; endsAt: string }[] }; jds: { id: string; title: string; status: string; decision_note: string; released: number; unlocked: number }[]; overview: Overview; role: string; notices?: { id: string; title: string; body: string; created_at: string; read_at: string | null }[] };
 type Interview = { id: string; round: string; scheduled_at: string; mode: string; location: string; interviewer: string; status: string; outcome: string; rating: number | null; feedback: string };
 type Entry = { id: string; jdId: string; jdTitle: string; ref: string; stage: string; stageLabel: string; stageReason: string; source: string; name: string; available: boolean; recruiterNote: string; offerCtcInr: number | null; offerDate: string | null; joiningDate: string | null; lastWorkingDay: string | null; competingOffers: string; updatedAt: string; next: string[]; interviews: Interview[] };
 type PipelineData = { pipeline: Entry[]; reasons: Record<string, string[]>; labels: Record<string, string> };
@@ -92,6 +92,8 @@ function OverviewView({ dash, say, reload, go }: { dash: Dashboard; say: (t: str
       <div><span className="pj-muted">Hires</span><b>{o.placements.length}</b><span className="pj-muted">{o.placements.filter(p => p.inGuarantee).length} inside the replacement guarantee</span></div>
       <div><span className="pj-muted">Unlocks remaining</span><b>{dash.quota.remaining}</b><span className="pj-muted">{dash.quota.plans.map(p => `${p.plan}: until ${p.endsAt.slice(0, 10)}`).join(" · ") || "No active plan"}</span></div>
     </div>
+    {(dash.notices ?? []).some(n => !n.read_at) && <section className="pj-card"><div className="pj-row" style={{ justifyContent: "space-between" }}><h2>Updates from Jobboard300</h2><button className="pj-link" onClick={() => post("/api/portal/company/notices-read", {}).then(reload)}>Mark all as read</button></div>
+      <div className="pj-list">{(dash.notices ?? []).filter(n => !n.read_at).map(n => <article className="pj-note" key={n.id}><b>{n.title}</b> <span className="pj-muted">· {fmtDate(n.created_at)}</span><p>{n.body}</p></article>)}</div></section>}
     <section className="pj-card"><h2>Hiring funnel</h2>
       <div className="pj-funnel">{steps.map(([k, label]) => <button key={k} onClick={() => go("pipeline")}><b>{f[k] ?? 0}</b><span>{label}</span></button>)}</div>
       <p className="pj-muted">Median days from shortlist to offer: {o.metrics.daysToOffer ?? "—"} · to joining: {o.metrics.daysToJoin ?? "—"} · Did not join: {o.metrics.noShows} (last 180 days)</p>

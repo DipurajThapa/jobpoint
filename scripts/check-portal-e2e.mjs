@@ -268,6 +268,13 @@ ok(await cPage.getByRole("navigation", { name: "Candidate" }).count() === 0 && a
 const jobs = await (await api(cands["acc-01"].context, "GET", "/api/portal/candidate/jobs")).json();
 ok(jobs.jobs.some(j => j.title === "Accounts Executive") && jobs.jobs.every(j => typeof j.band === "string" && !("score" in j)), "the candidate sees fitting jobs with a band, not a raw score");
 ok((await api(cands["acc-01"].context, "POST", "/api/portal/candidate/apply", { jdId: accJd })).ok(), "the candidate applies");
+const inbox = await (await api(cands["acc-01"].context, "GET", "/api/portal/candidate/inbox")).json();
+const inboxKinds = inbox.messages.map(x => x.kind);
+ok(inboxKinds.some(k => k.startsWith("cv.")) && inboxKinds.includes("profile.opened") && inboxKinds.includes("cv.downloaded") && inboxKinds.includes("interview.scheduled") && inboxKinds.includes("stage.offered"), `the candidate's inbox has a message for each event (${inbox.messages.length})`);
+ok(!/Good GST knowledge|4\/5|rating|score \d/i.test(JSON.stringify(inbox.messages)), "inbox messages carry outcomes only, never interviewer feedback, ratings or scores");
+ok((await api(cands["sal-01"].context, "GET", "/api/portal/candidate/inbox").then(r => r.json())).messages.every(x => !["profile.opened", "stage.offered"].includes(x.kind)), "another candidate's inbox has none of these messages");
+await cPage.reload({ waitUntil: "networkidle" });
+await cPage.getByRole("heading", { name: /^Inbox/ }).waitFor();
 await cPage.screenshot({ path: `${OUT}/candidate-cv.png`, fullPage: true });
 
 // ---------- Consent withdrawal ----------

@@ -210,6 +210,18 @@ The research treats a company that unlocks a CV as most likely a **separate data
 - **Future services** (CV writing, LinkedIn optimisation, spoken English, Tally and GST training) are seeded inactive. The tables `services`, `service_orders`, `service_enrolments` and `payment_intents` are ready, with no screens.
 - SMS OTP is not built. Commercial SMS in India needs TRAI DLT registration first (about two weeks).
 
+## 7a. Notifications, inbox and WhatsApp set-up
+
+Every update writes a message, in `lib/portal/notify.ts` (migration `0009_notifications.sql`).
+
+- **Candidate inbox** (`candidate_messages`, shown on "My CV and privacy"): CV received / incomplete (lists what is missing) / needs review, application received, submitted to a client, profile opened, CV downloaded, each stage change, interview scheduled (India time and link), offer, hire, not selected. Messages state the **outcome only**: never the interviewer's feedback, a rating or a score.
+- **Client updates** (`company_notices`, shown on the client dashboard until marked read): new submission, stage changes made by Jobboard300 staff, interviews scheduled.
+- **Weekly summary**: the queue run adds one counts-only summary per candidate per 7 days (times seen, opened, downloaded).
+- **WhatsApp** is provider-ready but sends nothing yet. Each candidate message also writes a row to `outbound_messages` (`queued` when a sender number is set up, otherwise `skipped`). To go live, a sender reads the `queued` rows, calls the provider API and marks them sent; nothing else changes.
+- **Whose number is used** (`messaging_settings`, `resolveSender`): the client's team number first; the admin's number when the team has none; the admin's number for everyone when the admin turns on "override". Team managers set their own team's number in Recruiting → WhatsApp set-up; only the admin sets the main number and the override.
+- **Team managers** invite recruiters into their own team (Recruiting tool only, one-time 72-hour link) and remove them. They cannot invite into, or see, another team.
+- Deleting a candidate deletes their inbox and queued messages.
+
 ## 8. Checks
 
 ```bash

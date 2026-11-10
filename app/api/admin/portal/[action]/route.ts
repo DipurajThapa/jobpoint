@@ -11,6 +11,7 @@ import { DEFAULT_PLANS, seedServices } from "@/lib/portal/plans";
 import { audit } from "@/lib/portal/db";
 import { adminClientWork, inviteClient, setJdService, submissionCandidates, submitByRecruiter, updateClientTerms } from "@/lib/portal/client";
 import { sendMail } from "@/lib/portal/mailer";
+import { weeklySummaries } from "@/lib/portal/notify";
 import { countUnlinkedWebsiteApplications, linkWebsiteApplication, unlinkedWebsiteApplications } from "@/lib/portal/website";
 import { canonicalCity, seniorityFor } from "@/lib/portal/india";
 import { resolveSkill } from "@/lib/ats/taxonomy";
@@ -140,7 +141,7 @@ export async function POST(request: Request, context: Ctx) {
         await audit(db, admin, "portal.link_issued", "account", row.id, String(b.purpose ?? "verify"));
         return json({ link: `${new URL(request.url).origin}/portal/${b.purpose === "reset" ? "reset" : "verify"}?token=${token}`, message: "One-time link created. Send it to the account holder." });
       }
-      case "run-queue": { const purged = await purgeExpiredStubs(db); return done(`Scoring queue processed.${purged ? ` ${purged} expired deletion record(s) purged.` : ""}`); }
+      case "run-queue": { const purged = await purgeExpiredStubs(db), summaries = await weeklySummaries(db); return done(`Scoring queue processed.${purged ? ` ${purged} expired deletion record(s) purged.` : ""}${summaries ? ` ${summaries} weekly summary message(s) sent to candidates.` : ""}`); }
       default: return fail("Unknown action.", 404);
     }
   } catch (error) { return failFrom(error); }
