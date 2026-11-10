@@ -65,6 +65,14 @@ ok((await noor.ctx.request.fetch(`${BASE}/api/platform/recruiting/stage`, { meth
 const cands = (await (await noor.get(`/api/platform/recruiting/candidates?jd=${managed.id}`)).json()).candidates;
 const pick = cands.find(c => Number(c.can_share) && !Number(c.in_pipeline));
 ok(!!pick, `the recruiter sees ranked candidates for the managed job (${cands.length})`);
+const adminCands = (await (await admin.get(`/api/platform/recruiting/candidates?jd=${managed.id}`)).json()).candidates;
+ok(cands.length <= 3 && cands.every(c => !("score" in c) && !("lower_bound" in c)) && adminCands.length > 3 && "score" in adminCands[0], `recruiters see at most three candidates and no scores; the admin sees the full list (${adminCands.length})`);
+const hiddenOne = adminCands.find(c => !cands.some(x => x.candidate_id === c.candidate_id) && !Number(c.in_pipeline));
+ok((await noor.post("/api/platform/recruiting/submit", { jdId: managed.id, candidateId: hiddenOne.candidate_id, note: "not on my shortlist" })).status() === 404, "a recruiter cannot submit a candidate who is not on their current shortlist");
+const skipped = cands.find(c => c.candidate_id !== pick.candidate_id);
+ok((await noor.post("/api/platform/recruiting/pass", { jdId: managed.id, candidateId: skipped.candidate_id, reason: "" })).status() === 400 && (await noor.post("/api/platform/recruiting/pass", { jdId: managed.id, candidateId: skipped.candidate_id, reason: "skills_mismatch" })).ok(), "passing on a candidate needs a reason");
+const next = (await (await noor.get(`/api/platform/recruiting/candidates?jd=${managed.id}`)).json()).candidates;
+ok(!next.some(c => c.candidate_id === skipped.candidate_id) && next.some(c => c.candidate_id === pick.candidate_id) && next.length <= 3, "the passed candidate is replaced by the next best");
 ok((await rina.post("/api/platform/recruiting/submit", { jdId: managed.id, candidateId: pick.candidate_id, note: "x" })).status() === 404, "another team cannot submit to this job");
 ok((await noor.post("/api/platform/recruiting/submit", { jdId: managed.id, candidateId: pick.candidate_id, note: "Strong fit; 30 days notice" })).ok(), "the recruiter submits a candidate to the client");
 const pipe = await (await noor.get(`/api/platform/recruiting/pipeline?jd=${managed.id}`)).json();

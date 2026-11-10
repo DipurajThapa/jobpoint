@@ -455,8 +455,10 @@ export async function submissionCandidates(db: Db, jdId: string) {
   const { results } = await db.prepare(`SELECT m.candidate_id, k.display_name, k.current_city, m.score, m.lower_bound, m.hard_pass, m.explanation,
       EXISTS (SELECT 1 FROM pipeline p WHERE p.jd_id = m.jd_id AND p.candidate_id = m.candidate_id) AS in_pipeline,
       CASE WHEN k.account_id IS NOT NULL THEN 'portal' ELSE 'website' END AS source,
-      (${ACTIVE_CONSENT_SQL("m.candidate_id", "share_with_companies")} OR ${ACTIVE_CONSENT_SQL("m.candidate_id", "recruiter_sharing")}) AS can_share
-    FROM matches m JOIN candidates k ON k.id = m.candidate_id WHERE m.jd_id = ? AND k.status = 'active' ORDER BY m.hard_pass DESC, m.lower_bound DESC LIMIT 40`).bind(jdId).all<{ explanation: string }>();
+      (${ACTIVE_CONSENT_SQL("m.candidate_id", "share_with_companies")} OR ${ACTIVE_CONSENT_SQL("m.candidate_id", "recruiter_sharing")}) AS can_share,
+      (SELECT COUNT(*) FROM placements pl WHERE pl.candidate_id = m.candidate_id AND pl.status IN ('left_in_guarantee', 'replaced')) AS early_exits,
+      (SELECT sp.reason FROM shortlist_passes sp WHERE sp.jd_id = m.jd_id AND sp.candidate_id = m.candidate_id) AS passed
+    FROM matches m JOIN candidates k ON k.id = m.candidate_id WHERE m.jd_id = ? AND k.status = 'active' ORDER BY m.hard_pass DESC, m.lower_bound DESC LIMIT 200`).bind(jdId).all<{ explanation: string; candidate_id: string; in_pipeline: number; passed: string | null; score?: number; lower_bound?: number }>();
   return results.map(r => ({ ...r, explanation: parseJson<{ summary?: string }>(r.explanation, {}).summary ?? "" }));
 }
 

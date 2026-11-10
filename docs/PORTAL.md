@@ -233,6 +233,9 @@ Policy lives in `lib/portal/policy.ts`; migration `0010_placement_model.sql`.
 - **Client list.** Candidates hide from employers by typed name (`hidden_company_names`); the company list is never returned to candidates.
 - **Older self-service mode.** `CLIENT_SELF_SERVICE=true` turns browsing and unlocking back on. Locally: `CLIENT_SELF_SERVICE=true npm run dev`. `check-portal-e2e.mjs` covers that mode and must be run with it on; `check-recruiting-e2e.mjs` covers the default mode and must be run with it off.
 
+- **Three at a time for staff.** Recruiters and team managers see the three best undecided candidates for a job, without scores (`staffCandidates`, migration `0011_shortlist_passes.sql`). Submitting one, or passing with a reason, brings up the next; passes are capped at 15 per job per day. A recruiter can submit only a candidate currently shown. The admin sees the full ranked list, the scores and each pass reason: that record, with pipeline outcomes, is what matching is tuned from.
+- **Early exits.** A candidate who left a placement inside the replacement period is marked for staff on every later shortlist (derived from `placements.status`). Clients and candidates do not see the mark.
+
 See `docs/SECURITY.md` for the access table and the breach response plan.
 
 ## 8. Checks

@@ -78,9 +78,10 @@ export default function Recruiting() {
 }
 
 function JobWork({ jd, canEdit, say, reload }: { jd: Row; canEdit: boolean; say: (t: string) => void; reload: () => void }) {
+  const [passReasons, setPassReasons] = useState<string[]>([]), [full, setFull] = useState(false);
   const [cands, setCands] = useState<Row[] | null>(null), [pipe, setPipe] = useState<Pipe | null>(null), [form, setForm] = useState<{ id: string; kind: string } | null>(null);
   const load = useCallback(() => {
-    api<{ candidates: Row[] }>("candidates", undefined, `?jd=${jd.id}`).then(d => setCands(d.candidates)).catch(e => say(e.message));
+    api<{ candidates: Row[]; passReasons?: string[]; full?: boolean }>("candidates", undefined, `?jd=${jd.id}`).then(d => { setCands(d.candidates); setPassReasons(d.passReasons ?? []); setFull(!!d.full); }).catch(e => say(e.message));
     api<Pipe>("pipeline", undefined, `?jd=${jd.id}`).then(setPipe).catch(e => say(e.message));
   }, [jd.id, say]);
   useEffect(() => { load(); }, [load]);
@@ -110,12 +111,17 @@ function JobWork({ jd, canEdit, say, reload }: { jd: Row; canEdit: boolean; say:
     </div>)}
     <h3>Candidates to submit</h3>
     {jd.service !== "managed" && <p className="pj-muted">This is a self-service job: the client unlocks profiles itself. Submissions open when the client switches it to a managed search.</p>}
-    {!cands ? <p className="pj-muted">Loading…</p> : cands.length === 0 ? <p className="pj-muted">No scored candidates for this job yet.</p> : cands.map(c => <div className="pj-note" key={String(c.candidate_id)}>
-      <b>{c.display_name || "Candidate"}</b> <span className="pj-pill">{c.source === "website" ? "Website applicant" : "Portal"}</span> <span className="pj-muted">· {c.current_city || "city not stated"} · score {Math.round(Number(c.score))} · {Number(c.hard_pass) ? "meets the hard filters" : "misses a hard filter"}{Number(c.in_pipeline) ? " · already submitted" : ""}</span>
+    {!full && <p className="pj-muted">You see the three best candidates at a time. Submit one, or pass with a reason, and the next best appears. Pass reasons are reviewed to improve matching.</p>}
+    {!cands ? <p className="pj-muted">Loading…</p> : cands.length === 0 ? <p className="pj-muted">No more candidates for this job right now.</p> : cands.map(c => <div className="pj-note" key={String(c.candidate_id)}>
+      <b>{c.display_name || "Candidate"}</b> <span className="pj-pill">{c.source === "website" ? "Website applicant" : "Portal"}</span> <span className="pj-muted">· {c.current_city || "city not stated"}{c.score == null ? "" : ` · score ${Math.round(Number(c.score))}`} · {Number(c.hard_pass) ? "meets the hard filters" : "misses a hard filter"}{Number(c.in_pipeline) ? " · already submitted" : ""}</span>
       <p className="pj-muted">{c.explanation}</p>
+      {Number(c.early_exits) > 0 && <p className="pj-notice bad">Left a previous placement within the 60-day guarantee ({String(c.early_exits)} time{Number(c.early_exits) > 1 ? "s" : ""}). Ask why before submitting.</p>}
+      {c.passed ? <p className="pj-muted">Passed: {String(c.passed).replace(/_/g, " ")}</p> : null}
       {!Number(c.in_pipeline) && !Number(c.can_share) && <p className="pj-muted">Has not agreed to their CV being shared with employers. Ask them first.</p>}
       {canEdit && jd.service === "managed" && !Number(c.in_pipeline) && Number(c.can_share) > 0 && <form className="pj-row" onSubmit={(ev: FormEvent<HTMLFormElement>) => { ev.preventDefault(); post("submit", { jdId: jd.id, candidateId: c.candidate_id, note: new FormData(ev.currentTarget).get("note") }); }}>
         <input name="note" required maxLength={2000} placeholder="Why this candidate, notice, CTC, availability" style={{ minWidth: "min(380px, 100%)" }} /><button className="pj-btn">Submit to client</button></form>}
+      {canEdit && !Number(c.in_pipeline) && !c.passed && passReasons.length > 0 && <form className="pj-row" onSubmit={(ev: FormEvent<HTMLFormElement>) => { ev.preventDefault(); post("pass", { jdId: jd.id, candidateId: c.candidate_id, reason: new FormData(ev.currentTarget).get("reason") }); }}>
+        <select name="reason" required defaultValue="" aria-label="Reason for passing"><option value="" disabled>Not suitable because…</option>{passReasons.map(r => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}</select><button className="pj-btn quiet">Pass</button></form>}
     </div>)}
   </div>;
 }

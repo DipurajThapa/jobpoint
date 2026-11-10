@@ -5,13 +5,13 @@ import { audit, newId, nowIso, parseJson, PortalError, type Db } from "./db";
 import { jdConflicts, sanitiseParams, type CompanyParams } from "./params";
 import { parsePortalJd, sanitisePortalRequirements, type JdInput, type PortalRequirements } from "./jd";
 import { assignPlan } from "./quota";
-import { REQUIREMENT_EDITS } from "./policy";
+import { FEE, REQUIREMENT_EDITS } from "./policy";
 
 export async function applyCompany(db: Db, input: { accountId: string; legalName: string; displayName: string; city: string; website?: string; gstin?: string }) {
   const id = newId(), at = nowIso();
   await db.batch([
-    db.prepare("INSERT INTO companies (id, legal_name, display_name, gstin, website, city, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'applied', ?)")
-      .bind(id, input.legalName.trim().slice(0, 160), input.displayName.trim().slice(0, 120), (input.gstin ?? "").trim().toUpperCase().slice(0, 15), (input.website ?? "").trim().slice(0, 200), input.city.trim().slice(0, 80), at),
+    db.prepare("INSERT INTO companies (id, legal_name, display_name, gstin, website, city, status, guarantee_days, fee_percent, created_at) VALUES (?, ?, ?, ?, ?, ?, 'applied', ?, ?, ?)")
+      .bind(id, input.legalName.trim().slice(0, 160), input.displayName.trim().slice(0, 120), (input.gstin ?? "").trim().toUpperCase().slice(0, 15), (input.website ?? "").trim().slice(0, 200), input.city.trim().slice(0, 80), FEE.guaranteeDays, FEE.defaultPct, at),
     db.prepare("INSERT INTO company_users (id, company_id, account_id, role, created_at) VALUES (?, ?, ?, 'owner', ?)").bind(newId(), id, input.accountId, at),
   ]);
   return id;

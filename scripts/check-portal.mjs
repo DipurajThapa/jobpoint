@@ -608,7 +608,7 @@ await check("Pipeline: unlock first; stage order and reasons enforced; joining c
   tick(35 * 86_400_000);
   await client.moveStage(db, comp.id, comp.userId, id, { stage: "joined", joiningDate: "2026-12-14" });
   const pl = await db.prepare("SELECT joined_on, guarantee_ends_on, non_solicit_until, ctc_inr, status FROM placements").first();
-  assert.deepEqual([pl.joined_on, pl.guarantee_ends_on, pl.non_solicit_until, pl.ctc_inr, pl.status], ["2026-12-14", "2027-03-14", "2027-12-14", 1_200_000, "active"]);
+  assert.deepEqual([pl.joined_on, pl.guarantee_ends_on, pl.non_solicit_until, pl.ctc_inr, pl.status], ["2026-12-14", "2027-02-12", "2027-12-14", 1_200_000, "active"]);
   ov = await client.clientOverview(db, comp.id);
   assert.deepEqual([ov.funnel.joined, ov.placements[0].inGuarantee, ov.metrics.offerAcceptance], [1, true, 100]);
   const exit = await client.reportPlacementExit(db, comp.id, comp.userId, (await db.prepare("SELECT id FROM placements").first()).id, "2027-02-01", "Resigned");
@@ -798,6 +798,9 @@ async function staffSetup() {
   return { db, admin, mgrK, recA, recB, mgrF, recF, compK, jdK, compF, jdF };
 }
 const ids = rows => rows.map(r => r.id).sort();
+const rank = (db, jdId, candidateId, score = 80) => db.prepare("INSERT OR REPLACE INTO matches (jd_id, candidate_id, cv_id, profile_version, score, lower_bound, hard_pass, explanation, engine_version, scored_at) VALUES (?, ?, 'cv', 1, ?, ?, 1, ?, 'test', ?)").bind(jdId, candidateId, score, score - 5, JSON.stringify({ summary: "Fits the role" }), clock.toISOString()).run();
+// Recruiters can submit only a candidate currently on their shortlist, so tests rank the candidate at the top first.
+const rankedSubmit = async (t, staff, input) => { await rank(t.db, input.jdId, input.candidateId, 99); return staffMod.staffSubmit(t.db, SECRET, staff, input); };
 
 await check("Staff see only their team's clients and jobs; admin sees all", async () => {
   const t = await staffSetup();
@@ -837,7 +840,7 @@ await check("A recruiter can submit, update stages and schedule interviews only 
   await client.setJdService(t.db, t.compK.id, t.jdK, "managed", 1, t.compK.userId);
   const cand = await makeCandidate(t.db, "Scoped Candidate");
   await rejects(staffMod.staffSubmit(t.db, SECRET, t.recF, { jdId: t.jdK, candidateId: cand, note: "x" }), "NOT_FOUND");
-  const sub = await staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: cand, note: "Good Tally and GST" });
+  const sub = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: cand, note: "Good Tally and GST" });
   await rejects(staffMod.staffMoveStage(t.db, t.recF, sub.id, { stage: "shortlisted" }), "NOT_FOUND");
   await rejects(staffMod.staffScheduleInterview(t.db, t.mgrF, sub.id, { round: "HR", scheduledAt: "2026-11-20T05:30:00Z", mode: "phone" }), "NOT_FOUND");
   await staffMod.staffMoveStage(t.db, t.recA, sub.id, { stage: "shortlisted", note: "Client asked to proceed" });
@@ -856,7 +859,7 @@ await check("Each hiring event writes exactly one inbox message for the right ca
   const t = await staffSetup();
   await client.setJdService(t.db, t.compK.id, t.jdK, "managed", 1, t.compK.userId);
   const cand = await makeCandidate(t.db, "Inbox Candidate"), other = await makeCandidate(t.db, "Other Candidate");
-  const sub = await staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: cand, note: "Private recruiter note: salary flexible" });
+  const sub = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: cand, note: "Private recruiter note: salary flexible" });
   await staffMod.staffMoveStage(t.db, t.recA, sub.id, { stage: "shortlisted" });
   const iv = await staffMod.staffScheduleInterview(t.db, t.recA, sub.id, { round: "Technical 1", scheduledAt: "2026-11-20T05:30:00Z", mode: "video", location: "https://meet.example/x" });
   await client.recordInterview(t.db, t.compK.id, t.compK.userId, iv.id, { status: "completed", outcome: "reject", rating: 2, feedback: "Weak on reconciliation" });
@@ -934,7 +937,7 @@ await check("A client sees a candidate only while their hiring process is open, 
   const t = await staffSetup();
   await client.setJdService(t.db, t.compK.id, t.jdK, "managed", 1, t.compK.userId);
   const cand = await makeCandidate(t.db, "Temporary Access"), second = await makeCandidate(t.db, "Second Person");
-  const sub = await staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: cand, note: "Strong fit" });
+  const sub = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: cand, note: "Strong fit" });
   const early = await views.unlockedCandidate(t.db, t.compK.id, sub.ref, true);
   assert.ok(early.contactsHidden && early.profile.contact.name && !early.profile.contact.email && !early.profile.contact.phone && early.profile.contact.links.length === 0, "no contact details before offer");
   await rejects(views.unlockedCandidate(t.db, t.compF.id, sub.ref, true), "NOT_UNLOCKED");
@@ -947,7 +950,7 @@ await check("A client sees a candidate only while their hiring process is open, 
   await rejects(views.unlockedCandidate(t.db, t.compK.id, sub.ref, true), "ACCESS_ENDED");
   const row = (await client.pipelineView(t.db, t.compK.id, undefined, true)).find(r => r.id === sub.id);
   assert.ok(!row.name.includes("Temporary") && row.recruiterNote === "" && row.available === false, "a closed-out candidate goes back to a reference");
-  const sub2 = await staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: second, note: "Next" });
+  const sub2 = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: second, note: "Next" });
   assert.ok(await views.unlockedCandidate(t.db, t.compK.id, sub2.ref, true));
   await t.db.prepare("UPDATE jds SET status = 'closed' WHERE id = ?").bind(t.jdK).run();
   await rejects(views.unlockedCandidate(t.db, t.compK.id, sub2.ref, true), "ACCESS_ENDED");
@@ -965,7 +968,7 @@ await check("Contact details are stripped from CV text; the placement fee is 7.5
   await rejects(client.updateClientTerms(t.db, t.compK.id, 60, "", "admin", 12, 12), "FEE");
   await client.updateClientTerms(t.db, t.compK.id, 60, "", "admin", 12, 7.5);
   const cand = await makeCandidate(t.db, "Joiner");
-  const sub = await staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: cand, note: "Fit" });
+  const sub = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: cand, note: "Fit" });
   for (const stage of ["shortlisted", "interview"]) await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage });
   await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "offered", offerCtcInr: 1_000_000 });
   await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "offer_accepted", joiningDate: "2026-12-01" });
@@ -986,8 +989,40 @@ await check("A live job's requirements can change only three times in 30 days; h
   await client.setJdService(t.db, t.compK.id, t.jdK, "managed", 1, t.compK.userId);
   const cand = await makeCandidate(t.db, "Hidden Person");
   await t.db.prepare("UPDATE candidates SET hidden_company_names = ? WHERE id = ?").bind(JSON.stringify(["kolkata client pvt. ltd."]), cand).run();
-  await rejects(staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: cand, note: "x" }), "HIDDEN");
+  await rejects(rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: cand, note: "x" }), "HIDDEN");
   assert.equal(policy.nameKey("Kolkata Client Private Limited"), policy.nameKey("KOLKATA CLIENT"));
+});
+
+await check("Recruiters see the three best candidates at a time, without scores; passing with a reason brings up the next", async () => {
+  const t = await staffSetup();
+  await client.setJdService(t.db, t.compK.id, t.jdK, "managed", 1, t.compK.userId);
+  const c = []; for (let i = 0; i < 6; i++) { c.push(await makeCandidate(t.db, `Ranked ${i}`)); await rank(t.db, t.jdK, c[i], 90 - i); }
+  const first = await staffMod.staffCandidates(t.db, t.recA, t.jdK);
+  assert.deepEqual(first.map(x => x.candidate_id), c.slice(0, 3));
+  assert.ok(first.every(x => !("score" in x) && !("lower_bound" in x)), "no scores for recruiters");
+  assert.deepEqual((await staffMod.staffCandidates(t.db, t.mgrK, t.jdK)).length, 3, "team managers get the same three");
+  const adminView = await staffMod.staffCandidates(t.db, t.admin, t.jdK);
+  assert.ok(adminView.length === 6 && adminView[0].score === 90, "the admin sees the full ranked list with scores");
+  await rejects(staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: c[4], note: "not shown to me" }), "NOT_FOUND");
+  await rejects(staffMod.staffPass(t.db, t.recA, { jdId: t.jdK, candidateId: c[5], reason: "skills_mismatch" }), "NOT_FOUND");
+  await rejects(staffMod.staffPass(t.db, t.recA, { jdId: t.jdK, candidateId: c[0], reason: "" }), "REASON");
+  await rejects(staffMod.staffPass(t.db, t.recF, { jdId: t.jdK, candidateId: c[0], reason: "other" }), "NOT_FOUND");
+  await staffMod.staffPass(t.db, t.recA, { jdId: t.jdK, candidateId: c[0], reason: "skills_mismatch" });
+  await staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: c[1], note: "Good fit" });
+  assert.deepEqual((await staffMod.staffCandidates(t.db, t.recA, t.jdK)).map(x => x.candidate_id), [c[2], c[3], c[4]]);
+  assert.equal((await staffMod.staffCandidates(t.db, t.admin, t.jdK)).find(x => x.candidate_id === c[0]).passed, "skills_mismatch", "the admin sees why a candidate was passed over");
+  const sub = (await client.pipelineView(t.db, t.compK.id)).find(r => r.stage === "submitted");
+  for (const stage of ["shortlisted", "interview"]) await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage });
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "offered", offerCtcInr: 900_000 });
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "offer_accepted", joiningDate: "2026-12-01" });
+  clock = new Date("2026-12-01T06:00:00Z");
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "joined", joiningDate: "2026-12-01" });
+  const pl = await t.db.prepare("SELECT id, guarantee_ends_on FROM placements WHERE pipeline_id = ?").bind(sub.id).first();
+  assert.equal(pl.guarantee_ends_on, "2027-01-30", "the replacement guarantee runs 60 days from joining");
+  clock = new Date("2026-12-20T06:00:00Z");
+  assert.equal((await client.reportPlacementExit(t.db, t.compK.id, t.compK.userId, pl.id, "2026-12-19", "Left")).inGuarantee, true);
+  assert.equal((await staffMod.staffCandidates(t.db, t.admin, t.jdK)).find(x => x.candidate_id === c[1]).early_exits, 1, "a candidate who left inside the guarantee is marked for staff");
+  clock = new Date("2026-11-09T06:00:00Z");
 });
 
 console.log(`\n${passed} portal checks passed.`);
