@@ -25,6 +25,19 @@ async function activeCandidates(db: Db, ids?: string[]): Promise<Cand[]> {
   return results;
 }
 
+/**
+ * People who applied to a vacancy are scored for that vacancy: that is what they
+ * asked for. Without the general matching consent they are scored for nothing else.
+ */
+async function applicants(db: Db, where: { jdId?: string; candidateId?: string }): Promise<(Cand & { jd_id: string })[]> {
+  const { results } = await db.prepare(`SELECT c.id, v.id AS cv_id, p.version, p.data, a.jd_id FROM portal_applications a JOIN candidates c ON c.id = a.candidate_id
+      JOIN cvs v ON v.candidate_id = c.id AND v.is_primary = 1 AND v.parse_status = 'parsed'
+      JOIN cv_profiles p ON p.cv_id = v.id AND p.version = (SELECT MAX(version) FROM cv_profiles WHERE cv_id = v.id)
+      WHERE c.status = 'active' AND a.status != 'withdrawn' AND NOT COALESCE(${ACTIVE_CONSENT_SQL("c.id", "profile_processing")}, 0)
+        AND ${where.jdId ? "a.jd_id = ?" : "a.candidate_id = ?"}`).bind(where.jdId ?? where.candidateId).all<Cand & { jd_id: string }>();
+  return results;
+}
+
 type Jd = { id: string; company_id: string; requirements: string };
 async function liveJds(db: Db, ids?: string[]): Promise<Jd[]> {
   const filter = ids ? `AND j.id IN (${ids.map(() => "?").join(",")})` : "";
@@ -69,14 +82,20 @@ export async function drainQueue(db: Db, secret: string, maxPairs = MAX_PAIRS_PE
       const jds = await liveJds(db);
       if (pairs && pairs + jds.length > maxPairs) break;
       if (cands.length) await scorePairs(db, cands, jds);
-      else await db.prepare("DELETE FROM matches WHERE candidate_id = ?").bind(item.ref_id).run();
+      else {
+        // No general matching consent: keep only the scores for vacancies this person applied to.
+        const own = await applicants(db, { candidateId: item.ref_id });
+        const ownJds = jds.filter(j => own.some(o => o.jd_id === j.id));
+        await db.prepare(`DELETE FROM matches WHERE candidate_id = ?${ownJds.length ? ` AND jd_id NOT IN (${ownJds.map(() => "?").join(",")})` : ""}`).bind(item.ref_id, ...ownJds.map(j => j.id)).run();
+        if (ownJds.length) await scorePairs(db, [own[0]], ownJds);
+      }
       pairs += jds.length;
       jds.forEach(j => touched.add(j.id));
     } else {
       const jds = await liveJds(db, [item.ref_id]);
       const cands = jds.length ? await activeCandidates(db) : [];
       if (pairs && pairs + cands.length > maxPairs) break;
-      if (jds.length) await scorePairs(db, cands, jds);
+      if (jds.length) await scorePairs(db, [...cands, ...await applicants(db, { jdId: item.ref_id })], jds);
       pairs += cands.length;
       touched.add(item.ref_id);
     }

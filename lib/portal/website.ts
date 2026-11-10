@@ -26,6 +26,7 @@ import { audit, newId, nowIso, sha256Hex, type Db } from "./db";
 import { consentActive, recordConsent, withdrawSharing } from "./consent";
 import { createCandidate, deleteCandidateData, mergeCandidates, normEmail, normPhone } from "./candidate";
 import { notifyCandidate } from "./notify";
+import { recordRoleApplication } from "./vacancy";
 import { enqueue } from "./company";
 import { ingestCv, type Bucket } from "./ingest";
 import { WEBSITE_NOTICE, websiteNoticeVersion } from "./notice";
@@ -75,6 +76,7 @@ export async function linkWebsiteApplication(db: Db, bucket: Bucket, app: Websit
     await db.prepare("INSERT INTO candidate_sources (id, candidate_id, kind, ref_id, created_at) VALUES (?, ?, 'website_application', ?, ?)").bind(newId(), owner.id, app.id, nowIso()).run();
     await notifyCandidate(db, owner.id, "record.application_added", "A website application was added to your account", "An application was made on the Jobboard300 website with your email address. It now appears under your account. Your CV and your sharing choices here were not changed. If you did not make it, use the privacy request form and we will remove it.");
     await audit(db, actor, "candidate.website_linked", "candidate", owner.id, `application ${app.id}; joined verified account`);
+    if (app.jobId && await recordRoleApplication(db, owner.id, app.jobId, app.id)) await enqueue(db, "candidate", owner.id, "website_role").run();
     return { candidateId: owner.id, created: false, cv: "none", matching: await consentActive(db, owner.id, "profile_processing"), recruiterSharing: await consentActive(db, owner.id, "recruiter_sharing") };
   }
   const reuse = await existingWebsiteCandidate(db, app.email);
@@ -90,7 +92,9 @@ export async function linkWebsiteApplication(db: Db, bucket: Bucket, app: Websit
     catch { cv = "unreadable"; }
   }
   const matching = await consentActive(db, candidateId, "profile_processing");
-  if (matching && cv === "parsed") await enqueue(db, "candidate", candidateId, "website").run();
+  // One vacancy record: an application to a website role is an application to that client job.
+  const applied = !!app.jobId && await recordRoleApplication(db, candidateId, app.jobId, app.id);
+  if ((matching || applied) && cv !== "unreadable") await enqueue(db, "candidate", candidateId, "website").run();
   await audit(db, actor, "candidate.website_linked", "candidate", candidateId, `application ${app.id}; cv ${cv}; matching ${matching}`);
   return { candidateId, created: !reuse, cv, matching, recruiterSharing: await consentActive(db, candidateId, "recruiter_sharing") };
 }

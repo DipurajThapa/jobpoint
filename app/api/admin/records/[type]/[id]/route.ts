@@ -6,7 +6,6 @@ import { syncWebsiteProfile, unlinkWebsiteApplication, withdrawWebsiteConsents }
 
 export const dynamic = "force-dynamic";
 
-const pipeline = ["new", "screening", "qualified", "shortlisted", "submitted", "interview", "selected", "offer", "joined", "rejected", "withdrawn", "on_hold"];
 const employerStages = ["new", "contacted", "in_progress", "closed"];
 
 function audit(request: Request, action: string, type: string, id: string) {
@@ -24,8 +23,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ type:
     if (type === "applications") {
       const current = await env.DB!.prepare("SELECT status, recruiter_notes, full_name, email, phone, location, experience, desired_role, skills, education, availability, share_consent, future_consent FROM applications WHERE id = ?").bind(id).first<{status: string; recruiter_notes: string; full_name: string; email: string; phone: string; location: string; experience: string; desired_role: string; skills: string; education: string; availability: string; share_consent: number; future_consent: number}>();
       if (!current) return errorJson("Application not found.", 404);
-      const status = body.status === undefined ? current.status : clean(body.status, 30);
-      if (!pipeline.includes(status)) return errorJson("Invalid application stage.");
+      // One pipeline: stages are set in the Recruiting tool. The stage recorded here before that is kept, read-only.
+      if (body.status !== undefined && clean(body.status, 30) !== current.status) return errorJson("Stages are now set in the Recruiting tool, where the candidate is submitted to the client's job.", 409);
+      const status = current.status;
       const notes = body.notes === undefined ? current.recruiter_notes : clean(body.notes, 2000);
       const profile = body.profile && typeof body.profile === "object" && !Array.isArray(body.profile) ? body.profile as Record<string, unknown> : null;
       const fullName = profile ? clean(profile.fullName, 120) : current.full_name;
@@ -39,11 +39,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ type:
       const availability = profile ? clean(profile.availability, 100) : current.availability;
       if (!fullName || !validEmail(email) || phone.replace(/\D/g, "").length < 7 || !location || !experience) return errorJson("Name, valid email, phone, location and experience are required.");
       const withdrawing = body.withdrawOptionalConsents === true;
-      if (status === "submitted" && (!current.share_consent || withdrawing)) return errorJson("Get the candidate's employer-sharing consent before submission.");
       await env.DB!.batch([
         env.DB!.prepare("UPDATE applications SET status = ?, recruiter_notes = ?, full_name = ?, email = ?, phone = ?, location = ?, experience = ?, desired_role = ?, skills = ?, education = ?, availability = ?, share_consent = ?, future_consent = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
           .bind(status, notes, fullName, email, phone, location, experience, desiredRole, skills, education, availability, withdrawing ? 0 : current.share_consent, withdrawing ? 0 : current.future_consent, id),
-        audit(request, withdrawing ? "consent.withdrawn" : profile ? "profile.corrected" : body.notes === undefined ? "stage.changed" : "notes.updated", "application", id),
+        audit(request, withdrawing ? "consent.withdrawn" : profile ? "profile.corrected" : "notes.updated", "application", id),
       ]);
       // A correction made here is applied to the same person's record in the shared candidate list.
       if (profile) await syncWebsiteProfile(portalDb(), id, { fullName, email, phone, location }, adminActor(request));
@@ -79,7 +78,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ type
       for (const key of linked.r2Keys) await env.BUCKET!.delete(key);
       await env.DB!.batch([
         // Screening results hold the parsed CV, so they go with the application.
-        env.DB!.prepare("DELETE FROM ats_screenings WHERE application_id = ?").bind(id),
+        env.DB!.prepare("DELETE FROM retired_ats_screenings WHERE application_id = ?").bind(id),
         env.DB!.prepare("DELETE FROM applications WHERE id = ?").bind(id),
         audit(request, "record.deleted", "application", id),
       ]);

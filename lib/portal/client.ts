@@ -11,6 +11,7 @@
 // Every read and write is scoped to one company, and candidates whose consent
 // was withdrawn are shown without any personal detail.
 
+import { sharedForRole } from "./vacancy";
 import { audit, candidateRef, newId, now, nowIso, parseJson, PortalError, type Db } from "./db";
 import { ACTIVE_CONSENT_SQL, consentActive } from "./consent";
 import { issuePortalToken } from "./accounts";
@@ -259,7 +260,8 @@ export async function submitByRecruiter(db: Db, secret: string, input: { company
   const hiddenByName = parseJson<string[]>(cand.hidden_company_names, []).map(nameKey).some(k => k && (k === nameKey(names?.display_name ?? "") || k === nameKey(names?.legal_name ?? "")));
   if (hiddenByName || parseJson<string[]>(cand.hidden_company_ids, []).includes(companyId)) throw new PortalError("HIDDEN", "The candidate has hidden their profile from this company.", 403);
   // Portal sharing consent, or the website's recruiter-reviewed sharing consent (this is a recruiter-reviewed submission).
-  if (!await consentActive(db, candidateId, "share_with_companies") && !await consentActive(db, candidateId, "recruiter_sharing")) throw new PortalError("NO_CONSENT", "The candidate has not consented to their CV being shared with employers.", 403);
+  // or the website form's tick to share the CV with the employer for this very role.
+  if (!await consentActive(db, candidateId, "share_with_companies") && !await consentActive(db, candidateId, "recruiter_sharing") && !await sharedForRole(db, candidateId, jdId)) throw new PortalError("NO_CONSENT", "The candidate has not consented to their CV being shared with employers.", 403);
   if (!input.note.trim()) throw new PortalError("NOTE", "Add a recruiter note for the client: why this candidate, availability, CTC and notice.");
   const unlock = await db.prepare("SELECT access_revoked_at, candidate_ref FROM unlocks WHERE company_id = ? AND candidate_id = ?").bind(companyId, candidateId).first<{ access_revoked_at: string | null; candidate_ref: string }>();
   // A company knows a person by one reference. After a merge the surviving record keeps the reference the company already has.
@@ -489,12 +491,14 @@ export async function submissionCandidates(db: Db, jdId: string) {
   const { results } = await db.prepare(`SELECT m.candidate_id, k.display_name, k.current_city, m.score, m.lower_bound, m.hard_pass, m.explanation,
       EXISTS (SELECT 1 FROM pipeline p WHERE p.jd_id = m.jd_id AND p.candidate_id = m.candidate_id) AS in_pipeline,
       CASE WHEN k.account_id IS NOT NULL THEN 'portal' ELSE 'website' END AS source,
-      (${ACTIVE_CONSENT_SQL("m.candidate_id", "share_with_companies")} OR ${ACTIVE_CONSENT_SQL("m.candidate_id", "recruiter_sharing")}) AS can_share,
+      (${ACTIVE_CONSENT_SQL("m.candidate_id", "share_with_companies")} OR ${ACTIVE_CONSENT_SQL("m.candidate_id", "recruiter_sharing")}
+        OR EXISTS (SELECT 1 FROM applications wa JOIN candidate_sources ws ON ws.kind = 'website_application' AND ws.ref_id = wa.id WHERE ws.candidate_id = m.candidate_id AND wa.job_id = m.jd_id AND wa.share_consent = 1)) AS can_share,
+      EXISTS (SELECT 1 FROM portal_applications pa WHERE pa.jd_id = m.jd_id AND pa.candidate_id = m.candidate_id AND pa.status != 'withdrawn') AS applied,
       (SELECT COUNT(*) FROM placements pl WHERE pl.candidate_id = m.candidate_id AND pl.status IN ('left_in_guarantee', 'replaced')) AS early_exits,
       (SELECT COUNT(*) FROM placements pl WHERE pl.candidate_id = m.candidate_id AND pl.status IN ('left_in_guarantee', 'replaced') AND COALESCE(pl.left_on, pl.joined_on) >= ?) AS recent_early_exits,
       k.fast_track_at IS NOT NULL AS fast_track,
       (SELECT sp.reason FROM shortlist_passes sp WHERE sp.jd_id = m.jd_id AND sp.candidate_id = m.candidate_id) AS passed
-    FROM matches m JOIN candidates k ON k.id = m.candidate_id WHERE m.jd_id = ? AND k.status = 'active' ORDER BY m.hard_pass DESC, m.lower_bound DESC LIMIT 200`).bind(lowPrioritySince, jdId).all<{ explanation: string; candidate_id: string; in_pipeline: number; passed: string | null; recent_early_exits: number; score?: number; lower_bound?: number }>();
+    FROM matches m JOIN candidates k ON k.id = m.candidate_id WHERE m.jd_id = ? AND k.status = 'active' ORDER BY m.hard_pass DESC, applied DESC, m.lower_bound DESC LIMIT 200`).bind(lowPrioritySince, jdId).all<{ explanation: string; candidate_id: string; in_pipeline: number; passed: string | null; recent_early_exits: number; score?: number; lower_bound?: number }>();
   // A candidate who left a placement inside the replacement period in the last 12 months ranks after everyone else.
   results.sort((a, b) => Number(!!a.recent_early_exits) - Number(!!b.recent_early_exits));
   return results.map(r => ({ ...r, explanation: parseJson<{ summary?: string }>(r.explanation, {}).summary ?? "" }));

@@ -1,5 +1,7 @@
 # CV screening (ATS) — design, operation and limits
 
+> **Retired on 10 Nov 2026 (merge 2 in `WORKFLOWS_AND_MERGE_PLAN.md`).** The CV screening tab and its routes are removed. Candidates are ranked and worked in the Recruiting tool, which uses the portal matching engine. The parsing library in `lib/ats/` is still used by that engine. The two tables are kept as `retired_ats_job_profiles` and `retired_ats_screenings`. The rest of this page describes the tool as it was.
+
 The CV screening tool is a recruiter aid in the **owner-only recruitment console** (`/admin` → **CV screening**). It is not linked from the public website. It is not a Working Platform tool, so team members cannot see it. Every route under `/api/admin/ats/` checks the site owner's sign-in on the server. Every change also requires a same-origin request.
 
 It does three things:

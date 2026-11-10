@@ -134,6 +134,13 @@
       "when": 1794960500000,
       "tag": "0018_one_orders_table",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795046900000,
+      "tag": "0019_one_vacancy_record",
+      "breakpoints": true
     }
   ]
 }

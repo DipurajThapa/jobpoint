@@ -159,7 +159,7 @@ export async function eraseWebsiteApplications(db: Db, applicationIds: string[])
     const row = await db.prepare("SELECT resume_key FROM applications WHERE id = ?").bind(id).first<{ resume_key: string | null }>();
     if (row?.resume_key) keys.push(row.resume_key);
     await db.batch([
-      db.prepare("DELETE FROM ats_screenings WHERE application_id = ?").bind(id),
+      db.prepare("DELETE FROM retired_ats_screenings WHERE application_id = ?").bind(id),
       db.prepare("DELETE FROM candidate_sources WHERE kind = 'website_application' AND ref_id = ?").bind(id),
       db.prepare("DELETE FROM applications WHERE id = ?").bind(id),
     ]);

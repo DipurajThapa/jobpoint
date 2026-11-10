@@ -129,7 +129,7 @@ test("one staff sign-in: only an administrator with two-step sign-in reaches the
   assert.equal((await get(admin.cookie)).status, 200);
   // What the administrator does there is recorded under their own account.
   await w.db.prepare("INSERT INTO applications (id, full_name, email, phone, location, experience, consent) VALUES ('app-x', 'N', 'n@person.example', '9830000000', 'K', 'e', 1)").run();
-  const patch = await call(await route("admin/records/[type]/[id]"), "PATCH", "/api/admin/records/applications/app-x", { cookie: admin.cookie, params: { type: "applications", id: "app-x" }, body: { status: "screening" } });
+  const patch = await call(await route("admin/records/[type]/[id]"), "PATCH", "/api/admin/records/applications/app-x", { cookie: admin.cookie, params: { type: "applications", id: "app-x" }, body: { notes: "called, interested" } });
   assert.equal(patch.status, 200, patch.text);
   assert.equal((await w.db.prepare("SELECT actor_id FROM audit_events WHERE target_id = 'app-x'").first()).actor_id, "platform:u_adminuser02");
   // Losing the role, being disabled, or turning the second step off closes the console again.
