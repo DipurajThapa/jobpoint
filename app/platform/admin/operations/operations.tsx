@@ -15,6 +15,18 @@ export default function Operations() {
   const [data,setData] = useState<Data>(initial), [users,setUsers] = useState<Row[]>([]);
   const [busy,setBusy] = useState(false), [message,setMessage] = useState(""), [error,setError] = useState(false);
   const [editing,setEditing] = useState("");
+  const [inventory,setInventory] = useState<{inventory:{takenAt:string;groups:{merge:string;title:string;lines:{label:string;rows:number|null}[]}[]};text:string}|null>(null);
+  async function countData() {
+    setBusy(true);setMessage("");
+    try {setInventory(await call("/api/platform/admin/operations?view=inventory","GET") as never);setError(false);}
+    catch(e){setError(true);setMessage(e instanceof Error?e.message:"The count failed.");}
+    finally{setBusy(false);}
+  }
+  async function copyInventory() {
+    if(!inventory)return;
+    try {await navigator.clipboard.writeText(inventory.text);setError(false);setMessage("Copied. Paste it into your message.");}
+    catch {setError(true);setMessage("Could not copy automatically. Select the text in the box and copy it.");}
+  }
   const connectionForm = useRef<HTMLFormElement>(null);
   // State is set in promise callbacks, never synchronously in the effect body.
   const fetchAll = useCallback(()=>Promise.all([call("/api/platform/admin/operations","GET"),call("/api/platform/admin/users","GET")]),[]);
@@ -38,7 +50,7 @@ export default function Operations() {
   const askDelete=(label:string,work:()=>void)=>{if(window.confirm(`Delete ${label}?`))work();};
   const time=(value:string)=>value?new Date(value).toLocaleString("en-GB",{dateStyle:"medium",timeStyle:"short"}):"Never";
   return <>
-    <nav className="wp-ops-nav" aria-label="Administration sections"><a href="#overview">Overview</a><a href="#teams">Teams</a><a href="#connections">Connections</a><a href="#settings">Settings</a><a href="#audit">Audit</a></nav>
+    <nav className="wp-ops-nav" aria-label="Administration sections"><a href="#overview">Overview</a><a href="#teams">Teams</a><a href="#connections">Connections</a><a href="#settings">Settings</a><a href="#inventory">Data inventory</a><a href="#audit">Audit</a></nav>
     {message&&<p className={`wp-notice ${error?"bad":"good"}`} role="status">{message}</p>}
     <section id="overview" className="wp-card"><h2>Operational overview</h2><div className="wp-stats">
       {[["Active users",data.counts?.activeUsers],["Active sessions",data.counts?.sessions],["Conversations",data.counts?.conversations],["Events, 7 days",data.counts?.events],["Enabled connections",data.counts?.integrations]].map(([label,value])=><div key={String(label)}><strong>{value??"—"}</strong><span>{label}</span></div>)}
@@ -56,6 +68,10 @@ export default function Operations() {
     </section>
     <section id="settings" className="wp-card"><h2>System and tool settings</h2><div className="wp-ops-row"><div><h3>Stored credentials</h3><p className="hint">After a dedicated encryption key (INTEGRATION_SECRET_KEY) is set in hosting, move stored integration tokens and two-step sign-in secrets to it. Safe to run more than once.</p></div><button className="wp-btn quiet" disabled={busy} onClick={()=>void run({action:"secrets.rewrap"},"Stored credentials re-encrypted with the dedicated key.")}>Re-encrypt stored credentials</button></div><div className="wp-ops-row"><div><h3>Invitation links</h3><p className="hint">Pause new team invitations. Existing sessions and reset links continue.</p></div><button className="wp-btn quiet" disabled={busy} onClick={()=>void run({action:"setting.invites",value:data.settings.invites_enabled==="false"},"Invitation policy updated.")}>{data.settings.invites_enabled==="false"?"Resume invitations":"Pause invitations"}</button></div>
       {data.availableTools.map(tool=><div className="wp-ops-row" key={tool.key}><div><h3>{tool.name}</h3><p className="hint">Assigned users retain their permissions; disabling the tool blocks its page and APIs.</p></div><button className="wp-btn quiet" disabled={busy} onClick={()=>{const enabled=data.features.find(f=>f.toolKey===tool.key)?.enabled!==0;void run({action:"feature.toggle",id:tool.key,enabled:!enabled},"Tool availability updated.");}}>{data.features.find(f=>f.toolKey===tool.key)?.enabled===0?"Enable":"Disable"}</button></div>)}
+    </section>
+    <section id="inventory" className="wp-card"><h2>Data inventory</h2><p className="hint">Counts the rows in every table the merge plan would move or retire. Numbers only: no names, emails or CVs are shown or copied. Nothing is changed.</p>
+      <div className="wp-ops-actions"><button type="button" className="wp-btn quiet" disabled={busy} onClick={()=>void countData()}>{inventory?"Count again":"Count now"}</button>{inventory&&<button type="button" className="wp-btn quiet" onClick={()=>void copyInventory()}>Copy as text</button>}</div>
+      {inventory&&<>{inventory.inventory.groups.map(g=><div key={g.merge}><h3>Merge {g.merge}: {g.title}</h3><ul className="wp-activity">{g.lines.map((l,i)=><li key={i}><span>{l.label}</span><b>{l.rows??"removed"}</b></li>)}</ul></div>)}<label>Text to paste<textarea readOnly rows={8} value={inventory.text} onFocus={e=>e.currentTarget.select()}/></label></>}
     </section>
     <section id="audit" className="wp-card"><h2>Recent activity</h2><p className="hint">The log records actor, action, target and time. Credentials and message bodies are excluded here.</p>{data.activity.length?<ul className="wp-activity">{data.activity.map((a,i)=><li key={i}><time>{time(a.createdAt)}</time><span>{a.actorId} · {a.action} · {a.targetType}: {a.targetId}</span></li>)}</ul>:<p className="hint">No activity recorded.</p>}</section>
   </>;

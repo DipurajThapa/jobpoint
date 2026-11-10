@@ -1,6 +1,7 @@
 import { apiError, apiJson, auditStatement, authorizeApi, db, newId, nowIso } from "@/lib/platform/auth";
 import { decryptToken, encryptToken, endpointProblem, rewrapStoredSecrets } from "@/lib/platform/integrations";
 import { TOOLS } from "@/lib/platform/tools";
+import { dataInventory, inventoryText } from "@/lib/platform/inventory";
 
 export const dynamic = "force-dynamic";
 type Integration = { id: string; name: string; kind: "api" | "mcp"; endpoint: string; enabled: number; encrypted_token: string };
@@ -8,6 +9,8 @@ type Integration = { id: string; name: string; kind: "api" | "mcp"; endpoint: st
 export async function GET(request: Request) {
   const admin = await authorizeApi(request, { admin: true });
   if (admin instanceof Response) return admin;
+  // Row counts for the merge plan: numbers only, counted on request.
+  if (new URL(request.url).searchParams.get("view") === "inventory") { const inventory = await dataInventory(db()); return apiJson({ inventory, text: inventoryText(inventory) }); }
   const [counts, teams, memberships, integrations, checks, settings, features, activity, usage] = await Promise.all([
     db().prepare(`SELECT (SELECT count(*) FROM platform_users WHERE status='active') activeUsers,
       (SELECT count(*) FROM platform_sessions WHERE datetime(expires_at) > datetime('now')) sessions,
