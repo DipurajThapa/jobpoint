@@ -113,7 +113,7 @@ function Cv({ data, reload, say }: { data: { profile: Profile | null; status: st
 }
 
 function Privacy({ data, reload, say }: { data: { sharing: boolean } | null; reload: () => void; say: (t: string, bad?: boolean) => void }) {
-  const [info, setInfo] = useState<{ companies: { id: string; display_name: string; city: string }[]; blocked: string[]; sharing: { unlockedBy: { company: string; unlocked_at: string; access_revoked_at: string | null }[]; previewCompanies: number } } | null>(null);
+  const [info, setInfo] = useState<{ hidden: string[]; sharing: { unlockedBy: { company: string; unlocked_at: string; access_revoked_at: string | null }[]; previewCompanies: number } } | null>(null);
   const load = useCallback(() => get<typeof info>("/api/portal/candidate/companies").then(setInfo).catch(e => say(e.message, true)), [say]);
   useEffect(() => { load(); }, [load]);
   const act = async (url: string, body: object) => { try { say((await post<{ message: string }>(url, body)).message); reload(); load(); } catch (e) { say((e as Error).message, true); } };
@@ -125,8 +125,10 @@ function Privacy({ data, reload, say }: { data: { sharing: boolean } | null; rel
       {info && <p className="pj-muted">Your anonymous summary is currently shown to {info.sharing.previewCompanies} employer(s).{info.sharing.unlockedBy.length ? ` Unlocked by: ${info.sharing.unlockedBy.map(u => `${u.company} (${u.unlocked_at.slice(0, 10)}${u.access_revoked_at ? ", access revoked" : ""})`).join("; ")}.` : " No employer has unlocked your full CV."}</p>}
     </section>
     <section className="pj-card"><h2>Hide my profile from specific companies</h2>
-      <p className="pj-muted">Blocked companies never see your profile, not even anonymously. Use this for your current employer.</p>
-      {info && <div className="pj-list">{info.companies.map(c => <label key={c.id} className="pj-row"><input type="checkbox" checked={info.blocked.includes(c.id)} onChange={e => act("/api/portal/candidate/block", { companyId: c.id, block: e.target.checked })} /> {c.display_name} <span className="pj-muted">{c.city}</span></label>)}</div>}
+      <p className="pj-muted">Type the name of any employer that must never receive your profile, such as your current one. We do not show which companies hire through Jobboard300.</p>
+      <form className="pj-row" onSubmit={e => { e.preventDefault(); const f = e.currentTarget, name = String(new FormData(f).get("name") ?? ""); act("/api/portal/candidate/block", { name, block: true }).then(() => { f.reset(); load(); }); }}>
+        <input name="name" required minLength={2} maxLength={120} placeholder="Employer name" aria-label="Employer name" /><button className="pj-btn quiet">Hide from this employer</button></form>
+      {info && info.hidden.length > 0 && <div className="pj-list">{info.hidden.map(n => <div key={n} className="pj-row"><span>{n}</span><button className="pj-btn quiet" onClick={() => act("/api/portal/candidate/block", { name: n, block: false }).then(load)}>Remove</button></div>)}</div>}
     </section>
     <section className="pj-card"><h2>Your data</h2>
       <div className="pj-row">

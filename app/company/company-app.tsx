@@ -16,13 +16,13 @@ type Overview = {
   placements: { id: string; title: string; joined_on: string; guarantee_ends_on: string; status: string; left_on: string | null; name: string; inGuarantee: boolean }[];
   metrics: { daysToOffer: number | null; daysToJoin: number | null; offerAcceptance: number | null; noShows: number };
 };
-type Dashboard = { company: { display_name: string; status: string; city: string }; params: { version: number; params: Params } | null; pendingRequest: { version: number } | null; quota: { remaining: number; unlockedTotal: number; plans: { plan: string; remaining: number; total: number; endsAt: string }[] }; jds: { id: string; title: string; status: string; decision_note: string; released: number; unlocked: number }[]; overview: Overview; role: string; notices?: { id: string; title: string; body: string; created_at: string; read_at: string | null }[] };
+type Dashboard = { company: { display_name: string; status: string; city: string }; params: { version: number; params: Params } | null; pendingRequest: { version: number } | null; quota: { remaining: number; unlockedTotal: number; plans: { plan: string; remaining: number; total: number; endsAt: string }[] }; jds: { id: string; title: string; status: string; decision_note: string; released: number; unlocked: number }[]; overview: Overview; role: string; selfService?: boolean; terms?: { feePercent?: number; guaranteeDays?: number }; notices?: { id: string; title: string; body: string; created_at: string; read_at: string | null }[] };
 type Interview = { id: string; round: string; scheduled_at: string; mode: string; location: string; interviewer: string; status: string; outcome: string; rating: number | null; feedback: string };
-type Entry = { id: string; jdId: string; jdTitle: string; ref: string; stage: string; stageLabel: string; stageReason: string; source: string; name: string; available: boolean; recruiterNote: string; offerCtcInr: number | null; offerDate: string | null; joiningDate: string | null; lastWorkingDay: string | null; competingOffers: string; updatedAt: string; next: string[]; interviews: Interview[] };
+type Entry = { id: string; jdId: string; jdTitle: string; ref: string; stage: string; stageLabel: string; stageReason: string; source: string; name: string; available: boolean; cvOpen?: boolean; recruiterNote: string; offerCtcInr: number | null; offerDate: string | null; joiningDate: string | null; lastWorkingDay: string | null; competingOffers: string; updatedAt: string; next: string[]; interviews: Interview[] };
 type PipelineData = { pipeline: Entry[]; reasons: Record<string, string[]>; labels: Record<string, string> };
 type Params = { minScore: number; roleFamilies: string[]; seniority: string[]; cities: string[]; allowRemote: boolean; ctcBands: { minInr: number; maxInr: number }[]; maxNoticeDays: number | null; maxReleasePerJd: number; maxLiveJds: number; mandatoryFilters: string[] };
 type Match = { ref: string; title: string; roleFamily: string; seniority: string; yearsExperience: number; keySkills: string[]; city: string; relocate: string; education: string; notice: string; expectedCtc: string; score: number; lowerBound: number; explanation: { summary: string; meets: string[]; misses: string[]; why: string }; assessed: string[]; unlocked: boolean };
-type Full = { traceId: string; unlockedAt: string; profile: { contact: { name: string; email: string; phone: string; links: string[] }; headline: string; summary: string; work: { title: string; employer: string; location: string; start: string | null; end: string | null; current: boolean; highlights: string[] }[]; education: { qualification: string; field: string; institution: string; year: number | null }[]; skills: { name: string; evidence: string }[]; certifications: string[]; languages: string[]; india: { yearsExperience: number; noticeDays: number | null; ctcCurrentInr: number | null; ctcExpectedInr: number | null; currentCity: string } }; applications: { id: string; status: string; title: string }[] };
+type Full = { contactsHidden?: boolean; traceId: string; unlockedAt: string; profile: { contact: { name: string; email: string; phone: string; links: string[] }; headline: string; summary: string; work: { title: string; employer: string; location: string; start: string | null; end: string | null; current: boolean; highlights: string[] }[]; education: { qualification: string; field: string; institution: string; year: number | null }[]; skills: { name: string; evidence: string }[]; certifications: string[]; languages: string[]; india: { yearsExperience: number; noticeDays: number | null; ctcCurrentInr: number | null; ctcExpectedInr: number | null; currentCity: string } }; applications: { id: string; status: string; title: string }[] };
 
 const lpa = (n: number | null) => n === null ? "not stated" : `₹${(n / 100_000).toFixed(1)} LPA`;
 async function get<T>(path: string): Promise<T> {
@@ -51,7 +51,7 @@ export default function CompanyApp({ owner }: { owner: boolean }) {
         <button aria-current={view.name === "jobs" || view.name === "new" ? "page" : undefined} onClick={() => go({ name: "jobs" })}>Jobs</button>
         <button aria-current={view.name === "pipeline" ? "page" : undefined} onClick={() => go({ name: "pipeline" })}>Pipeline</button>
         <button aria-current={view.name === "team" ? "page" : undefined} onClick={() => go({ name: "team" })}>Team</button>
-        <button aria-current={view.name === "params" ? "page" : undefined} onClick={() => go({ name: "params" })}>Matching rules</button>
+        {dash?.selfService && <button aria-current={view.name === "params" ? "page" : undefined} onClick={() => go({ name: "params" })}>Matching rules</button>}
       </nav>
       <form onSubmit={e => { e.preventDefault(); signOut(); }}><button>Sign out</button></form>
     </header>
@@ -62,11 +62,11 @@ export default function CompanyApp({ owner }: { owner: boolean }) {
       {dash && view.name === "jobs" && <Home dash={dash} active={active} post={() => setView({ name: "new" })} open={(id, title) => setView({ name: "matches", id, title })} edit={id => setView({ name: "jd", id })} pipeline={jd => setView({ name: "pipeline", jd })} />}
       {view.name === "pipeline" && <Pipeline jd={view.jd} jobs={dash?.overview.jobs ?? []} say={say} reload={load} profile={ref => setView({ name: "candidate", ref })} />}
       {view.name === "team" && <Team say={say} />}
-      {view.name === "new" && <NewJd created={id => setView({ name: "jd", id })} say={say} />}
+      {view.name === "new" && <NewJd selfService={!!dash?.selfService} created={id => setView({ name: "jd", id })} say={say} />}
       {view.name === "jd" && <JdEditor id={view.id} say={say} done={() => setView({ name: "home" })} />}
       {view.name === "matches" && <Matches id={view.id} title={view.title} say={say} open={ref => setView({ name: "candidate", ref })} reload={load} />}
-      {view.name === "candidate" && <Candidate refId={view.ref} jobs={dash?.overview.jobs ?? []} say={say} back={() => setView({ name: "pipeline" })} />}
-      {view.name === "params" && dash && <ParamsView dash={dash} owner={owner} say={say} reload={load} />}
+      {view.name === "candidate" && <Candidate refId={view.ref} jobs={dash?.selfService ? dash.overview.jobs : []} say={say} back={() => setView({ name: "pipeline" })} />}
+      {view.name === "params" && dash?.selfService && <ParamsView dash={dash} owner={owner} say={say} reload={load} />}
     </main>
   </>;
 }
@@ -90,7 +90,7 @@ function OverviewView({ dash, say, reload, go }: { dash: Dashboard; say: (t: str
       <div><span className="pj-muted">Interviews in the next 14 days</span><b>{o.upcoming.length}</b><span className="pj-muted">{o.needsFeedback.length ? `${o.needsFeedback.length} past interview(s) need feedback` : "All feedback recorded"}</span></div>
       <div><span className="pj-muted">Offers awaiting joining</span><b>{o.joining.length}</b><span className="pj-muted">Offer acceptance {o.metrics.offerAcceptance === null ? "—" : `${o.metrics.offerAcceptance}%`}</span></div>
       <div><span className="pj-muted">Hires</span><b>{o.placements.length}</b><span className="pj-muted">{o.placements.filter(p => p.inGuarantee).length} inside the replacement guarantee</span></div>
-      <div><span className="pj-muted">Unlocks remaining</span><b>{dash.quota.remaining}</b><span className="pj-muted">{dash.quota.plans.map(p => `${p.plan}: until ${p.endsAt.slice(0, 10)}`).join(" · ") || "No active plan"}</span></div>
+      {dash.selfService ? <div><span className="pj-muted">Unlocks remaining</span><b>{dash.quota.remaining}</b><span className="pj-muted">{dash.quota.plans.map(p => `${p.plan}: until ${p.endsAt.slice(0, 10)}`).join(" · ") || "No active plan"}</span></div> : <div><span className="pj-muted">Your terms</span><b>{dash.terms?.feePercent ?? 8.33}%</b><span className="pj-muted">of annual salary, charged only when someone joins · {dash.terms?.guaranteeDays ?? 60}-day replacement</span></div>}
     </div>
     {(dash.notices ?? []).some(n => !n.read_at) && <section className="pj-card"><div className="pj-row" style={{ justifyContent: "space-between" }}><h2>Updates from Jobboard300</h2><button className="pj-link" onClick={() => post("/api/portal/company/notices-read", {}).then(reload)}>Mark all as read</button></div>
       <div className="pj-list">{(dash.notices ?? []).filter(n => !n.read_at).map(n => <article className="pj-note" key={n.id}><b>{n.title}</b> <span className="pj-muted">· {fmtDate(n.created_at)}</span><p>{n.body}</p></article>)}</div></section>}
@@ -121,8 +121,8 @@ function Home({ dash, active, post: postJob, open, edit, pipeline }: { dash: Das
   const stats = new Map(dash.overview.jobs.map(j => [j.id, j]));
   return <>
     <div className="pj-stats">
-      <div><span className="pj-muted">Unlocks remaining</span><b>{dash.quota.remaining}</b><span className="pj-muted">{dash.quota.plans.map(p => `${p.plan}: ${p.remaining}/${p.total} until ${p.endsAt.slice(0, 10)}`).join(" · ") || "No active plan"}</span></div>
-      <div><span className="pj-muted">Profiles unlocked</span><b>{dash.quota.unlockedTotal}</b><span className="pj-muted">They stay available even after your plan ends.</span></div>
+      {dash.selfService ? <><div><span className="pj-muted">Unlocks remaining</span><b>{dash.quota.remaining}</b><span className="pj-muted">{dash.quota.plans.map(p => `${p.plan}: ${p.remaining}/${p.total} until ${p.endsAt.slice(0, 10)}`).join(" · ") || "No active plan"}</span></div>
+      <div><span className="pj-muted">Profiles unlocked</span><b>{dash.quota.unlockedTotal}</b><span className="pj-muted">They stay available even after your plan ends.</span></div></> : <div><span className="pj-muted">Your terms</span><b>{dash.terms?.feePercent ?? 8.33}%</b><span className="pj-muted">of annual salary, charged only when someone joins · {dash.terms?.guaranteeDays ?? 60}-day replacement</span></div>}
       <div><span className="pj-muted">Live jobs</span><b>{dash.jds.filter(j => j.status === "live").length}</b><span className="pj-muted">of {dash.params?.params.maxLiveJds ?? 0} allowed</span></div>
     </div>
     <section className="pj-card"><div className="pj-row" style={{ justifyContent: "space-between" }}><h2>Your jobs</h2>{active && <button className="pj-btn" onClick={postJob}>Post a job</button>}</div>
@@ -198,7 +198,7 @@ function Pipeline({ jd, jobs, say, reload, profile }: { jd?: string; jobs: Overv
       <label>Job <select value={filter} onChange={e => setFilter(e.target.value)}><option value="">All jobs</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}</select></label>
       <label>Show <select value={show} onChange={e => setShow(e.target.value)}><option value="open">In process</option><option value="closed">Closed</option><option value="all">All</option></select></label>
     </div>
-    {!data ? <p className="pj-muted">Loading…</p> : rows.length === 0 ? <p className="pj-muted">Nobody here yet. Unlock a profile from a job&apos;s matches and add it to the pipeline, or wait for Jobboard300&apos;s submissions on managed jobs.</p> :
+    {!data ? <p className="pj-muted">Loading…</p> : rows.length === 0 ? <p className="pj-muted">Nobody here yet. Your Jobboard300 recruiter will submit candidates for each live job, and they will appear here.</p> :
       <div className="pj-list">{rows.map(e => <article className="pj-item" key={e.id}>
         <div>
           <b>{e.name}</b> <span className="pj-pill">{e.stageLabel}</span>{e.source === "job_point" && <span className="pj-pill">Submitted by Jobboard300</span>}
@@ -210,7 +210,7 @@ function Pipeline({ jd, jobs, say, reload, profile }: { jd?: string; jobs: Overv
           {form?.id === e.id && form.kind.startsWith("stage:") && <StageForm entry={e} stage={form.kind.slice(6)} reasons={data.reasons[form.kind.slice(6)]} labels={data.labels} done={done} say={say} />}
         </div>
         {e.available && <div className="pj-row pj-actions">
-          <button className="pj-btn quiet" onClick={() => profile(e.ref)}>Profile</button>
+          {e.cvOpen !== false && <button className="pj-btn quiet" onClick={() => profile(e.ref)}>Profile</button>}
           {["shortlisted", "interview"].includes(e.stage) && <button className="pj-btn quiet" onClick={() => setForm({ id: e.id, kind: "interview" })}>Schedule interview</button>}
           {e.next.length > 0 && <select value="" aria-label="Move to stage" onChange={ev => ev.target.value && setForm({ id: e.id, kind: `stage:${ev.target.value}` })}><option value="">Move to…</option>{e.next.map(s => <option key={s} value={s}>{data.labels[s]}</option>)}</select>}
         </div>}
@@ -229,7 +229,7 @@ function Team({ say }: { say: (t: string, bad?: boolean) => void }) {
   }
   if (!data) return <p className="pj-muted">Loading…</p>;
   return <section className="pj-card"><h2>Team</h2>
-    <p className="pj-muted">Everyone here can see your jobs, matches, unlocked profiles and pipeline. Only the owner can add or remove people and request changes to matching rules.</p>
+    <p className="pj-muted">Everyone here can see your jobs and pipeline. Only the owner can add or remove people.</p>
     {link && <p className="pj-notice good">One-time link: <input readOnly value={link} onFocus={e => e.currentTarget.select()} style={{ width: "100%" }} /></p>}
     <table className="pj-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>{data.team.map(m => <tr key={m.id}>
       <td>{m.display_name || "—"}{m.id === data.you ? " (you)" : ""}</td><td>{m.email}</td><td>{m.role === "owner" ? "Owner" : "Team member"}</td>
@@ -245,7 +245,7 @@ function Team({ say }: { say: (t: string, bad?: boolean) => void }) {
   </section>;
 }
 
-function NewJd({ created, say }: { created: (id: string) => void; say: (t: string, bad?: boolean) => void }) {
+function NewJd({ selfService, created, say }: { selfService: boolean; created: (id: string) => void; say: (t: string, bad?: boolean) => void }) {
   const [busy, setBusy] = useState(false);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); setBusy(true); const f = Object.fromEntries(new FormData(e.currentTarget).entries());
@@ -258,7 +258,7 @@ function NewJd({ created, say }: { created: (id: string) => void; say: (t: strin
       <label>Location<input name="location" required placeholder="e.g. Kolkata" /></label>
       <label>Work mode<select name="workMode"><option>On-site</option><option>Hybrid</option><option>Remote</option></select></label>
       <label>Openings<input name="openings" type="number" min={1} max={500} defaultValue={1} /></label>
-      <label>Who finds the candidates?<select name="service"><option value="self">We review matches and unlock profiles</option><option value="managed">Jobboard300 recruits and submits a shortlist</option></select></label>
+      {selfService ? <label>Who finds the candidates?<select name="service"><option value="self">We review matches and unlock profiles</option><option value="managed">Jobboard300 recruits and submits a shortlist</option></select></label> : <p className="full pj-muted">A Jobboard300 recruiter finds, screens and submits candidates for this job. You pay only when someone joins.</p>}
       <label className="full">Job description <span className="pj-muted">Include responsibilities, must-have skills (&ldquo;Must have &hellip;&rdquo;), years of experience, education, CTC range and notice period.</span><textarea name="text" required minLength={80} rows={12} /></label>
       <div className="full"><button className="pj-btn" disabled={busy}>{busy ? "Reading…" : "Create draft"}</button></div>
     </form>
@@ -280,7 +280,7 @@ function JdEditor({ id, say, done }: { id: string; say: (t: string, bad?: boolea
     try { say((await post<{ message: string }>("/api/portal/company/jd-update", { jdId: id, requirements })).message); load(); } catch (err) { say((err as Error).message, true); }
   }
   async function submit() { try { say((await post<{ message: string; conflicts: string[] }>("/api/portal/company/jd-submit", { jdId: id })).message); done(); } catch (err) { say((err as Error).message, true); } }
-  async function close() { if (!window.confirm("Close this job? Unlocked profiles stay available.")) return; try { say((await post<{ message: string }>("/api/portal/company/jd-close", { jdId: id })).message); done(); } catch (err) { say((err as Error).message, true); } }
+  async function close() { if (!window.confirm("Close this job?")) return; try { say((await post<{ message: string }>("/api/portal/company/jd-close", { jdId: id })).message); done(); } catch (err) { say((err as Error).message, true); } }
   return <section className="pj-card"><h2>{data.jd.title}</h2>
     <p className="pj-muted">Status: {data.jd.status}{data.jd.decision_note ? ` · ${data.jd.decision_note}` : ""}. Editing a live job sends it back to Jobboard300 for approval.</p>
     <form className="pj-form" key={data.jd.requirements} onSubmit={save}>
@@ -342,8 +342,8 @@ function Candidate({ refId, jobs, say, back }: { refId: string; jobs: Overview["
   const p = c.profile;
   return <section className="pj-card">
     <div className="pj-row" style={{ justifyContent: "space-between" }}><h2>{p.contact.name}</h2><a className="pj-btn" href={`/api/portal/company/download?ref=${refId}`}>Download CV (watermarked PDF)</a></div>
-    <p>{p.contact.email} · {p.contact.phone}{p.india.currentCity ? ` · ${p.india.currentCity}` : ""}</p>
-    <p className="pj-muted">Unlocked {c.unlockedAt.slice(0, 10)} · Trace {c.traceId}. For this hiring purpose only; do not share. Delete the CV if the candidate asks or is not hired within 90 days.</p>
+    {c.contactsHidden ? <p className="pj-notice">Contact details are shared once you make an offer. Until then, Jobboard300 arranges every interview with this candidate.{p.india.currentCity ? ` Based in ${p.india.currentCity}.` : ""}</p> : <p>{p.contact.email} · {p.contact.phone}{p.india.currentCity ? ` · ${p.india.currentCity}` : ""}</p>}
+    <p className="pj-muted">Shared {c.unlockedAt.slice(0, 10)} · Trace {c.traceId}. For this hiring purpose only; do not share. This profile closes when the hiring process for this candidate ends. Delete any copy if the candidate asks or is not hired.</p>
     <p>{p.india.yearsExperience} years · Notice {p.india.noticeDays ?? "not stated"} days · Current {lpa(p.india.ctcCurrentInr)} · Expected {lpa(p.india.ctcExpectedInr)}</p>
     {p.summary && <p>{p.summary}</p>}
     <h3>Experience</h3><ul>{p.work.map((w, i) => <li key={i}><b>{w.title}</b>{w.employer ? `, ${w.employer}` : ""} ({w.start ?? "?"} – {w.current ? "present" : w.end ?? "?"}){w.highlights.length > 0 && <ul>{w.highlights.slice(0, 5).map((h, k) => <li key={k}>{h}</li>)}</ul>}</li>)}</ul>

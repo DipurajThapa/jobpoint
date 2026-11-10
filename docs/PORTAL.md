@@ -222,6 +222,19 @@ Every update writes a message, in `lib/portal/notify.ts` (migration `0009_notifi
 - **Team managers** invite recruiters into their own team (Recruiting tool only, one-time 72-hour link) and remove them. They cannot invite into, or see, another team.
 - Deleting a candidate deletes their inbox and queued messages.
 
+## 7b. Placement-fee model and client access (default)
+
+Policy lives in `lib/portal/policy.ts`; migration `0010_placement_model.sql`.
+
+- **Commercials.** No CV quotas are sold. Each client has `fee_percent` (7.5 to 8.33, default 8.33) and a replacement guarantee (default 60 days). On joining, the placement stores the fee percentage and the fee in rupees (annual CTC × percentage).
+- **Managed only.** Every job is recruited by Jobboard300. The client API refuses `matches`, `unlock`, `pipeline-add`, `application-status`, `params-request` and switching a job to self-service (`MANAGED_ONLY`).
+- **Temporary access.** `unlockedCandidate(..., temporary)` requires an open pipeline entry on a job that is not closed; otherwise `ACCESS_ENDED`. Contact details are blanked, and the download is a re-rendered PDF with contacts removed, until the offer stage.
+- **Black box.** The client dashboard carries no match counts, scores, reasons or matching rules. A live job's requirements can change three times in 30 days (`EDIT_LIMIT`).
+- **Client list.** Candidates hide from employers by typed name (`hidden_company_names`); the company list is never returned to candidates.
+- **Older self-service mode.** `CLIENT_SELF_SERVICE=true` turns browsing and unlocking back on. Locally: `CLIENT_SELF_SERVICE=true npm run dev`. `check-portal-e2e.mjs` covers that mode and must be run with it on; `check-recruiting-e2e.mjs` covers the default mode and must be run with it off.
+
+See `docs/SECURITY.md` for the access table and the breach response plan.
+
 ## 8. Checks
 
 ```bash

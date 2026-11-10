@@ -33,6 +33,8 @@ const client = await mod("client.ts");
 const website = await mod("website.ts");
 const staffMod = await mod("staff.ts");
 const notify = await mod("notify.ts");
+const views = await mod("views.ts");
+const policy = await mod("policy.ts");
 
 const SECRET = "test-secret-test-secret-test-secret-123";
 let clock = new Date("2026-11-09T06:00:00Z");
@@ -924,6 +926,68 @@ await check("A manager manages only their own team's members; deleting a candida
   await notify.notifyCandidate(t.db, cand, "test", "T", "B");
   await candidate.deleteCandidateData(t.db, cand, "candidate");
   assert.equal((await t.db.prepare("SELECT (SELECT COUNT(*) FROM candidate_messages WHERE candidate_id = ?) + (SELECT COUNT(*) FROM outbound_messages WHERE recipient_id = ?) AS n").bind(cand, cand).first()).n, 0);
+});
+
+// ---------- Placement-fee model and client access lock-down ----------
+
+await check("A client sees a candidate only while their hiring process is open, and contact details only from offer", async () => {
+  const t = await staffSetup();
+  await client.setJdService(t.db, t.compK.id, t.jdK, "managed", 1, t.compK.userId);
+  const cand = await makeCandidate(t.db, "Temporary Access"), second = await makeCandidate(t.db, "Second Person");
+  const sub = await staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: cand, note: "Strong fit" });
+  const early = await views.unlockedCandidate(t.db, t.compK.id, sub.ref, true);
+  assert.ok(early.contactsHidden && early.profile.contact.name && !early.profile.contact.email && !early.profile.contact.phone && early.profile.contact.links.length === 0, "no contact details before offer");
+  await rejects(views.unlockedCandidate(t.db, t.compF.id, sub.ref, true), "NOT_UNLOCKED");
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "shortlisted" });
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "interview" });
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "offered", offerCtcInr: 1_200_000 });
+  const atOffer = await views.unlockedCandidate(t.db, t.compK.id, sub.ref, true);
+  assert.ok(!atOffer.contactsHidden && atOffer.profile.contact.email, "contact details arrive with the offer");
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "offer_declined", reason: Object.values(client.REASONS.offer_declined ?? ["other"])[0] });
+  await rejects(views.unlockedCandidate(t.db, t.compK.id, sub.ref, true), "ACCESS_ENDED");
+  const row = (await client.pipelineView(t.db, t.compK.id, undefined, true)).find(r => r.id === sub.id);
+  assert.ok(!row.name.includes("Temporary") && row.recruiterNote === "" && row.available === false, "a closed-out candidate goes back to a reference");
+  const sub2 = await staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: second, note: "Next" });
+  assert.ok(await views.unlockedCandidate(t.db, t.compK.id, sub2.ref, true));
+  await t.db.prepare("UPDATE jds SET status = 'closed' WHERE id = ?").bind(t.jdK).run();
+  await rejects(views.unlockedCandidate(t.db, t.compK.id, sub2.ref, true), "ACCESS_ENDED");
+});
+
+await check("Contact details are stripped from CV text; the placement fee is 7.5% to 8.33% with a 60-day replacement", async () => {
+  const text = policy.redactContacts("Asha Rao | asha.rao@example.com | +91 98300 12345 | linkedin.com/in/asharao | https://github.com/asha\n8 years in Java, 2019-2024, CTC 1200000");
+  assert.ok(!/example\.com|98300|linkedin|github/.test(text) && text.includes("8 years in Java, 2019-2024") && text.includes("1200000"), text);
+  assert.equal(policy.feePercent(undefined), 8.33); assert.equal(policy.feePercent(7.5), 7.5);
+  assert.throws(() => policy.feePercent(7)); assert.throws(() => policy.feePercent(10));
+  assert.equal(policy.placementFee(1_200_000, 8.33), 99_960); assert.equal(policy.placementFee(null, 8.33), null);
+  assert.equal(policy.selfService(undefined), false);
+  const t = await staffSetup();
+  await client.setJdService(t.db, t.compK.id, t.jdK, "managed", 1, t.compK.userId);
+  await rejects(client.updateClientTerms(t.db, t.compK.id, 60, "", "admin", 12, 12), "FEE");
+  await client.updateClientTerms(t.db, t.compK.id, 60, "", "admin", 12, 7.5);
+  const cand = await makeCandidate(t.db, "Joiner");
+  const sub = await staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: cand, note: "Fit" });
+  for (const stage of ["shortlisted", "interview"]) await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage });
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "offered", offerCtcInr: 1_000_000 });
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "offer_accepted", joiningDate: "2026-12-01" });
+  clock = new Date("2026-12-01T06:00:00Z");
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "joined", joiningDate: "2026-12-01" });
+  const pl = await t.db.prepare("SELECT fee_percent, fee_inr, guarantee_ends_on FROM placements WHERE pipeline_id = ?").bind(sub.id).first();
+  assert.deepEqual([pl.fee_percent, pl.fee_inr], [7.5, 75_000]);
+  await rejects(views.unlockedCandidate(t.db, t.compK.id, sub.ref, true), "ACCESS_ENDED");
+  clock = new Date("2026-11-09T06:00:00Z");
+});
+
+await check("A live job's requirements can change only three times in 30 days; hiding from an employer works by typed name", async () => {
+  const t = await staffSetup();
+  const relive = async () => { await company.submitJd(t.db, t.compK.id, t.jdK, t.compK.userId); await company.decideJd(t.db, t.jdK, true, "admin"); };
+  const req = JSON.parse((await t.db.prepare("SELECT requirements FROM jds WHERE id = ?").bind(t.jdK).first()).requirements);
+  for (let i = 0; i < 3; i++) { await company.updateJdRequirements(t.db, t.compK.id, t.jdK, req, t.compK.userId); await relive(); }
+  await rejects(company.updateJdRequirements(t.db, t.compK.id, t.jdK, req, t.compK.userId), "EDIT_LIMIT");
+  await client.setJdService(t.db, t.compK.id, t.jdK, "managed", 1, t.compK.userId);
+  const cand = await makeCandidate(t.db, "Hidden Person");
+  await t.db.prepare("UPDATE candidates SET hidden_company_names = ? WHERE id = ?").bind(JSON.stringify(["kolkata client pvt. ltd."]), cand).run();
+  await rejects(staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: cand, note: "x" }), "HIDDEN");
+  assert.equal(policy.nameKey("Kolkata Client Private Limited"), policy.nameKey("KOLKATA CLIENT"));
 });
 
 console.log(`\n${passed} portal checks passed.`);

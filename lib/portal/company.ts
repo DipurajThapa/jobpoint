@@ -5,6 +5,7 @@ import { audit, newId, nowIso, parseJson, PortalError, type Db } from "./db";
 import { jdConflicts, sanitiseParams, type CompanyParams } from "./params";
 import { parsePortalJd, sanitisePortalRequirements, type JdInput, type PortalRequirements } from "./jd";
 import { assignPlan } from "./quota";
+import { REQUIREMENT_EDITS } from "./policy";
 
 export async function applyCompany(db: Db, input: { accountId: string; legalName: string; displayName: string; city: string; website?: string; gstin?: string }) {
   const id = newId(), at = nowIso();
@@ -112,6 +113,11 @@ export async function updateJdRequirements(db: Db, companyId: string, jdId: stri
   if (jd.status === "closed") throw new PortalError("CLOSED", "This JD is closed.");
   const requirements = sanitisePortalRequirements(raw, jd.title);
   if (!requirements) throw new PortalError("INVALID_JD", "The requirements could not be read.");
+  if (jd.status === "live") {
+    // Repeatedly changing a live job's requirements is how matching gets probed: cap it and route further changes through a recruiter.
+    const edits = await db.prepare(`SELECT COUNT(*) AS n FROM audit_events WHERE action = 'jd.edited' AND target_id = ? AND detail LIKE 'was live%' AND created_at >= datetime('now', ?)`).bind(jdId, `-${REQUIREMENT_EDITS.days} days`).first<{ n: number }>();
+    if ((edits?.n ?? 0) >= REQUIREMENT_EDITS.max) throw new PortalError("EDIT_LIMIT", `This job's requirements have already changed ${REQUIREMENT_EDITS.max} times in ${REQUIREMENT_EDITS.days} days. Ask your Jobboard300 recruiter to make further changes.`, 429);
+  }
   await db.prepare("UPDATE jds SET requirements = ?, status = CASE WHEN status IN ('live','pending','paused') THEN 'draft' ELSE status END, updated_at = ? WHERE id = ?")
     .bind(JSON.stringify(requirements), nowIso(), jdId).run();
   await audit(db, userId, "jd.edited", "jd", jdId, jd.status === "live" ? "was live; needs approval again" : "");

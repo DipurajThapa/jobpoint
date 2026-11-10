@@ -71,6 +71,13 @@
       "when": 1794182900000,
       "tag": "0009_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794269300000,
+      "tag": "0010_placement_model",
+      "breakpoints": true
     }
   ]
 }

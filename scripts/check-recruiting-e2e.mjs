@@ -104,6 +104,27 @@ ok(true, "the job shows its pipeline with the updated stage");
 await page.getByRole("heading", { name: "WhatsApp set-up" }).waitFor();
 ok(await page.getByRole("heading", { name: "Invite a recruiter to your team" }).isVisible(), "the manager sees team invitations and the WhatsApp set-up");
 await page.screenshot({ path: `${OUT}/recruiting.png`, fullPage: true });
+// Placement-fee model: the client cannot browse or unlock, sees a submitted candidate
+// without contact details, and loses the profile when the process for them closes.
+const clientCtx = await browser.newContext();
+const capi = (method, path, data) => clientCtx.request.fetch(`${BASE}${path}`, { method, data, headers: { origin: BASE } });
+ok((await capi("POST", "/api/portal/auth/sign-in", { email: "finance.lead@demo-ferro.example.com", password: "quiet harbour lantern 2026" })).ok(), "a client user signs in to the hiring portal");
+const noMatches = await capi("GET", `/api/portal/company/matches?jd=${managed.id}`);
+ok(noMatches.status() === 403 && (await noMatches.json()).code === "MANAGED_ONLY" && (await capi("POST", "/api/portal/company/unlock", { ref: entry.ref, jdId: managed.id })).status() === 403, "the client cannot browse matches or unlock profiles");
+const dash = await (await capi("GET", "/api/portal/company/dashboard")).json();
+ok(dash.selfService === false && dash.jds.every(j => j.released === 0 && j.unlocked === 0) && dash.overview.jobs.every(j => j.released === 0) && dash.quota.remaining === 0 && dash.terms.feePercent >= 7.5 && dash.terms.feePercent <= 8.33, "the client dashboard shows the fee terms and no match counts");
+ok(!/score|lower_bound|explanation/i.test(JSON.stringify(dash)) && !/score|lower_bound|explanation/i.test(await (await capi("GET", "/api/portal/company/pipeline")).text()), "nothing the client receives carries scores or match reasons");
+const prof = await capi("GET", `/api/portal/company/candidate?ref=${entry.ref}`), profBody = await prof.json();
+ok(prof.ok() && profBody.contactsHidden === true && profBody.profile.contact.name && !profBody.profile.contact.email && !profBody.profile.contact.phone, "during the interview stage the client sees the profile without contact details");
+const pdf = await capi("GET", `/api/portal/company/download?ref=${entry.ref}`);
+ok(pdf.ok() && pdf.headers()["content-type"] === "application/pdf", "the client downloads a watermarked copy");
+const rej = await noor.post("/api/platform/recruiting/stage", { pipelineId: entry.id, stage: "rejected", reason: "skills_gap" });
+ok(rej.ok(), `the process for this candidate is closed (${rej.status()})`);
+const after = await capi("GET", `/api/portal/company/candidate?ref=${entry.ref}`);
+ok(after.status() === 403 && (await after.json()).code === "ACCESS_ENDED" && (await capi("GET", `/api/portal/company/download?ref=${entry.ref}`)).status() === 403, "once the process closes, the profile and CV are no longer available to the client");
+const closed = (await (await capi("GET", "/api/portal/company/pipeline")).json()).pipeline.find(e => e.id === entry.id);
+ok(closed.available === false && closed.name === `Candidate ${entry.ref}` && closed.recruiterNote === "", "the closed entry shows a reference, not a person");
+
 await admin.ctx.request.fetch(`${BASE}/api/platform/admin/users/${rinaId}`, { method: "PATCH", data: { access: { recruiting: "none" } }, headers: { origin: BASE } });
 ok((await rina.get("/api/platform/recruiting/work")).status() === 403, "removing the tool removes access at once");
 await browser.close();

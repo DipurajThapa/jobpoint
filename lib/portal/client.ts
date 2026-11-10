@@ -16,6 +16,7 @@ import { ACTIVE_CONSENT_SQL, consentActive } from "./consent";
 import { issuePortalToken } from "./accounts";
 import { activateCompany, currentParams } from "./company";
 import { notifyCandidate, notifyCompany, notifyStage } from "./notify";
+import { FEE, feePercent, nameKey, placementFee } from "./policy";
 
 export const STAGES = ["submitted", "shortlisted", "interview", "offered", "offer_accepted", "joined", "rejected", "offer_declined", "no_show", "withdrawn"] as const;
 export type Stage = typeof STAGES[number];
@@ -76,7 +77,7 @@ async function createInvitedAccount(db: Db, email: string) {
   return id;
 }
 
-export type ClientInvite = { displayName: string; legalName: string; city: string; website?: string; gstin?: string; ownerEmail: string; ownerName?: string; guaranteeDays?: number; nonSolicitMonths?: number; feeTerms?: string; params: unknown; plan?: string };
+export type ClientInvite = { displayName: string; legalName: string; city: string; website?: string; gstin?: string; ownerEmail: string; ownerName?: string; guaranteeDays?: number; nonSolicitMonths?: number; feeTerms?: string; feePercent?: number; params: unknown; plan?: string };
 
 /**
  * Jobboard300 onboards a client directly: an active company with approved
@@ -85,15 +86,15 @@ export type ClientInvite = { displayName: string; legalName: string; city: strin
  */
 export async function inviteClient(db: Db, input: ClientInvite, adminId: string) {
   if (!input.displayName?.trim() || !input.legalName?.trim()) throw new PortalError("COMPANY", "Enter the company's name and registered legal name.");
-  const guarantee = Math.round(Number(input.guaranteeDays ?? 90));
+  const guarantee = Math.round(Number(input.guaranteeDays ?? FEE.guaranteeDays)), fee = pct(input.feePercent);
   if (!(guarantee >= 0 && guarantee <= 365)) throw new PortalError("GUARANTEE", "The replacement guarantee must be between 0 and 365 days.");
   const nonSolicit = Math.round(Number(input.nonSolicitMonths ?? 12));
   if (!(nonSolicit >= 0 && nonSolicit <= 36)) throw new PortalError("NON_SOLICIT", "The non-solicitation period must be between 0 and 36 months.");
   const accountId = await createInvitedAccount(db, input.ownerEmail);
   const companyId = newId(), at = nowIso();
   await db.batch([
-    db.prepare("INSERT INTO companies (id, legal_name, display_name, gstin, website, city, status, guarantee_days, non_solicit_months, fee_terms, created_at) VALUES (?, ?, ?, ?, ?, ?, 'applied', ?, ?, ?, ?)")
-      .bind(companyId, input.legalName.trim().slice(0, 160), input.displayName.trim().slice(0, 120), (input.gstin ?? "").trim().toUpperCase().slice(0, 15), (input.website ?? "").trim().slice(0, 200), (input.city ?? "").trim().slice(0, 80), guarantee, nonSolicit, (input.feeTerms ?? "").trim().slice(0, 300), at),
+    db.prepare("INSERT INTO companies (id, legal_name, display_name, gstin, website, city, status, guarantee_days, non_solicit_months, fee_terms, fee_percent, created_at) VALUES (?, ?, ?, ?, ?, ?, 'applied', ?, ?, ?, ?, ?)")
+      .bind(companyId, input.legalName.trim().slice(0, 160), input.displayName.trim().slice(0, 120), (input.gstin ?? "").trim().toUpperCase().slice(0, 15), (input.website ?? "").trim().slice(0, 200), (input.city ?? "").trim().slice(0, 80), guarantee, nonSolicit, (input.feeTerms ?? "").trim().slice(0, 300), fee, at),
     db.prepare("INSERT INTO company_users (id, company_id, account_id, role, display_name, created_at) VALUES (?, ?, ?, 'owner', ?, ?)").bind(newId(), companyId, accountId, (input.ownerName ?? "").trim().slice(0, 120), at),
   ]);
   try { await activateCompany(db, companyId, input.params, adminId, input.plan || "free"); }
@@ -103,13 +104,17 @@ export async function inviteClient(db: Db, input: ClientInvite, adminId: string)
   return { companyId, accountId, token };
 }
 
-export async function updateClientTerms(db: Db, companyId: string, guaranteeDays: number, feeTerms: string, adminId: string, nonSolicitMonths = 12) {
+const pct = (value: unknown) => { try { return feePercent(value); } catch (e) { throw new PortalError("FEE", (e as Error).message); } };
+
+export async function updateClientTerms(db: Db, companyId: string, guaranteeDays: number, feeTerms: string, adminId: string, nonSolicitMonths = 12, fee: unknown = undefined) {
   const g = Math.round(Number(guaranteeDays)), n = Math.round(Number(nonSolicitMonths));
   if (!(g >= 0 && g <= 365)) throw new PortalError("GUARANTEE", "The replacement guarantee must be between 0 and 365 days.");
   if (!(n >= 0 && n <= 36)) throw new PortalError("NON_SOLICIT", "The non-solicitation period must be between 0 and 36 months.");
-  const r = await db.prepare("UPDATE companies SET guarantee_days = ?, fee_terms = ?, non_solicit_months = ? WHERE id = ?").bind(g, feeTerms.trim().slice(0, 300), n, companyId).run();
+  const current = await db.prepare("SELECT fee_percent FROM companies WHERE id = ?").bind(companyId).first<{ fee_percent: number }>();
+  const f = pct(fee ?? current?.fee_percent);
+  const r = await db.prepare("UPDATE companies SET guarantee_days = ?, fee_terms = ?, non_solicit_months = ?, fee_percent = ? WHERE id = ?").bind(g, feeTerms.trim().slice(0, 300), n, f, companyId).run();
   if (!r.meta.changes) throw new PortalError("NOT_FOUND", "Company not found.", 404);
-  await audit(db, adminId, "client.terms", "company", companyId, `${g} days; ${feeTerms.slice(0, 100)}`);
+  await audit(db, adminId, "client.terms", "company", companyId, `${g} days; ${f}%; ${feeTerms.slice(0, 100)}`);
 }
 
 export async function teamList(db: Db, companyId: string) {
@@ -218,9 +223,11 @@ export async function submitByRecruiter(db: Db, secret: string, input: { company
   const jd = await openJd(db, companyId, jdId);
   if (jd.status !== "live") throw new PortalError("NOT_LIVE", "The job must be live before candidates are submitted.");
   if (jd.service !== "managed") throw new PortalError("NOT_MANAGED", "This job is self-service. Switch it to a managed search first.");
-  const cand = await db.prepare("SELECT status, hidden_company_ids FROM candidates WHERE id = ?").bind(candidateId).first<{ status: string; hidden_company_ids: string }>();
+  const cand = await db.prepare("SELECT status, hidden_company_ids, hidden_company_names FROM candidates WHERE id = ?").bind(candidateId).first<{ status: string; hidden_company_ids: string; hidden_company_names: string }>();
   if (!cand || cand.status !== "active") throw new PortalError("NOT_FOUND", "Candidate not found or not active.", 404);
-  if (parseJson<string[]>(cand.hidden_company_ids, []).includes(companyId)) throw new PortalError("HIDDEN", "The candidate has hidden their profile from this company.", 403);
+  const names = await db.prepare("SELECT display_name, legal_name FROM companies WHERE id = ?").bind(companyId).first<{ display_name: string; legal_name: string }>();
+  const hiddenByName = parseJson<string[]>(cand.hidden_company_names, []).map(nameKey).some(k => k && (k === nameKey(names?.display_name ?? "") || k === nameKey(names?.legal_name ?? "")));
+  if (hiddenByName || parseJson<string[]>(cand.hidden_company_ids, []).includes(companyId)) throw new PortalError("HIDDEN", "The candidate has hidden their profile from this company.", 403);
   // Portal sharing consent, or the website's recruiter-reviewed sharing consent (this is a recruiter-reviewed submission).
   if (!await consentActive(db, candidateId, "share_with_companies") && !await consentActive(db, candidateId, "recruiter_sharing")) throw new PortalError("NO_CONSENT", "The candidate has not consented to their CV being shared with employers.", 403);
   if (!input.note.trim()) throw new PortalError("NOTE", "Add a recruiter note for the client: why this candidate, availability, CTC and notice.");
@@ -287,11 +294,11 @@ export async function moveStage(db: Db, companyId: string, actorId: string, pipe
   ];
   if (["rejected", "offer_declined", "no_show", "withdrawn"].includes(stage)) statements.push(db.prepare("UPDATE interviews SET status = 'cancelled', updated_at = ? WHERE pipeline_id = ? AND status = 'scheduled' AND EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = ? AND updated_at = ?)").bind(at, row.id, row.id, stage, at));
   if (stage === "joined") {
-    const c = await db.prepare("SELECT guarantee_days, non_solicit_months FROM companies WHERE id = ?").bind(companyId).first<{ guarantee_days: number; non_solicit_months: number }>();
+    const c = await db.prepare("SELECT guarantee_days, non_solicit_months, fee_percent FROM companies WHERE id = ?").bind(companyId).first<{ guarantee_days: number; non_solicit_months: number; fee_percent: number }>();
     const jd = await db.prepare("SELECT title FROM jds WHERE id = ?").bind(row.jd_id).first<{ title: string }>();
     const offer = await db.prepare("SELECT offer_ctc_inr FROM pipeline WHERE id = ?").bind(row.id).first<{ offer_ctc_inr: number | null }>();
-    statements.push(db.prepare("INSERT OR IGNORE INTO placements (id, pipeline_id, company_id, candidate_id, jd_id, title, joined_on, ctc_inr, guarantee_ends_on, non_solicit_until, created_by, created_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = 'joined' AND updated_at = ?)")
-      .bind(newId(), row.id, companyId, row.candidate_id, row.jd_id, jd?.title ?? "", input.joiningDate, offer?.offer_ctc_inr ?? null, addDays(input.joiningDate!, c?.guarantee_days ?? 90), addMonths(input.joiningDate!, c?.non_solicit_months ?? 12), actorId, at, row.id, at));
+    statements.push(db.prepare("INSERT OR IGNORE INTO placements (id, pipeline_id, company_id, candidate_id, jd_id, title, joined_on, ctc_inr, guarantee_ends_on, non_solicit_until, fee_percent, fee_inr, created_by, created_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = 'joined' AND updated_at = ?)")
+      .bind(newId(), row.id, companyId, row.candidate_id, row.jd_id, jd?.title ?? "", input.joiningDate, offer?.offer_ctc_inr ?? null, addDays(input.joiningDate!, c?.guarantee_days ?? FEE.guaranteeDays), addMonths(input.joiningDate!, c?.non_solicit_months ?? 12), c?.fee_percent ?? FEE.defaultPct, placementFee(offer?.offer_ctc_inr, c?.fee_percent ?? FEE.defaultPct), actorId, at, row.id, at));
   }
   const results = await db.batch(statements) as { meta: { changes?: number } }[];
   if (!results[0]?.meta.changes) throw new PortalError("CONFLICT", "Someone else updated this candidate just now. Reload and try again.", 409);
@@ -361,7 +368,7 @@ export async function reportPlacementExit(db: Db, companyId: string, actorId: st
 type ViewRow = { id: string; jd_id: string; jd_title: string; candidate_ref: string; stage: Stage; stage_reason: string; source: string; recruiter_note: string; offer_ctc_inr: number | null; offer_date: string | null; joining_date: string | null; last_working_day: string | null; competing_offers: string; created_at: string; updated_at: string; display_name: string | null; revoked: string | null; title: string | null; years: number | null };
 
 /** Pipeline for one company (optionally one job), with names only while access is active. */
-export async function pipelineView(db: Db, companyId: string, jdId?: string) {
+export async function pipelineView(db: Db, companyId: string, jdId?: string, temporary = false) {
   const { results } = await db.prepare(`SELECT p.id, p.jd_id, j.title AS jd_title, p.candidate_ref, p.stage, p.stage_reason, p.source, p.recruiter_note, p.offer_ctc_inr, p.offer_date, p.joining_date, p.last_working_day, p.competing_offers, p.created_at, p.updated_at,
       k.display_name, u.access_revoked_at AS revoked
     FROM pipeline p JOIN jds j ON j.id = p.jd_id LEFT JOIN candidates k ON k.id = p.candidate_id
@@ -371,10 +378,12 @@ export async function pipelineView(db: Db, companyId: string, jdId?: string) {
   const interviews = ids.length ? (await db.prepare(`SELECT id, pipeline_id, round, scheduled_at, mode, location, interviewer, status, outcome, rating, feedback FROM interviews WHERE company_id = ? AND pipeline_id IN (${ids.map(() => "?").join(",")}) ORDER BY scheduled_at`)
     .bind(companyId, ...ids).all<{ pipeline_id: string }>()).results : [];
   return results.map(r => {
-    const hidden = !!r.revoked;
+    // In the placement-fee model a closed-out candidate goes back to being a reference: no name, note or CV.
+    const ended = temporary && !OPEN_STAGES.includes(r.stage) && r.stage !== "joined";
+    const hidden = !!r.revoked || ended;
     return {
       id: r.id, jdId: r.jd_id, jdTitle: r.jd_title, ref: r.candidate_ref, stage: r.stage, stageLabel: STAGE_LABEL[r.stage], stageReason: r.stage_reason, source: r.source,
-      name: hidden ? "Candidate withdrew consent" : (r.display_name || r.candidate_ref), available: !hidden,
+      name: r.revoked ? "Candidate withdrew consent" : ended ? `Candidate ${r.candidate_ref}` : (r.display_name || r.candidate_ref), available: !hidden, cvOpen: !hidden && (!temporary || OPEN_STAGES.includes(r.stage)),
       recruiterNote: hidden ? "" : r.recruiter_note, offerCtcInr: r.offer_ctc_inr, offerDate: r.offer_date, joiningDate: r.joining_date, createdAt: r.created_at, updatedAt: r.updated_at,
       lastWorkingDay: r.last_working_day, competingOffers: hidden ? "" : r.competing_offers,
       next: hidden ? [] : NEXT[r.stage], interviews: hidden ? [] : interviews.filter(i => i.pipeline_id === r.id),
@@ -434,7 +443,7 @@ export async function adminClientWork(db: Db) {
       (SELECT COUNT(*) FROM pipeline p WHERE p.jd_id = j.id AND p.stage IN ('shortlisted','interview','offered','offer_accepted')) AS in_process,
       (SELECT COUNT(*) FROM pipeline p WHERE p.jd_id = j.id AND p.stage = 'joined') AS joined
     FROM jds j JOIN companies c ON c.id = j.company_id WHERE j.service = 'managed' AND j.status IN ('live','pending','paused') ORDER BY j.updated_at DESC LIMIT 100`).all();
-  const { results: placements } = await db.prepare(`SELECT pl.id, pl.title, pl.joined_on, pl.ctc_inr, pl.guarantee_ends_on, pl.non_solicit_until, pl.status, pl.left_on, pl.note, c.display_name AS company, c.fee_terms
+  const { results: placements } = await db.prepare(`SELECT pl.id, pl.title, pl.joined_on, pl.ctc_inr, pl.guarantee_ends_on, pl.non_solicit_until, pl.status, pl.left_on, pl.note, pl.fee_percent, pl.fee_inr, c.display_name AS company, c.fee_terms
     FROM placements pl JOIN companies c ON c.id = pl.company_id ORDER BY pl.joined_on DESC LIMIT 200`).all();
   return { managed, placements };
 }

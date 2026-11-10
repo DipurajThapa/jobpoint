@@ -6,6 +6,7 @@ import { adjustQuota, assignPlan, upsertPlans } from "@/lib/portal/quota";
 import { mergeCandidates, primaryProfile, purgeExpiredStubs, resolveReview } from "@/lib/portal/candidate";
 import { drainQueue } from "@/lib/portal/queue";
 import { adminOverview } from "@/lib/portal/views";
+import { selfService } from "@/lib/portal/policy";
 import { decideAssessment, decideHeldAttempt } from "@/lib/portal/assessment";
 import { DEFAULT_PLANS, seedServices } from "@/lib/portal/plans";
 import { audit } from "@/lib/portal/db";
@@ -29,7 +30,7 @@ export async function GET(request: Request, context: Ctx) {
     if (action === "overview") {
       const plans = await db.prepare("SELECT COUNT(*) AS n FROM plans").first<{ n: number }>();
       if (!plans?.n) { await upsertPlans(db, DEFAULT_PLANS); await seedServices(db); }
-      return json({ ...await adminOverview(db), clientWork: await adminClientWork(db), websiteUnlinked: await countUnlinkedWebsiteApplications(db) });
+      return json({ ...await adminOverview(db), selfService: selfService(env.CLIENT_SELF_SERVICE), clientWork: await adminClientWork(db), websiteUnlinked: await countUnlinkedWebsiteApplications(db) });
     }
     if (action === "submission-candidates") return json({ candidates: await submissionCandidates(db, new URL(request.url).searchParams.get("jd") ?? "") });
     if (action === "review-cv") {
@@ -65,12 +66,12 @@ export async function POST(request: Request, context: Ctx) {
         return done(`${linked} website application(s) added to the candidate list${unreadable ? `; ${unreadable} CV(s) need manual review` : ""}.`);
       }
       case "client-invite": {
-        const out = await inviteClient(db, { displayName: s(b.displayName, 120), legalName: s(b.legalName, 160), city: s(b.city, 80), website: s(b.website), gstin: s(b.gstin, 15), ownerEmail: s(b.ownerEmail, 254), ownerName: s(b.ownerName, 120), guaranteeDays: Number(b.guaranteeDays ?? 90), nonSolicitMonths: Number(b.nonSolicitMonths ?? 12), feeTerms: s(b.feeTerms, 300), params: b.params, plan: s(b.plan, 20) || "free" }, admin);
+        const out = await inviteClient(db, { displayName: s(b.displayName, 120), legalName: s(b.legalName, 160), city: s(b.city, 80), website: s(b.website), gstin: s(b.gstin, 15), ownerEmail: s(b.ownerEmail, 254), ownerName: s(b.ownerName, 120), guaranteeDays: Number(b.guaranteeDays ?? 60), nonSolicitMonths: Number(b.nonSolicitMonths ?? 12), feeTerms: s(b.feeTerms, 300), feePercent: b.feePercent == null || b.feePercent === "" ? undefined : Number(b.feePercent), params: b.params, plan: s(b.plan, 20) || "free" }, admin);
         const link = `${new URL(request.url).origin}/portal/accept?token=${out.token}`;
         const mail = await sendMail({ to: s(b.ownerEmail, 254), subject: "Your Jobboard300 hiring account is ready", text: `Jobboard300 has set up a hiring account for ${s(b.displayName, 120)}. Open this link to set your password and sign in (valid for 7 days):\n${link}` }, link);
         return done(mail.sent ? "Client created and the owner has been emailed a one-time link. Copy of the link:" : "Client created. Send the owner this one-time link (valid for 7 days):", { link });
       }
-      case "client-terms": await updateClientTerms(db, s(b.companyId, 60), Number(b.guaranteeDays), s(b.feeTerms, 300), admin, Number(b.nonSolicitMonths ?? 12)); return json({ message: "Client terms saved." });
+      case "client-terms": await updateClientTerms(db, s(b.companyId, 60), Number(b.guaranteeDays), s(b.feeTerms, 300), admin, Number(b.nonSolicitMonths ?? 12), b.feePercent == null || b.feePercent === "" ? undefined : Number(b.feePercent)); return json({ message: "Client terms saved." });
       case "jd-service": {
         const jd = await db.prepare("SELECT company_id, openings FROM jds WHERE id = ?").bind(s(b.jdId, 60)).first<{ company_id: string; openings: number }>();
         if (!jd) return fail("Job not found.", 404);

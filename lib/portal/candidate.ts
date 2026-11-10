@@ -152,7 +152,7 @@ export async function deleteCandidateData(db: Db, candidateId: string, actor: st
     db.prepare("DELETE FROM portal_applications WHERE candidate_id = ?").bind(candidateId),
     db.prepare("DELETE FROM assessment_attempts WHERE candidate_id = ?").bind(candidateId),
     db.prepare("DELETE FROM service_orders WHERE candidate_id = ?").bind(candidateId),
-    db.prepare("UPDATE candidates SET status = 'deleted', account_id = NULL, display_name = '', current_city = '', preferred_cities = '[]', hidden_company_ids = '[]', dedupe_email_hash = '', dedupe_phone_hash = '', last_active_at = ? WHERE id = ?").bind(at, candidateId),
+    db.prepare("UPDATE candidates SET status = 'deleted', account_id = NULL, display_name = '', current_city = '', preferred_cities = '[]', hidden_company_ids = '[]', hidden_company_names = '[]', dedupe_email_hash = '', dedupe_phone_hash = '', last_active_at = ? WHERE id = ?").bind(at, candidateId),
     ...(account?.account_id ? [db.prepare("UPDATE portal_accounts SET status = 'deleted', email = 'deleted-' || id || '@invalid', phone = '', password_hash = NULL WHERE id = ?").bind(account.account_id), db.prepare("DELETE FROM portal_sessions WHERE account_id = ?").bind(account.account_id)] : []),
   ]);
   await audit(db, actor, "candidate.deleted", "candidate", candidateId, `${results.length} CV file(s) erased`);
