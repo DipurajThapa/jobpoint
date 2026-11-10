@@ -104,6 +104,15 @@ See also [workflows and merge plan](docs/WORKFLOWS_AND_MERGE_PLAN.md) and [keys,
 
 Migration `drizzle/0021_enquiry_call_and_whatsapp_consent.sql` adds WhatsApp consent, the enquiry call request and the acknowledgement outcome. Migration `drizzle/0013_audit_fixes.sql` adds `jd_requirement_edits` and the erasure fields on `privacy_requests`. The audit behind these changes is [docs/AUDIT_ARCHITECTURE_DATA_SECURITY_2026-11-10.md](docs/AUDIT_ARCHITECTURE_DATA_SECURITY_2026-11-10.md).
 
+Migration `drizzle/0023_open_audit_items.sql` (11 Nov 2026) closes the open audit items: a `link` on candidate messages (a path on this site, shown as a button, so it is right on any address), `staff_updates` and `staff_updates_seen` for the Recruiting tool's “What changed” list (no names are stored; the person is read through the pipeline entry), `placements.replaces_placement_id` (a replacement hire is linked to the placement it replaces and carries no new fee) and `interviews.recorded_by`. Behaviour that changed with it:
+
+- **Interviews.** No time in the past. Reschedule (client or staff) sends the candidate one message. Cancelling tells the candidate. Jobboard300 can record a result for the client; “Do not proceed” can mark the candidate Not selected in the same step.
+- **Hire and fee.** A candidate cannot be marked Joined without the annual CTC the fee is worked out from; the owner can correct it (with a reason) from the Placements table. The last hire fills the job: it closes, and “Close the remaining n as position filled” tells the others. A hire who leaves inside the guarantee re-opens the job with one more opening; the replacement is linked and not charged again.
+- **Editing and closing a job.** Saving with nothing changed does nothing and uses none of the three edits; a real change goes straight to “waiting for approval” and the job stays visible to its recruiters; details the editor does not show are kept. Closing a job closes its candidates as “position closed” with a message; closed jobs stay visible under a filter and can be sent for approval again.
+- **Consent.** Hiding from an employer who already has the profile ends that employer's access and closes the open entries. Withdrawing consent writes the stage history and tells the recruiters. Allowing sharing again makes the person submittable again (the withdrawal stays in the ledger).
+- **Recruiting tool.** What changed, joining soon (with last working day and other offers), profile and reading copy of the CV, phone and email on every row, the client's feedback, interview link and interviewer, technical test results, undo a pass, one-time links in a box with Copy.
+- **CV screening** (engine `portal-match-2026.11.2`; see [the review](docs/reviews/ATS_MATCHING_REVIEW_2026-11-11.md)). Not found in a CV is a question for the recruiter, not a filter, unless the client is set to strict; the two level checks only advise; a career break costs little.
+
 ## Audit: quality, functional and UAT
 
 Three auditors test the whole product against the local dev server and its local database. They never run against a hosted site.

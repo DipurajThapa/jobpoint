@@ -111,3 +111,19 @@ The caution: the engine was designed when clients were going to browse candidate
 5. Add a scheduled scoring run and a "ranking in progress" line before volume grows.
 6. After the first 100 real submissions, compare outcomes with scores and adjust the numbers. Repeat monthly.
 7. Remove the two dead settings from the client form.
+
+## Status, 11 November 2026 (later the same day)
+
+Engine version `portal-match-2026.11.2`. What was done about the recommended order above, and what was not.
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Open the CV to recruiters; remove the score from their summary line | **Done.** Recruiters read the parsed profile and a reading copy of the CV (phone, email and links removed; opening contact details is still one person at a time, counted and logged). They see a band and reasons, never the number. |
+| 2 | “Not found” on experience and essential skills becomes a question | **Done.** A skill missing from the CV, or years that cannot be worked out because the CV has no dates, no longer filters the candidate out. The recruiter sees “Ask the candidate: …”. A client can choose the strict setting (`strict_mandatory_skills`), and then a skill not found filters as before. The older `work_evidence_for_mandatory_skills` setting is also strict. |
+| 3 | Use the maximum years; make the two level checks advisory | **Done.** The job's minimum years stays the only experience gate. The two level checks (the job's, the client's) now only add a note. Experience above the stated maximum eases the score by 8% a year down to 60%, and from 3 years above the recruiter is asked whether the role suits them. |
+| 4 | Career-break rule | **Decided and done.** The “recent relevant work” part has half its old weight (5, not 10) and never falls below 60%, so a break for caring, illness or study costs at most 2 points of 100. The score is not otherwise changed by a gap. This choice was made in this change, not by the owner: confirm or reverse it, and revisit it with real outcomes. |
+| 5 | Scheduled scoring run and a “ranking in progress” line | **Half done.** This hosting has no scheduler, so a scheduled run cannot be built here. Instead, opening a job scores a bounded batch of the waiting work first, and the shortlist says “Ranking in progress: n items are still being scored” while work is waiting. Applications and newly published roles were already scored at once. If the host later offers a cron trigger, call `drainQueue` from it. |
+| 6 | After the first 100 real submissions, compare outcomes with scores, monthly | **Not done: needs real data.** The engine records why recruiters pass and what happens to each submission. The first review should be a sample of 20 passes and 20 submissions read by someone who knows the roles. |
+| 7 | Remove the two dead settings from the client form | **Done.** The minimum match score and the CVs-released cap are no longer asked for (old values stay on old records; new clients get the defaults). |
+
+Finding 8 (the recruiter cannot look beyond three) is partly met: the recruiter can now read any shown candidate's profile and CV, and can reconsider a candidate who was passed on. A search across the team's candidates is not built.
