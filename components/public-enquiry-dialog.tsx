@@ -76,7 +76,7 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
       <span className="eyebrow">{candidate ? "FOR JOB SEEKERS" : "FOR EMPLOYERS"}</span>
       <h2 id="dialog-title">{candidate ? "Upload your CV." : "Tell us what you are looking for."}</h2>
       {done ? <><p id="dialog-intro" className="visually-hidden">{done.title}</p><FormConfirmation title={done.title} message={done.message} onClose={onClose} /></> : <>
-      <p id="dialog-intro">{DEMO_MODE ? "Preview the information we would request when recruitment intake opens." : candidate ? "It takes about a minute and it is free. A recruiter reviews every CV and contacts you when a role fits." : "A short message is enough. A consultant will call you to understand the role; the job description comes later."}</p>
+      <p id="dialog-intro">{DEMO_MODE ? "Preview the information we would request when recruitment intake opens." : candidate ? "Free, and about a minute. Send your CV and how to reach you; we read your skills and experience from the CV. A recruiter reviews it and contacts you when a role fits." : "A few lines are enough; you do not need a job description. Choose a time for a call if you like. A consultant will go through the role with you, and nothing is charged until a person you choose joins."}</p>
       {/* method="post" so that a press before the script has loaded never puts the details in the address bar. */}
       <form method="post" action={candidate ? "/api/applications" : "/api/employer-enquiries"} encType={candidate ? "multipart/form-data" : undefined} onSubmit={submit}>
         <DemoFormNotice />
@@ -89,7 +89,7 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
               <label>Work email<input name="email" type="email" required maxLength={254} autoComplete="email" /></label>
               <label>Phone <span className="label-note">with country code if you want WhatsApp messages</span><input name="phone" type="tel" required maxLength={30} autoComplete="tel" placeholder="+91" /></label>
               <label className="full-field">What are you looking for?<textarea name="details" required maxLength={1800} rows={4} placeholder="For example: two accounts executives for our Durgapur office, to start next month." /></label>
-              <fieldset className="call-picker full-field"><legend>Book a call with a consultant <span className="label-note">optional · 30 minutes · India time</span></legend>
+              <fieldset className="call-picker full-field"><legend>Choose a time for a call with a consultant <span className="label-note">optional · 30 minutes · India time · a consultant confirms the time or offers another</span></legend>
                 {days.length === 0 ? <p className="label-note">No times are showing right now. Send the enquiry and a consultant will contact you within one working day.</p> : <div className="form-grid">
                   <label>Day<select value={day} onChange={e => setDay(e.target.value)} aria-label="Day for the call"><option value="">No call for now: contact me instead</option>{days.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                   <label>Time<select name="meetingAt" key={day} defaultValue="" disabled={!day} required={!!day} aria-label="Time for the call"><option value="" disabled>{day ? "Choose a time" : "Choose a day first"}</option>{slots.filter(s => dayOf(s) === day).map(s => <option key={s} value={s}>{timeLabel(s)}</option>)}</select></label>

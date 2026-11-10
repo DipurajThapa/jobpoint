@@ -26,6 +26,11 @@ export const CONTENT_SECURITY_POLICY = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // Job pages build their title, description and canonical link per request. By default the
+  // framework sends those after the page body to every visitor it does not recognise as a
+  // crawler, which includes GPTBot, ClaudeBot and PerplexityBot. Matching every user agent
+  // keeps them in <head> for everyone. Read when the server starts.
+  htmlLimitedBots: /.*/,
   async headers() {
     const headers = [
       { key: "X-Content-Type-Options", value: "nosniff" },

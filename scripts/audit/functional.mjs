@@ -290,7 +290,7 @@ if (webApp) {
   check("F5.21", "sending the same application again within a day is refused and the first CV is kept", again.r.status === 409 && count("applications", "email = ?", webApp.email) === 1, { severity: "medium", detail: `status ${again.r.status}` });
 }
 await step("F5.22", "a visitor registers a general profile (no role) and allows future contact and sharing", async () => {
-  const out = await websiteApply(seedCvs[7] ?? seedCvs[1], { email: mail("web.general"), shareConsent: "yes", whatsappConsent: undefined, location: "Bengaluru" });
+  const out = await websiteApply(seedCvs[7] ?? seedCvs[1], { email: mail("web.general"), shareConsent: "yes", whatsappConsent: "", location: "Bengaluru" });
   if (out.r.status !== 201) throw new Error(`${out.r.status} ${out.r.text.slice(0, 300)}`);
   webGeneral = out;
   const a = row("SELECT id, job_id, future_consent FROM applications WHERE email = ?", out.email);
@@ -531,8 +531,8 @@ if (A?.pipelineId && entry) {
     const page = await anon.get(`/commit?token=${token}`);
     check("F9.8", "the candidate opens the commitment page without an account and reads the text", read.ok && read.body.body.includes("60 days") && page.status === 200, { severity: "high", detail: `api ${read.status}, page ${page.status}` });
     const noTick = await anon.post("/api/portal/public/commitment-accept", { token, agree: false });
-    const acc = await anon.post("/api/portal/public/commitment-accept", { token, declaration: true, consent: true });
-    check("F9.9", "the candidate accepts the commitment (ticking is required) and the acceptance is stored with its time", noTick.status === 400 && acc.ok && !!row("SELECT accepted_at FROM candidate_commitments WHERE pipeline_id = ?", A.pipelineId)?.accepted_at, { severity: "high", detail: `${noTick.status}/${acc.status}` });
+    const acc = await anon.post("/api/portal/public/commitment-accept", { token, agree: true });
+    check("F9.9", "the candidate accepts the commitment (ticking is required) and the acceptance is stored with its time", noTick.status === 400 && acc.ok && !!row("SELECT accepted_at FROM candidate_commitments WHERE pipeline_id = ?", A.pipelineId)?.accepted_at, { severity: "high", detail: `${noTick.status}/${acc.status} ${acc.text.slice(0, 160)}` });
     check("F9.10", "the recruiter sees the commitment as accepted", (await recruiter.get(`/api/platform/recruiting/pipeline?jd=${jdId}`)).body?.pipeline?.find(e => e.id === A.pipelineId)?.commitment === "accepted", { severity: "medium" });
   }
   const noDate = await clientOwner.post("/api/portal/company/pipeline-stage", { pipelineId: A.pipelineId, stage: "offer_accepted" });

@@ -133,16 +133,16 @@ await step("U2.3", "the owner invites the client from the Job portal tab and get
 await step("U2.4", "the owner links the enquiry to the new client and marks it in progress", async () => {
   await owner.page.getByRole("button", { name: /^Employer enquiries/ }).click();
   let card = owner.page.locator("article", { hasText: CLIENT.name }).first();
-  const offered = await card.locator("select").nth(1).locator("option").allInnerTexts();
+  const offered = await card.getByLabel(`Client that ${CLIENT.name} became`).locator("option").allInnerTexts();
   if (!offered.includes(`Client: ${CLIENT.name}`)) {
     finding("U2.4a", { severity: "low", kind: "defect", title: "A client created a moment ago is missing from the console's lists until the page is reloaded", actual: `Straight after "Create client and get sign-in link", the enquiry's "Client that … became" list offers: ${offered.join(", ")}. The new client is not in it, and it is also missing from "Client this role is for" on the Open roles tab. Reloading the page brings it in.`, expected: "Lists refresh after a client is created.", fix: "Have PortalPanel call the console's refresh() after a successful action (pass it as a prop), in app/admin/admin-client.tsx.", where: "app/admin/admin-client.tsx; app/admin/portal-panel.tsx" });
     await owner.go("/admin");
     await owner.page.getByRole("button", { name: /^Employer enquiries/ }).click();
     card = owner.page.locator("article", { hasText: CLIENT.name }).first();
   }
-  await card.locator("select").nth(1).selectOption({ label: `Client: ${CLIENT.name}` });
+  await card.getByLabel(`Client that ${CLIENT.name} became`).selectOption({ label: `Client: ${CLIENT.name}` });
   await owner.page.getByText("Enquiry linked to the client.").waitFor();
-  await card.locator("select").first().selectOption("in_progress");
+  await card.getByLabel(`Status for ${CLIENT.name}`).selectOption("in_progress");
   await owner.page.getByText("Enquiry status updated.").waitFor();
   const e = row("SELECT status, company_id FROM employer_enquiries WHERE email = ?", CLIENT.email);
   return e.status === "in_progress" && !!e.company_id;

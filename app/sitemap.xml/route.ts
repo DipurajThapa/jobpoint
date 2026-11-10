@@ -1,4 +1,5 @@
 import { DEMO_MODE } from "@/lib/demo";
+import { SITE_URL } from "@/lib/site";
 import { env } from "cloudflare:workers";
 
 export const runtime = "edge";
@@ -6,9 +7,10 @@ export const dynamic = "force-dynamic";
 
 function escapeXml(value: string) { return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 
-export async function GET(request: Request) {
+export async function GET() {
   if (DEMO_MODE) return new Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" } });
-  const origin = new URL(request.url).origin;
+  // Same address as the canonical links, whichever host the request arrived on.
+  const origin = SITE_URL;
   // Policy drafts stay out of the sitemap until the company finalises them.
   const urls = ["/", "/job-seekers", "/employers", "/terms/job-seekers", "/terms/employers"].map(path => `<url><loc>${escapeXml(origin + path)}</loc></url>`);
   try {
