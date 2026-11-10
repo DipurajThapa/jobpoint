@@ -23,12 +23,12 @@ import type { PortalRequirements } from "./jd";
 import type { CompanyParams } from "./params";
 import { formatLpa, sameLabourMarket } from "./india";
 
-export const MATCH_ENGINE_VERSION = "portal-match-2026.11.1";
+export const MATCH_ENGINE_VERSION = "portal-match-2026.11.2";
 export const LAMBDA = 1.0;
 
 export type ComponentKey = "mustHave" | "experience" | "title" | "recency" | "niceToHave" | "education" | "location" | "assessment";
 const LABEL: Record<ComponentKey, string> = { mustHave: "Must-have skills", experience: "Relevant experience", title: "Role and title", recency: "Recent relevant work", niceToHave: "Nice-to-have skills", education: "Education", location: "Location", assessment: "Company assessment" };
-const BOUNDS: Record<ComponentKey, [number, number]> = { mustHave: [20, 50], experience: [0, 25], title: [0, 15], recency: [0, 10], niceToHave: [0, 15], education: [0, 15], location: [0, 10], assessment: [0, 40] };
+const BOUNDS: Record<ComponentKey, [number, number]> = { mustHave: [20, 50], experience: [0, 25], title: [0, 15], recency: [0, 5], niceToHave: [0, 15], education: [0, 15], location: [0, 10], assessment: [0, 40] };
 const GENERIC = new Set(["soft", "language", "office"]);
 const EVIDENCE_MEAN: Record<CandidateSkill["evidence"], number> = { work: 1, certification: 1, summary: 0.8, other: 0.8, listed: 0.6 };
 const EVIDENCE_TAU: Record<CandidateSkill["evidence"], number> = { work: 0.2, certification: 0.2, summary: 0.25, other: 0.25, listed: 0.3 };
@@ -55,6 +55,8 @@ export type MatchResult = {
   components: Component[];
   checks: Check[];
   explanation: { summary: string; meets: string[]; misses: string[]; why: string };
+  /** Things to ask the candidate: not found in the CV, which is not the same as “no”. They do not remove anyone. */
+  questions: string[];
   band: "Strong match" | "Good match" | "Partial match" | "Weak match";
   gaps: string[];
   nearThreshold: boolean;
@@ -64,7 +66,7 @@ export type MatchResult = {
 export function deriveWeights(req: PortalRequirements, company?: MatchEvidence["company"]): { weights: Record<ComponentKey, number>; trace: string[] } {
   const trace: string[] = [];
   const m = req.mustHave.length, n = req.niceToHave.length, min = req.minYears;
-  const w: Record<ComponentKey, number> = { mustHave: 25 + 2.5 * Math.min(m, 8), niceToHave: Math.min(15, 3 * n), experience: 15, education: 10, title: 10, recency: 10, location: req.hard.remote ? 0 : 5, assessment: 0 };
+  const w: Record<ComponentKey, number> = { mustHave: 25 + 2.5 * Math.min(m, 8), niceToHave: Math.min(15, 3 * n), experience: 15, education: 10, title: 10, recency: 5, location: req.hard.remote ? 0 : 5, assessment: 0 };
   trace.push(`${m} must-have skill(s) → must-have weight ${w.mustHave}; ${n} nice-to-have → ${w.niceToHave}.`);
   if (min !== null && min <= 1) { Object.assign(w, { experience: 5, education: 15, title: 5 }); trace.push("Entry-level role: education counts more, experience and title less."); }
   else if (min !== null && min >= 8) { Object.assign(w, { experience: 20, education: 5, title: 15 }); trace.push("Senior role: experience and title count more, education less."); }
@@ -103,33 +105,52 @@ function project(raw: Record<ComponentKey, number>): Record<ComponentKey, number
 const BAND_YEARS: Record<string, [number, number]> = { fresher: [0, 1], junior: [1, 3], mid: [3, 6], senior: [6, 10], lead: [10, 60] };
 const withinBands = (years: number, bands: string[], tolerance = 1) => bands.some(b => BAND_YEARS[b] && years >= BAND_YEARS[b][0] - tolerance && years < BAND_YEARS[b][1] + tolerance);
 
-/** Hard filters: pass/fail gates from the JD and the company's approved parameters. */
-export function hardFilters(p: PortalProfile, req: PortalRequirements, params: CompanyParams | null): string[] {
-  const failed: string[] = [];
+/**
+ * Screening of one candidate against one job. A filter fails a candidate only on something known. When the CV is silent
+ * (no dates, a skill worded differently, a level that is a little off) the result is a question for the recruiter, not a
+ * failure: “not stated” is not “no”. A client can choose the strict setting for essential skills
+ * (`strict_mandatory_skills`, or `work_evidence_for_mandatory_skills`), and then a skill not found is a failure.
+ */
+export function screen(p: PortalProfile, req: PortalRequirements, params: CompanyParams | null): { failed: string[]; questions: string[] } {
+  const failed: string[] = [], questions: string[] = [];
   const f = req.hard, i = p.india;
   if (!f.remote && f.cities.length) {
     const here = [i.currentCity, ...i.preferredCities].filter(Boolean);
     const local = f.cities.some(c => here.some(h => sameLabourMarket(h, c)));
     // A CV that names no city is "not known", not "elsewhere": the recruiter asks. Only a known, different place fails.
     if (here.length && !local && !(f.allowRelocation && i.willingToRelocate === true)) failed.push(`Location: not in ${f.cities.join(" or ")}${f.allowRelocation ? " and not willing to relocate" : ""}.`);
+    else if (!here.length) questions.push(`Location: the CV names no city; ask where they are based (the job is in ${f.cities.join(" or ")}).`);
   }
-  if (f.minYears !== null && i.yearsExperience + 0.25 < f.minYears) failed.push(`Experience: ${i.yearsExperience} years, needs at least ${f.minYears}.`);
+  if (f.minYears !== null && i.yearsExperience + 0.25 < f.minYears) {
+    // A CV without dated roles can come out as few years or none. That is not evidence of too little experience.
+    const dated = p.work.some(w => w.start);
+    if (!dated) questions.push(`Experience: the CV gives no dates, so the years could not be worked out; ask how many years they have (the job needs ${f.minYears}).`);
+    else failed.push(`Experience: ${i.yearsExperience} years, needs at least ${f.minYears}.`);
+  }
   const workOnly = params?.mandatoryFilters?.includes("work_evidence_for_mandatory_skills");
+  const strict = workOnly || params?.mandatoryFilters?.includes("strict_mandatory_skills");
   const groups = req.mandatoryGroups ?? f.mandatorySkills.map(s => [s.id]);
   const name = (id: string) => [...req.mustHave, ...f.mandatorySkills].find(s => s.id === id)?.name ?? id;
   for (const group of groups) {
     const ok = group.some(id => { const have = p.skills.find(x => x.id === id); return !!have && (!workOnly || have.evidence === "work" || have.evidence === "certification"); });
-    if (!ok) failed.push(`Mandatory skill: ${group.map(name).join(" or ")} not ${workOnly ? "shown in work history" : "found"}.`);
+    if (ok) continue;
+    if (strict) failed.push(`Mandatory skill: ${group.map(name).join(" or ")} not ${workOnly ? "shown in work history" : "found"}.`);
+    else questions.push(`Ask about ${group.map(name).join(" or ")}: the job asks for it and it is not in the CV. They may have it under another name.`);
   }
   const notice = f.maxNoticeDays ?? params?.maxNoticeDays ?? null;
   if (notice !== null && i.noticeDays !== null && i.noticeDays > notice) failed.push(`Notice period: ${i.noticeDays} days, maximum ${notice}.`);
   if (f.ctcMaxInr !== null && i.ctcExpectedInr !== null && i.ctcExpectedInr > f.ctcMaxInr * 1.1) failed.push(`Expected CTC ${formatLpa(i.ctcExpectedInr)} is above the ${formatLpa(f.ctcMaxInr)} maximum.`);
   if (params?.mandatoryFilters?.includes("ctc_stated") && i.ctcExpectedInr === null) failed.push("Expected CTC is not stated.");
   if (params?.mandatoryFilters?.includes("notice_stated") && i.noticeDays === null) failed.push("Notice period is not stated.");
-  if (params?.seniority?.length && !params.seniority.includes(i.seniority) && !withinBands(i.yearsExperience, params.seniority)) failed.push(`Seniority (${i.seniority}, ${i.yearsExperience} years) is outside this company's approved bands.`);
-  if (f.seniority.length && !withinBands(i.yearsExperience, f.seniority, 2)) failed.push(`Seniority (${i.seniority}) is far from the role's level.`);
-  return failed;
+  // Experience was being checked three times (the job's minimum, the job's level, the client's levels). The minimum is the gate;
+  // the two level checks only tell the recruiter, who decides.
+  if (params?.seniority?.length && !params.seniority.includes(i.seniority) && !withinBands(i.yearsExperience, params.seniority)) questions.push(`Level: ${i.yearsExperience} years (${i.seniority}) is outside the levels this client usually hires.`);
+  if (f.seniority.length && !withinBands(i.yearsExperience, f.seniority, 2)) questions.push(`Level: ${i.yearsExperience} years (${i.seniority}) is far from the role's level.`);
+  return { failed, questions };
 }
+
+/** Hard filters: pass/fail gates from the JD and the company's approved parameters. */
+export const hardFilters = (p: PortalProfile, req: PortalRequirements, params: CompanyParams | null): string[] => screen(p, req, params).failed;
 
 function relevantJobs(p: PortalProfile, req: PortalRequirements) {
   const ids = new Set([...req.mustHave, ...req.niceToHave].filter(s => !GENERIC.has(s.family)).map(s => s.id));
@@ -195,7 +216,7 @@ function aggregate(checks: Check[], reqs: RequirementSkill[]) {
 }
 
 export function scoreMatch(p: PortalProfile, req: PortalRequirements, params: CompanyParams | null, evidence: MatchEvidence = {}, now = new Date()): MatchResult {
-  const failedFilters = hardFilters(p, req, params);
+  const { failed: failedFilters, questions } = screen(p, req, params);
   const { weights, trace } = deriveWeights(req, evidence.company);
   const listedCount = p.skills.filter(s => s.evidence === "listed").length;
   const listedCap = Math.min(1, 25 / Math.max(1, listedCount));
@@ -230,8 +251,13 @@ export function scoreMatch(p: PortalProfile, req: PortalRequirements, params: Co
   const totalYears = p.india.yearsExperience;
   if (req.minYears !== null) {
     const other = Math.max(0, totalYears - relevantYears);
-    const mean = req.minYears === 0 ? 1 : Math.min(1, relevantYears / req.minYears) + Math.min(0.25, 0.25 * other / req.minYears);
-    push("experience", mean, dated ? 0.05 : 0.15, `${relevantYears} relevant of ${totalYears} years; needs ${req.minYears}${req.maxYears !== null ? `–${req.maxYears}` : "+"}.`);
+    let mean = req.minYears === 0 ? 1 : Math.min(1, relevantYears / req.minYears) + Math.min(0.25, 0.25 * other / req.minYears);
+    // Well above the stated maximum, the role is probably too junior for them: the score eases down (8% a year, to 60%), so
+    // a 15-year candidate does not fill the three places on a “2 to 5 years” job. The recruiter can still see and submit them.
+    const over = req.maxYears !== null ? Math.max(0, totalYears - req.maxYears) : 0;
+    if (over > 0) mean = Math.min(mean, 1) * Math.max(0.6, 1 - 0.08 * over);
+    push("experience", mean, dated ? 0.05 : 0.15, `${relevantYears} relevant of ${totalYears} years; needs ${req.minYears}${req.maxYears !== null ? `–${req.maxYears}` : "+"}${over > 0 ? `; ${over} year${over === 1 ? "" : "s"} above the maximum` : ""}.`);
+    if (over >= 3) questions.push(`Level: ${totalYears} years is well above the ${req.maxYears} the job asks for; ask whether the role suits them.`);
   } else push("experience", null, 0, "No experience requirement.");
 
   const titles: [string, number][] = p.work.slice(0, 4).map((w, i) => [w.title, [1, 0.85, 0.7, 0.7][i]] as [string, number]);
@@ -243,7 +269,8 @@ export function scoreMatch(p: PortalProfile, req: PortalRequirements, params: Co
     const idx = (ym: string) => Number(ym.slice(0, 4)) * 12 + Number(ym.slice(5, 7)) - 1;
     const nowIdx = now.getUTCFullYear() * 12 + now.getUTCMonth();
     const ago = nowIdx - Math.max(...relevant.map(j => j.current || !j.end ? nowIdx : idx(j.end)));
-    push("recency", ago <= 24 ? 1 : ago >= 72 ? 0.2 : 1 - 0.8 * (ago - 24) / 48, 0.05, ago <= 0 ? "Currently in relevant work." : `Relevant work ended ${ago} months ago.`);
+    // A break (caring, illness, study) must not cost much: the part is small and never falls below 60%. Decision of 11 Nov 2026.
+    push("recency", ago <= 24 ? 1 : ago >= 72 ? 0.6 : 1 - 0.4 * (ago - 24) / 48, 0.05, ago <= 0 ? "Currently in relevant work." : `Relevant work ended ${ago} months ago.`);
   } else push("recency", (req.minYears ?? 0) > 0 ? 0 : null, 0.05, dated ? "No dated role matches this job." : "No dated roles.");
 
   const top = p.education.reduce((x, e) => Math.max(x, e.level), 0);
@@ -285,7 +312,7 @@ export function scoreMatch(p: PortalProfile, req: PortalRequirements, params: Co
   const minScore = params?.minScore ?? 70;
   return {
     engineVersion: MATCH_ENGINE_VERSION, hardPass: failedFilters.length === 0, failedFilters, score, sd, lowerBound, weights, weightTrace: trace, components, checks,
-    explanation: explain(score, sd, must, nice, components, relevantYears, req, p, failedFilters, groups),
+    explanation: explain(score, sd, must, nice, components, relevantYears, req, p, failedFilters, groups), questions,
     band, gaps, nearThreshold: failedFilters.length === 0 && S >= minScore && L < minScore,
   };
 }

@@ -42,7 +42,7 @@ function ParamsFields({ defaults }: { defaults?: StoredParams | null }) {
     <label>Remote roles<select name="allowRemote" defaultValue={d?.allowRemote ? "yes" : "no"}><option value="no">Not permitted</option><option value="yes">Permitted</option></select></label>
     <label>Maximum live jobs<input name="maxLiveJds" type="number" min={1} max={100} defaultValue={d?.maxLiveJds ?? 10} /></label>
     <fieldset className="full-field"><legend>Mandatory filters</legend>
-      {([["ctc_stated", "Candidate must state expected CTC"], ["notice_stated", "Candidate must state notice period"], ["work_evidence_for_mandatory_skills", "Essential skills must appear in work history"]] as const).map(([value, text]) =>
+      {([["ctc_stated", "Candidate must state expected CTC"], ["notice_stated", "Candidate must state notice period"], ["strict_mandatory_skills", "Strict: a candidate whose CV does not show an essential skill is filtered out (the default is to ask the candidate)"], ["work_evidence_for_mandatory_skills", "Essential skills must appear in work history (also strict)"]] as const).map(([value, text]) =>
         <label key={value} className="consent"><input type="checkbox" name="mandatoryFilters" value={value} defaultChecked={(d?.mandatoryFilters ?? []).includes(value)} /> {text}</label>)}
     </fieldset>
   </div>;

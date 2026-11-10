@@ -150,14 +150,14 @@ function Tech({ results }: { results?: Technical[] }) {
 }
 
 function JobWork({ jd, canEdit, canManage, say, showLink, reload }: { jd: Row; canEdit: boolean; canManage: boolean; say: Say; showLink: ShowLink; reload: () => void }) {
-  const [passReasons, setPassReasons] = useState<string[]>([]), [full, setFull] = useState(false);
+  const [passReasons, setPassReasons] = useState<string[]>([]), [full, setFull] = useState(false), [waiting, setWaiting] = useState(0);
   // Phone and email are opened one candidate at a time; each view is recorded and counted against a daily limit.
   const [contacts, setContacts] = useState<Record<string, { phone: string; email: string }>>({});
   const showContact = async (candidateId: string) => { try { const d = await api<{ phone: string; email: string }>("contact", { jdId: jd.id, candidateId }); setContacts(c => ({ ...c, [candidateId]: d })); } catch (e) { say((e as Error).message); } };
   const [cands, setCands] = useState<Row[] | null>(null), [pipe, setPipe] = useState<Pipe | null>(null), [form, setForm] = useState<{ id: string; kind: string } | null>(null);
   const [profiles, setProfiles] = useState<string | null>(null), [passed, setPassed] = useState<Row[] | null>(null);
   const load = useCallback(() => {
-    api<{ candidates: Row[]; passReasons?: string[]; full?: boolean }>("candidates", undefined, `?jd=${jd.id}`).then(d => { setCands(d.candidates); setPassReasons(d.passReasons ?? []); setFull(!!d.full); }).catch(e => say(e.message));
+    api<{ candidates: Row[]; passReasons?: string[]; full?: boolean; ranking?: { waiting: number } }>("candidates", undefined, `?jd=${jd.id}`).then(d => { setCands(d.candidates); setPassReasons(d.passReasons ?? []); setFull(!!d.full); setWaiting(d.ranking?.waiting ?? 0); }).catch(e => say(e.message));
     api<Pipe>("pipeline", undefined, `?jd=${jd.id}`).then(setPipe).catch(e => say(e.message));
   }, [jd.id, say]);
   useEffect(() => { load(); }, [load]);
@@ -227,10 +227,12 @@ function JobWork({ jd, canEdit, canManage, say, showLink, reload }: { jd: Row; c
     </div>)}
     {!closed && <>
       <h3>Candidates to submit</h3>
+      {waiting > 0 && <p className="pj-notice" role="status">Ranking in progress: {waiting} item{waiting === 1 ? " is" : "s are"} still being scored, so this list may be incomplete. <button type="button" className="pj-link" onClick={load}>Check again</button></p>}
       {!full && <p className="pj-muted">You see the three best candidates at a time. Submit one, or pass with a reason, and the next best appears. Pass reasons are reviewed to improve matching.</p>}
       {!cands ? <p className="pj-muted">Loading…</p> : cands.length === 0 ? <p className="pj-muted">No more candidates for this job right now.</p> : cands.map(c => { const cid = String(c.candidate_id); return <div className="pj-note" key={cid}>
         <b>{c.display_name || "Candidate"}</b> <span className="pj-pill">{c.source === "website" ? "Website applicant" : "Portal"}</span> <span className="pj-muted">· {c.current_city || "city not stated"}{c.score == null ? (c.band ? ` · ${c.band}` : "") : ` · score ${Math.round(Number(c.score))}`} · {Number(c.hard_pass) ? "meets the hard filters" : "misses a hard filter"}{Number(c.in_pipeline) ? " · already submitted" : ""}</span>
         <p className="pj-muted">{c.explanation}</p>
+        {Array.isArray(c.questions) && (c.questions as unknown as string[]).length > 0 && <div className="pj-notice"><b>Ask the candidate</b><ul>{(c.questions as unknown as string[]).map(q => <li key={q}>{q}</li>)}</ul><span className="pj-muted">Not found in the CV is not the same as no. Nobody is filtered out for it.</span></div>}
         {Number(c.fast_track) > 0 && <span className="pj-pill">Fast Track</span>}
         <Tech results={c.technical as unknown as Technical[]} />
         {Number(c.early_exits) > 0 && <p className="pj-notice bad">Left a previous placement within the 60-day guarantee ({String(c.early_exits)} time{Number(c.early_exits) > 1 ? "s" : ""}). Ask why before submitting.</p>}

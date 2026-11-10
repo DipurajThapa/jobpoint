@@ -620,7 +620,7 @@ export async function submissionCandidates(db: Db, jdId: string) {
     FROM matches m JOIN candidates k ON k.id = m.candidate_id WHERE m.jd_id = ? AND k.status = 'active' ORDER BY m.hard_pass DESC, applied DESC, m.lower_bound DESC LIMIT 200`).bind(lowPrioritySince, jdId).all<{ explanation: string; candidate_id: string; in_pipeline: number; passed: string | null; recent_early_exits: number; score?: number; lower_bound?: number }>();
   // A candidate who left a placement inside the replacement period in the last 12 months ranks after everyone else.
   results.sort((a, b) => Number(!!a.recent_early_exits) - Number(!!b.recent_early_exits));
-  return results.map(r => ({ ...r, explanation: parseJson<{ summary?: string }>(r.explanation, {}).summary ?? "" }));
+  return results.map(r => ({ ...r, questions: parseJson<{ questions?: string[] }>(r.explanation, {}).questions ?? [], explanation: parseJson<{ summary?: string }>(r.explanation, {}).summary ?? "" }));
 }
 
 /** How many people the client wants to hire for the job. */

@@ -45,7 +45,7 @@ async function liveJds(db: Db, ids?: string[]): Promise<Jd[]> {
 }
 
 export function storedResult(r: MatchResult) {
-  return JSON.stringify({ ...r.explanation, band: r.band, gaps: r.gaps, sd: r.sd, nearThreshold: r.nearThreshold, failedFilters: r.failedFilters, weights: r.weights, weightTrace: r.weightTrace, components: r.components, checks: r.checks.map(c => ({ requirement: c.requirement, kind: c.kind, status: c.status, mean: Math.round(c.mean * 100) / 100, sd: Math.round(c.sd * 100) / 100 })) });
+  return JSON.stringify({ ...r.explanation, questions: r.questions, band: r.band, gaps: r.gaps, sd: r.sd, nearThreshold: r.nearThreshold, failedFilters: r.failedFilters, weights: r.weights, weightTrace: r.weightTrace, components: r.components, checks: r.checks.map(c => ({ requirement: c.requirement, kind: c.kind, status: c.status, mean: Math.round(c.mean * 100) / 100, sd: Math.round(c.sd * 100) / 100 })) });
 }
 
 async function scorePairs(db: Db, cands: Cand[], jds: Jd[]) {

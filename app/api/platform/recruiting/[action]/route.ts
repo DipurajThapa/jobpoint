@@ -7,6 +7,7 @@ import { env } from "cloudflare:workers";
 import { portalDb, portalSecret, json, fail, failFrom, siteLink } from "@/lib/portal/session";
 import { extractText } from "@/lib/ats/extract";
 import { renderCvPdf } from "@/lib/portal/watermark";
+import { drainQueue } from "@/lib/portal/queue";
 import { redactContacts } from "@/lib/portal/policy";
 import { assignClientTeam, assignJobRecruiter, canManageTeam, markChangesSeen, removeTeamMember, setStaffMessaging, setTeamManager, staffCandidates, staffCloseJob, staffCloseRemaining, staffContact, staffCvSource, staffMessaging, staffMoveStage, staffPass, staffPassedCandidates, staffProfile, staffRecordInterview, staffRescheduleInterview, staffUnpass, PASS_REASONS, staffPipeline, staffJobTests, setJobAptitude, staffInviteToTest, staffCommitmentLink, staffScheduleInterview, staffSubmit, staffWork, type Staff } from "@/lib/portal/staff";
 import { REASONS, STAGE_LABEL } from "@/lib/portal/client";
@@ -22,7 +23,15 @@ export async function GET(request: Request, context: Ctx) {
   const db = portalDb(), staff: Staff = { id: user.id, admin: user.role === "admin" }, url = new URL(request.url);
   try {
     if (action === "work") return json({ ...await staffWork(db, staff), canEdit: user.access.recruiting !== "view", me: user.id, messaging: await staffMessaging(db, staff) });
-    if (action === "candidates") return json({ candidates: await staffCandidates(db, staff, url.searchParams.get("jd") ?? ""), passReasons: PASS_REASONS, full: staff.admin });
+    if (action === "candidates") {
+      const jd = url.searchParams.get("jd") ?? "";
+      await staffCandidates(db, staff, jd); // 404 for a job this person cannot see, before any work is done
+      // There is no scheduler on this hosting, so opening a job is what keeps the ranking moving: score a bounded batch first,
+      // and say so when work is still waiting, so a short list is not mistaken for a complete one.
+      let ranking = (await db.prepare("SELECT COUNT(*) AS n FROM score_queue").first<{ n: number }>())?.n ?? 0;
+      if (ranking) ranking = (await drainQueue(db, portalSecret(), 200)).remaining;
+      return json({ candidates: await staffCandidates(db, staff, jd), passReasons: PASS_REASONS, full: staff.admin, ranking: { waiting: ranking } });
+    }
     if (action === "passed") return json({ passed: await staffPassedCandidates(db, staff, url.searchParams.get("jd") ?? "") });
     if (action === "profile") return json(await staffProfile(db, staff, { jdId: url.searchParams.get("jd") ?? "", candidateId: url.searchParams.get("candidate") ?? "" }));
     if (action === "cv") {

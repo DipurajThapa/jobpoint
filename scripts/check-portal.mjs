@@ -232,11 +232,34 @@ await check("Hard filters: city or relocation, experience, mandatory skills, not
   const junior = fullProfile(); junior.india = { ...junior.india, yearsExperience: 1 };
   assert.ok(match.hardFilters(junior, req, PARAMS).some(f => f.startsWith("Experience")));
   const noTds = fullProfile({ skills: fullProfile().skills.filter(s => s.id !== "tally") });
-  assert.ok(match.hardFilters(noTds, req, PARAMS).some(f => f.includes("Tally")));
+  // Not found in the CV is a question for the recruiter, not a failure, unless the client chose the strict setting.
+  assert.ok(!match.hardFilters(noTds, req, PARAMS).some(f => f.includes("Tally")), "a skill not found does not fail the candidate by default");
+  assert.ok(match.screen(noTds, req, PARAMS).questions.some(q => q.includes("Tally")), "it becomes a question");
+  assert.equal(match.scoreMatch(noTds, req, PARAMS).hardPass, true);
+  const strictParams = { ...PARAMS, mandatoryFilters: ["strict_mandatory_skills"] };
+  assert.ok(match.hardFilters(noTds, req, strictParams).some(f => f.includes("Tally")), "the strict setting fails it");
+  assert.equal(match.scoreMatch(noTds, req, strictParams).hardPass, false);
+  // A CV without dates cannot show how many years: a question, not a failure.
+  const undated = fullProfile(); undated.work = undated.work.map(w => ({ ...w, start: null, end: null })); undated.india = { ...undated.india, yearsExperience: 0.5 };
+  assert.ok(!match.hardFilters(undated, req, PARAMS).some(f => f.startsWith("Experience")) && match.screen(undated, req, PARAMS).questions.some(q => q.startsWith("Experience")), "undated experience is a question");
+  // The two level checks only advise.
+  const senior = fullProfile(); senior.india = { ...senior.india, yearsExperience: 15, seniority: "lead" };
+  assert.ok(!match.hardFilters(senior, req, PARAMS).some(f => f.startsWith("Seniority") || f.startsWith("Level")) && match.screen(senior, req, PARAMS).questions.some(q => q.startsWith("Level")), "level is advisory");
   const late = fullProfile(); late.india = { ...late.india, noticeDays: 90 };
   assert.ok(match.hardFilters(late, req, PARAMS).some(f => f.startsWith("Notice")));
   const pricey = fullProfile(); pricey.india = { ...pricey.india, ctcExpectedInr: 900000 };
   assert.ok(match.hardFilters(pricey, req, PARAMS).some(f => f.startsWith("Expected CTC")));
+});
+await check("Experience far above the stated maximum eases the score; a career break costs little", () => {
+  const req = REQ(); req.maxYears = 5;
+  const comp = (p, key) => match.scoreMatch(p, req, PARAMS).components.find(c => c.key === key);
+  const inRange = fakeProfile(); inRange.india = { ...inRange.india, yearsExperience: 4.5 };
+  const veteran = fakeProfile(); veteran.india = { ...veteran.india, yearsExperience: 15 };
+  assert.ok(comp(veteran, "experience").mean < comp(inRange, "experience").mean, "15 years does not beat 4.5 on a 2-to-5-year job");
+  assert.ok(comp(veteran, "experience").mean >= 0.6 * comp(inRange, "experience").mean - 1e-9, "but the easing is gradual and stops at 60%");
+  assert.ok(match.scoreMatch(veteran, req, PARAMS).questions.some(q => q.includes("well above")), "the recruiter is told");
+  const onBreak = fakeProfile(); onBreak.work = onBreak.work.map(w => ({ ...w, current: false, start: "2012-01", end: "2018-06", months: 78 }));
+  assert.ok(comp(onBreak, "recency").mean >= 0.6 - 1e-9, `a long break costs at most 40% of a small part (got ${comp(onBreak, "recency").mean})`);
 });
 await check("Name, gender, age, religion, caste, marital status and photo cannot change a score", () => {
   const base = match.scoreMatch(fakeProfile(), REQ(), PARAMS);
