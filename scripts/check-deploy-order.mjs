@@ -1,7 +1,7 @@
 // Simulates "the new code is live before its database change": hides a column added by the latest
 // migrations, sends both public forms and checks that each is still saved. Needs npm run dev.
 //   node scripts/check-deploy-order.mjs
-import { BASE, chromium, context, client, pdfFromText, rows, clearRateLimits } from "./audit/lib.mjs";
+import { chromium, context, client, pdfFromText, rows, clearRateLimits } from "./audit/lib.mjs";
 import { DatabaseSync } from "node:sqlite"; import { readdirSync } from "node:fs";
 const d = new URL("../.wrangler/state/v3/d1/miniflare-D1DatabaseObject", import.meta.url).pathname, db = new DatabaseSync(`${d}/${readdirSync(d).find(f => f.endsWith(".sqlite") && f !== "metadata.sqlite")}`);
 clearRateLimits();

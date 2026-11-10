@@ -14,5 +14,11 @@ function configuredSiteUrl(): string {
   } catch { return DEFAULT_SITE_URL; }
 }
 
+/**
+ * How to reach Jobboard300. Shown in the footer, the contact section and the privacy notice.
+ * The postal address is still to come from the owner.
+ */
+export const CONTACT = { phone: "+91 96119 87667", phoneHref: "tel:+919611987667", email: "dipuraj.thapa@gmail.com", city: "Kolkata, India" } as const;
+
 /** The public address of the site, used in links sent to candidates and in search metadata. No trailing slash. */
 export const SITE_URL = configuredSiteUrl();

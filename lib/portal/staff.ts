@@ -63,6 +63,9 @@ export async function jobForStaff(db: Db, staff: Staff, jdId: string): Promise<J
   return row;
 }
 
+/** The band shown in place of the score. Someone who misses a pass-or-fail rule is never called a strong match. */
+export const bandOf = (score: number, hardPass: boolean) => score >= 75 && hardPass ? "Strong match" : score >= 55 ? "Good match" : score >= 35 ? "Partial match" : "Weak match";
+
 /** How many candidates a recruiter or team manager sees for a job at one time. */
 export const SHORTLIST_SIZE = 3;
 export const PASS_REASONS = ["not_reachable", "not_interested", "no_consent", "skills_mismatch", "experience_mismatch", "salary_mismatch", "location_mismatch", "other"] as const;
@@ -77,7 +80,11 @@ export async function staffCandidates(db: Db, staff: Staff, jdId: string) {
   await jobForStaff(db, staff, jdId);
   const all = await submissionCandidates(db, jdId);
   if (staff.admin) return all.slice(0, 40);
-  return all.filter(c => !Number(c.in_pipeline) && !c.passed).slice(0, SHORTLIST_SIZE).map(c => { const rest = { ...c }; delete rest.score; delete rest.lower_bound; return rest; });
+  // Recruiters and team managers see a band and the reasons, never the number: the number is not yet tested against real hiring.
+  return all.filter(c => !Number(c.in_pipeline) && !c.passed).slice(0, SHORTLIST_SIZE).map(c => {
+    const rest: typeof c & { band?: string } = { ...c, band: bandOf(Number(c.score ?? 0), !!Number((c as { hard_pass?: number }).hard_pass)), explanation: String(c.explanation ?? "").replace(/^\s*\d{1,3}\s*\(likely[^)]*\):\s*/, "") };
+    delete rest.score; delete rest.lower_bound; return rest;
+  });
 }
 
 /** Pass on a shortlisted candidate with a reason. The reasons are what matching is tuned from. */

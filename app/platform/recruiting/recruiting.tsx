@@ -119,7 +119,7 @@ function JobWork({ jd, canEdit, say, reload }: { jd: Row; canEdit: boolean; say:
     <h3>Candidates to submit</h3>
     {!full && <p className="pj-muted">You see the three best candidates at a time. Submit one, or pass with a reason, and the next best appears. Pass reasons are reviewed to improve matching.</p>}
     {!cands ? <p className="pj-muted">Loading…</p> : cands.length === 0 ? <p className="pj-muted">No more candidates for this job right now.</p> : cands.map(c => <div className="pj-note" key={String(c.candidate_id)}>
-      <b>{c.display_name || "Candidate"}</b> <span className="pj-pill">{c.source === "website" ? "Website applicant" : "Portal"}</span> <span className="pj-muted">· {c.current_city || "city not stated"}{c.score == null ? "" : ` · score ${Math.round(Number(c.score))}`} · {Number(c.hard_pass) ? "meets the hard filters" : "misses a hard filter"}{Number(c.in_pipeline) ? " · already submitted" : ""}</span>
+      <b>{c.display_name || "Candidate"}</b> <span className="pj-pill">{c.source === "website" ? "Website applicant" : "Portal"}</span> <span className="pj-muted">· {c.current_city || "city not stated"}{c.score == null ? (c.band ? ` · ${c.band}` : "") : ` · score ${Math.round(Number(c.score))}`} · {Number(c.hard_pass) ? "meets the hard filters" : "misses a hard filter"}{Number(c.in_pipeline) ? " · already submitted" : ""}</span>
       <p className="pj-muted">{c.explanation}</p>
       {Number(c.fast_track) > 0 && <span className="pj-pill">Fast Track</span>}
       {Number(c.early_exits) > 0 && <p className="pj-notice bad">Left a previous placement within the 60-day guarantee ({String(c.early_exits)} time{Number(c.early_exits) > 1 ? "s" : ""}). Ask why before submitting.</p>}

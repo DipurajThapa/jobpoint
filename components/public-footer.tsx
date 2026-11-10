@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import Image from "next/image";
 import { DEMO_MODE } from "@/lib/demo";
+import { CONTACT } from "@/lib/site";
 
 /**
  * The same footer on every public page: one column for job seekers, one for
@@ -36,5 +37,5 @@ export default function PublicFooter({ onCandidate, onEmployer }: { onCandidate?
         <Link href="/platform/sign-in">Staff sign-in</Link>
       </div>
     </div>
-  </div><div className="container footer-bottom"><span>© {new Date().getFullYear()} Jobboard300</span><span>Kolkata, India</span><nav aria-label="Legal navigation"><Link href="/privacy">Privacy notice</Link><Link href="/privacy#privacy-request">Your data requests</Link><Link href="/terms">Terms of use</Link><Link href="/compliance">Privacy safeguards</Link></nav></div></footer>;
+  </div><div className="container footer-bottom"><span>© {new Date().getFullYear()} Jobboard300</span><span>{CONTACT.city} · <a href={CONTACT.phoneHref}>{CONTACT.phone}</a> · <a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a></span><nav aria-label="Legal navigation"><Link href="/privacy">Privacy notice</Link><Link href="/privacy#privacy-request">Your data requests</Link><Link href="/terms">Terms of use</Link><Link href="/compliance">Privacy safeguards</Link></nav></div></footer>;
 }

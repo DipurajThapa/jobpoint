@@ -1,6 +1,7 @@
 import LegalPage from "@/components/legal-page";
 import PrivacyRequestForm from "./privacy-request-form";
 import { DEMO_MODE } from "@/lib/demo";
+import { CONTACT } from "@/lib/site";
 
 export const metadata = { title: "Privacy notice", description: "What Jobboard300 collects from job seekers and employers, why, who sees it, your choices and how to make a request.", alternates: { canonical: "/privacy" }, robots: { index: false, follow: true } };
 
@@ -10,7 +11,7 @@ export const metadata = { title: "Privacy notice", description: "What Jobboard30
 // reviewed by a lawyer; the points marked "to be confirmed" need the company's own facts.
 export default function PrivacyPage() {
   return <LegalPage title="Privacy notice" intro={DEMO_MODE ? "This notice explains the planned recruitment data handling. The public website is currently a read-only demo; submissions and CV uploads are disabled." : "This notice explains what Jobboard300 collects when you send a CV or a hiring enquiry, why, who sees it and what you can ask us to do. Updated 11 November 2026."}>
-    <h2>Who handles your information</h2><p>Jobboard300 is a job board and recruitment consultancy based in Kolkata, India. Its registered legal name, postal address and the name of its grievance officer are to be confirmed by the company and will be published on this page. Until then, use the request form at the foot of this page for any question, correction, complaint or request about your data.</p>
+    <h2>Who handles your information</h2><p>Jobboard300 is a job board and recruitment consultancy based in Kolkata, India. You can reach it on <a href={CONTACT.phoneHref}>{CONTACT.phone}</a> or at <a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a>. Its registered legal name, postal address and the name of its grievance officer are to be confirmed by the company and will be published on this page. For any question, correction, complaint or request about your data, the request form at the foot of this page is the quickest route.</p>
 
     <h2>What we collect from job seekers, and why</h2>
     <p><b>On the website form.</b> Your name, email, mobile number, the place you would like to work (optional) and your CV. We do not ask you to type your experience, skills or education: software reads them from your CV, together with your current city and, where the CV states them, your notice period and salary. We use these to consider you for the role you applied for and, if you agreed, for other suitable roles, and to contact you about them.</p>
