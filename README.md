@@ -61,9 +61,6 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 | `GET /api/admin/resumes/{applicationId}` | Site owner | Download a stored resume |
 | `GET /api/admin/privacy-requests` | Site owner | Review privacy requests and recent sensitive actions |
 | `PATCH /api/admin/privacy-requests/{id}` | Site owner | Record a verified request outcome |
-| `GET /api/admin/ats`; `GET, PUT /api/admin/ats/jobs/{id}` | Site owner | CV screening: roles, editable requirements, candidates ranked by fit |
-| `POST /api/admin/ats/screen`; `GET, PATCH /api/admin/ats/screenings/{id}` | Site owner | Screen a stored CV against a role; read the report; record the recruiter's review |
-| `POST /api/admin/ats/analyze` | Site owner | One-off check of a CV against a role or pasted JD (not stored) |
 | `/api/portal/auth/{action}`, `/api/portal/candidate/{action}`, `/api/portal/company/{action}` | Portal accounts | Job portal: sign-up and sign-in, candidate CV and consent, company JDs, previews and unlocks (see docs/PORTAL.md) |
 | `/api/admin/portal/{action}` | Site owner | Job portal administration: approvals, parameters, plans and quota, reviews, duplicates, abuse flags |
 | `POST /api/platform/auth/{sign-in,sign-out,accept,password}` | Public / signed in | Platform sign-in, sign-out, invitation or reset redemption, password change |

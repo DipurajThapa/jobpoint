@@ -340,3 +340,119 @@ test("merge 1: a website form sent with a verified account's email joins the rec
   // Bikram's record is not involved.
   assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM candidate_sources WHERE candidate_id = ?").get(w.bikram.id).n, 0);
 });
+
+// ---- Merge 2: one vacancy record and one pipeline ----
+const vacancy = await import(resolve(root, "lib/portal/vacancy.ts"));
+const queueLib = await import(resolve(root, "lib/portal/queue.ts"));
+const { SECRET, profile: cvProfile } = await import("./helpers/world.mjs");
+const ROLE = { title: "Accounts Executive", location: "Durgapur", employmentType: "Full-time", workMode: "On-site", sector: "Accounts", description: "We are hiring an Accounts Executive in Durgapur for a manufacturing client. B.Com with 2-5 years of experience.", requirements: "Must have Tally, GST returns and bank reconciliation. Salary 3 to 4.5 LPA." };
+const jobsRoute = () => route("admin/jobs"), jobRoute = () => route("admin/jobs/[id]");
+const postRole = async (body) => call(await jobsRoute(), "POST", "/api/admin/jobs", { headers: OWNER, body: { ...ROLE, ...body } });
+
+/** A website applicant with a parsed CV: name, whether they ticked the two optional boxes, and the role applied to. */
+async function websiteApplicant(w, id, name, email, { jobId = null, share = false, future = false } = {}) {
+  await w.db.prepare("INSERT INTO applications (id, job_id, full_name, email, phone, location, experience, consent, share_consent, future_consent) VALUES (?, ?, ?, ?, '9830077777', 'Durgapur', 'four years', 1, ?, ?)").bind(id, jobId, name, email, share ? 1 : 0, future ? 1 : 0).run();
+  const out = await mods.website.linkWebsiteApplication(w.db, w.BUCKET, { id, jobId, fullName: name, email, phone: "9830077777", location: "Durgapur", shareConsent: share, futureConsent: future, privacyVersion: "2026-11-09", resumeName: null }, null);
+  const r2Key = `portal-cv/${out.candidateId}/one`;
+  await w.BUCKET.put(r2Key, new TextEncoder().encode(`CV of ${name}`));
+  await mods.candidate.addCv(w.db, out.candidateId, { r2Key, fileName: "cv.pdf", fileType: "pdf", size: 1000, sha256: `sha-${id}`, text: `${name} accounts executive with tally gst and bank reconciliation in durgapur ${id}`, profile: cvProfile(name, email, "9830077777"), parseOk: true });
+  await mods.company.enqueue(w.db, "candidate", out.candidateId, "test").run();
+  await queueLib.drainQueue(w.db, SECRET, 400);
+  return out.candidateId;
+}
+
+test("merge 2: a role posted in the owner console is one vacancy, under the house client or the chosen client", async () => {
+  const w = await world();
+  const house = await postRole({ status: "published" });
+  assert.equal(house.status, 201, house.text);
+  const jd = w.db.raw.prepare("SELECT company_id, status, service, title FROM jds WHERE id = ?").get(house.json.id);
+  assert.deepEqual({ ...jd }, { company_id: vacancy.HOUSE_CLIENT_ID, status: "live", service: "managed", title: ROLE.title });
+  assert.equal(w.db.raw.prepare("SELECT status FROM companies WHERE id = ?").get(vacancy.HOUSE_CLIENT_ID).status, "active");
+  assert.ok(JSON.parse(w.db.raw.prepare("SELECT requirements FROM jds WHERE id = ?").get(house.json.id).requirements).roleFamily, "the role's requirements were not parsed");
+  const forClient = await postRole({ status: "draft", companyId: w.A.id });
+  assert.deepEqual({ ...w.db.raw.prepare("SELECT company_id, status FROM jds WHERE id = ?").get(forClient.json.id) }, { company_id: w.A.id, status: "draft" });
+  // A client that is not active cannot be given a role, and no half-made role is left behind.
+  await w.db.prepare("UPDATE companies SET status = 'suspended' WHERE id = ?").bind(w.B.id).run();
+  const before = w.db.raw.prepare("SELECT COUNT(*) AS n FROM jobs").get().n;
+  assert.equal((await postRole({ companyId: w.B.id })).status, 400);
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM jobs").get().n, before);
+  // The list shows the client; the house client is not offered as a client to pick, or to link an enquiry to.
+  const list = await call(await jobsRoute(), "GET", "/api/admin/jobs", { headers: OWNER });
+  assert.equal(list.json.jobs.find(j => j.id === house.json.id).clientName, "Jobboard300");
+  assert.equal(list.json.jobs.find(j => j.id === forClient.json.id).clientName, "Alpha Steel Works");
+  assert.ok(!list.json.clients.some(c => c.id === vacancy.HOUSE_CLIENT_ID));
+  const records = await call(await route("admin/records"), "GET", "/api/admin/records", { headers: OWNER });
+  assert.ok(!records.json.clients.some(c => c.id === vacancy.HOUSE_CLIENT_ID));
+  // Only the owner posts roles.
+  assert.equal((await call(await jobsRoute(), "POST", "/api/admin/jobs", { body: ROLE })).status, 401);
+});
+
+test("merge 2: publishing, unpublishing and closing a role moves the same vacancy", async () => {
+  const w = await world();
+  const role = (await postRole({ status: "draft" })).json.id;
+  const set = async (status) => call(await jobRoute(), "PATCH", `/api/admin/jobs/${role}`, { headers: OWNER, body: { status }, params: { id: role } });
+  const jd = () => w.db.raw.prepare("SELECT status FROM jds WHERE id = ?").get(role).status;
+  assert.equal(jd(), "draft");
+  await set("published"); assert.equal(jd(), "live");
+  await set("draft"); assert.equal(jd(), "paused");
+  await set("published"); assert.equal(jd(), "live");
+  await set("closed"); assert.equal(jd(), "closed");
+  assert.equal(w.db.raw.prepare("SELECT status FROM jobs WHERE id = ?").get(role).status, "closed");
+});
+
+test("merge 2: roles posted before this get their vacancy record when the owner opens the list", async () => {
+  const w = await world();
+  await w.db.prepare("INSERT INTO jobs (id, title, location, employment_type, description, requirements, status) VALUES ('old-role', 'Store Keeper', 'Asansol', 'Full-time', 'Short text.', '', 'published')").run();
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM jds WHERE id = 'old-role'").get().n, 0);
+  await call(await jobsRoute(), "GET", "/api/admin/jobs", { headers: OWNER });
+  assert.deepEqual({ ...w.db.raw.prepare("SELECT company_id, status FROM jds WHERE id = 'old-role'").get() }, { company_id: vacancy.HOUSE_CLIENT_ID, status: "live" });
+  assert.equal(await vacancy.backfillVacancies(w.db, "owner"), 0);
+});
+
+test("merge 2: a website application to a role enters that vacancy's shortlist, and nothing else", async () => {
+  const w = await world();
+  const role = (await postRole({ status: "published", companyId: w.A.id })).json.id;
+  // Ticked "share my CV with the employer for this role" only: not the general matching box.
+  const farah = await websiteApplicant(w, "app-f1", "Farah Khan", "farah.khan@person.example", { jobId: role, share: true });
+  assert.deepEqual({ ...w.db.raw.prepare("SELECT jd_id, status FROM portal_applications WHERE candidate_id = ?").get(farah) }, { jd_id: role, status: "applied" });
+  // Scored for the role applied to, and for no other job (Alpha's own job and Bravo's job are live too).
+  assert.deepEqual(w.db.raw.prepare("SELECT jd_id FROM matches WHERE candidate_id = ?").all(farah).map(r => r.jd_id), [role]);
+  const shortlist = await mods.client.submissionCandidates(w.db, role);
+  const row = shortlist.find(c => c.candidate_id === farah);
+  assert.ok(row, "the applicant is not in the role's shortlist");
+  assert.equal(row.applied, 1); assert.equal(row.can_share, 1); assert.equal(row.source, "website");
+  assert.ok(!(await mods.client.submissionCandidates(w.db, w.B.jdId)).some(c => c.candidate_id === farah), "the applicant appeared in another client's shortlist");
+  // The recruiter can submit them to this role on the strength of that tick, but to no other job.
+  await assert.rejects(mods.client.submitByRecruiter(w.db, SECRET, { companyId: w.B.id, jobId: w.B.jdId, jdId: w.B.jdId, candidateId: farah, note: "x" }, "admin-1"), /not consented/);
+  await assert.rejects(mods.client.submitByRecruiter(w.db, SECRET, { companyId: w.A.id, jdId: w.A.jdId, candidateId: farah, note: "x" }, "admin-1"), /not consented/);
+  await mods.client.submitByRecruiter(w.db, SECRET, { companyId: w.A.id, jdId: role, candidateId: farah, note: "Applied on the website; strong Tally." }, "admin-1");
+  assert.equal(w.db.raw.prepare("SELECT stage FROM pipeline WHERE jd_id = ? AND candidate_id = ?").get(role, farah).stage, "submitted");
+  // The owner console shows where the application stands and how many applied.
+  const records = await call(await route("admin/records"), "GET", "/api/admin/records", { headers: OWNER });
+  assert.deepEqual((({ stage, submissions, inCandidateList }) => ({ stage, submissions, inCandidateList }))(records.json.applications.find(a => a.id === "app-f1")), { stage: "submitted", submissions: 1, inCandidateList: true });
+  const list = await call(await jobsRoute(), "GET", "/api/admin/jobs", { headers: OWNER });
+  assert.deepEqual((({ applicants, inPipeline }) => ({ applicants, inPipeline }))(list.json.jobs.find(j => j.id === role)), { applicants: 1, inPipeline: 1 });
+});
+
+test("merge 2: an applicant who did not tick the sharing box is shortlisted but cannot be submitted", async () => {
+  const w = await world();
+  const role = (await postRole({ status: "published" })).json.id;
+  const gita = await websiteApplicant(w, "app-g1", "Gita Paul", "gita.paul@person.example", { jobId: role });
+  const row = (await mods.client.submissionCandidates(w.db, role)).find(c => c.candidate_id === gita);
+  assert.ok(row); assert.equal(row.applied, 1); assert.ok(!row.can_share);
+  await assert.rejects(mods.client.submitByRecruiter(w.db, SECRET, { companyId: vacancy.HOUSE_CLIENT_ID, jdId: role, candidateId: gita, note: "x" }, "admin-1"), /not consented/);
+});
+
+test("merge 2: the old stage list is read-only and CV screening is gone", async () => {
+  const w = await world();
+  await w.db.prepare("INSERT INTO applications (id, full_name, email, phone, location, experience, consent, status, recruiter_notes) VALUES ('app-h1', 'Hari Das', 'hari.das@person.example', '9830088888', 'Kolkata', 'two years', 1, 'qualified', 'old note')").run();
+  const rec = await route("admin/records/[type]/[id]");
+  const patch = body => call(rec, "PATCH", "/api/admin/records/applications/app-h1", { headers: OWNER, body, params: { type: "applications", id: "app-h1" } });
+  const moved = await patch({ status: "interview" });
+  assert.equal(moved.status, 409); assert.match(moved.json.error, /Recruiting tool/);
+  assert.equal((await patch({ notes: "new note" })).status, 200);
+  assert.deepEqual({ ...w.db.raw.prepare("SELECT status, recruiter_notes FROM applications WHERE id = 'app-h1'").get() }, { status: "qualified", recruiter_notes: "new note" });
+  const tables = w.db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name);
+  assert.ok(tables.includes("retired_ats_screenings") && !tables.includes("ats_screenings"));
+  await assert.rejects(import(resolve(root, "app/api/admin/ats/route.ts")));
+});

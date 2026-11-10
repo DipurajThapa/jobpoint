@@ -55,7 +55,7 @@ async function websiteApplication(w, id, name, email, phone) {
   await w.BUCKET.put(key, new TextEncoder().encode(`website CV of ${name}`));
   await w.db.prepare("INSERT INTO applications (id, full_name, email, phone, location, experience, consent, future_consent, resume_key, resume_name, recruiter_notes) VALUES (?, ?, ?, ?, 'Kolkata', ?, 1, 1, ?, 'cv.pdf', ?)")
     .bind(id, name, email, phone, `${name} has five years in accounts`, key, `${name} sounded keen on the phone`).run();
-  await w.db.prepare("INSERT INTO ats_screenings (id, application_id, method, engine_version, cv_sha256, score, verdict, profile, requirements, result, created_at, created_by) VALUES (?, ?, 'rules', 't', 'x', 70, 'possible', ?, '{}', '{}', ?, 'owner')")
+  await w.db.prepare("INSERT INTO retired_ats_screenings (id, application_id, method, engine_version, cv_sha256, score, verdict, profile, requirements, result, created_at, created_by) VALUES (?, ?, 'rules', 't', 'x', 70, 'possible', ?, '{}', '{}', ?, 'owner')")
     .bind(`scr-${id}`, id, JSON.stringify({ contact: { name, email, phone } }), new Date().toISOString()).run();
   return key;
 }
@@ -159,7 +159,7 @@ test("a verified deletion request erases the person from both the website record
   assert.equal((await patch("pr-del", done)).status, 409, "a second erasure of the same request must be refused");
   // Nobody else was touched.
   assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM applications WHERE id = 'app-other'").first()).n, 1);
-  assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM ats_screenings WHERE application_id = 'app-other'").first()).n, 1);
+  assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM retired_ats_screenings WHERE application_id = 'app-other'").first()).n, 1);
   for (const person of [w.asha, w.bikram]) assert.equal((await w.db.prepare("SELECT status FROM candidates WHERE id = ?").bind(person.id).first()).status, "active");
 });
 
