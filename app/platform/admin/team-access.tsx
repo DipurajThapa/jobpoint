@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Level = "view" | "edit" | "manage";
-type Tool = { key: string; name: string; levels: Record<Level, string> };
+type Tool = { key: string; name: string; levels: Record<Level, string>; inviteDefault?: Level };
 type User = { id: string; email: string; name: string; role: "admin" | "member"; status: "invited" | "active" | "disabled"; createdAt: string; lastSignInAt: string | null; access: Record<string, Level>; pendingInvite: boolean };
 type Activity = { action: string; actorId: string; targetId: string; createdAt: string; actorEmail: string | null; targetEmail: string | null };
 
@@ -83,7 +83,7 @@ export default function TeamAccess({ tools }: { tools: Tool[] }) {
         <label>Name<input name="name" maxLength={120} placeholder="Optional; they can enter it" /></label>
         <label>Work email<input name="email" type="email" required maxLength={254} /></label>
         <label>Role<select value={role} onChange={e => setRole(e.target.value as "member" | "admin")}><option value="member">Team member</option><option value="admin">Administrator (all tools, manages access)</option></select></label>
-        {role === "member" && tools.map(t => <label key={t.key}>{t.name}<select name={`tool-${t.key}`} defaultValue="edit">{LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}</select></label>)}
+        {role === "member" && tools.map(t => <label key={t.key}>{t.name}<select name={`tool-${t.key}`} defaultValue={t.inviteDefault ?? "none"}>{LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}</select></label>)}
       </div>
       {role === "member" && tools.map(t => <p className="hint" key={t.key}><b>{t.name}:</b> View — {t.levels.view} Edit — {t.levels.edit} Manage — {t.levels.manage}</p>)}
       <div style={{ marginTop: 14 }}><button className="wp-btn" disabled={busy}>Create invitation link</button></div>

@@ -31,6 +31,7 @@ const jdMod = await mod("jd.ts");
 const queue = await mod("queue.ts");
 const client = await mod("client.ts");
 const website = await mod("website.ts");
+const staffMod = await mod("staff.ts");
 
 const SECRET = "test-secret-test-secret-test-secret-123";
 let clock = new Date("2026-11-09T06:00:00Z");
@@ -778,6 +779,71 @@ await check("Earlier website applications can be added to the list in batches", 
   for (const { app } of await website.unlinkedWebsiteApplications(db)) await website.linkWebsiteApplication(db, null, app, null, "admin");
   assert.equal(await website.countUnlinkedWebsiteApplications(db), 0);
   assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM candidate_sources").first()).n, 2);
+});
+
+// ---------- Jobboard300 staff roles and assignment ----------
+async function staffSetup() {
+  const db = await setup();
+  const user = async (id, role = "member") => { await db.prepare("INSERT INTO platform_users (id, email, name, role, status) VALUES (?, ?, ?, ?, 'active')").bind(id, `${id}@jobboard300.test`, id, role).run(); return { id, admin: role === "admin" }; };
+  const team = async (id, members) => { await db.prepare("INSERT INTO platform_teams (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)").bind(id, id, clock.toISOString(), clock.toISOString()).run(); for (const m of members) await db.prepare("INSERT INTO platform_team_members (team_id, user_id) VALUES (?, ?)").bind(id, m.id).run(); };
+  const admin = await user("admin1", "admin"), mgrK = await user("mgr-kolkata"), recA = await user("rec-a"), recB = await user("rec-b"), mgrF = await user("mgr-franchise"), recF = await user("rec-f");
+  await team("kolkata", [mgrK, recA, recB]); await team("franchise", [mgrF, recF]);
+  await staffMod.setTeamManager(db, admin, "kolkata", mgrK.id, true); await staffMod.setTeamManager(db, admin, "franchise", mgrF.id, true);
+  const compK = await makeCompany(db, "Kolkata Client"); const jdK = await liveJd(db, compK);
+  const compF = await makeCompany(db, "Franchise Client"); const jdF = await liveJd(db, compF);
+  await staffMod.assignClientTeam(db, admin, compK.id, "kolkata"); await staffMod.assignClientTeam(db, admin, compF.id, "franchise");
+  return { db, admin, mgrK, recA, recB, mgrF, recF, compK, jdK, compF, jdF };
+}
+const ids = rows => rows.map(r => r.id).sort();
+
+await check("Staff see only their team's clients and jobs; admin sees all", async () => {
+  const t = await staffSetup();
+  const a = await staffMod.staffWork(t.db, t.admin);
+  assert.deepEqual([a.role, a.clients.length, a.jobs.length], ["admin", 2, 2]);
+  const m = await staffMod.staffWork(t.db, t.mgrK);
+  assert.deepEqual([m.role, ids(m.clients), ids(m.jobs)], ["manager", [t.compK.id], [t.jdK]]);
+  assert.ok(m.members.every(x => x.team_id === "kolkata"), "a manager sees only their own team's members");
+  const r = await staffMod.staffWork(t.db, t.recF);
+  assert.deepEqual([r.role, ids(r.clients), ids(r.jobs), r.members.length], ["recruiter", [t.compF.id], [t.jdF], 0]);
+  await rejects(staffMod.jobForStaff(t.db, t.recF, t.jdK), "NOT_FOUND");
+  await rejects(staffMod.staffCandidates(t.db, t.recA, t.jdF), "NOT_FOUND");
+  await rejects(staffMod.staffPipeline(t.db, t.mgrF, t.jdK), "NOT_FOUND");
+  const nobody = { id: "no-team", admin: false };
+  assert.deepEqual([(await staffMod.staffWork(t.db, nobody)).clients.length, (await staffMod.staffWork(t.db, nobody)).jobs.length], [0, 0], "no team, nothing visible");
+});
+
+await check("Assignment: admin assigns clients; a manager assigns jobs only within their own team", async () => {
+  const t = await staffSetup();
+  await rejects(staffMod.assignClientTeam(t.db, t.mgrK, t.compF.id, "kolkata"), "ADMIN_ONLY");
+  await rejects(staffMod.setTeamManager(t.db, t.mgrK, "kolkata", t.recA.id, true), "ADMIN_ONLY");
+  await staffMod.assignJobRecruiter(t.db, t.mgrK, t.jdK, t.recA.id);
+  await rejects(staffMod.assignJobRecruiter(t.db, t.mgrK, t.jdK, t.recF.id), "NOT_IN_TEAM");
+  await rejects(staffMod.assignJobRecruiter(t.db, t.mgrK, t.jdF, t.recA.id), "NOT_FOUND");
+  await rejects(staffMod.assignJobRecruiter(t.db, t.recA, t.jdK, t.recA.id), "MANAGER_ONLY");
+  assert.deepEqual(ids((await staffMod.staffWork(t.db, t.recA)).jobs), [t.jdK], "the assigned recruiter sees the job");
+  assert.deepEqual(ids((await staffMod.staffWork(t.db, t.recB)).jobs), [], "a teammate does not see a job assigned to someone else");
+  assert.deepEqual(ids((await staffMod.staffWork(t.db, t.recB)).clients), [t.compK.id], "but still sees the team's client");
+  await rejects(staffMod.staffPipeline(t.db, t.recB, t.jdK), "NOT_FOUND");
+  await staffMod.assignClientTeam(t.db, t.admin, t.compK.id, "franchise");
+  assert.equal((await t.db.prepare("SELECT recruiter_id FROM jds WHERE id = ?").bind(t.jdK).first()).recruiter_id, null, "moving a client to another team clears outside assignments");
+  assert.deepEqual(ids((await staffMod.staffWork(t.db, t.mgrK)).clients), [], "the old team no longer sees the client");
+});
+
+await check("A recruiter can submit, update stages and schedule interviews only for work in scope", async () => {
+  const t = await staffSetup();
+  await client.setJdService(t.db, t.compK.id, t.jdK, "managed", 1, t.compK.userId);
+  const cand = await makeCandidate(t.db, "Scoped Candidate");
+  await rejects(staffMod.staffSubmit(t.db, SECRET, t.recF, { jdId: t.jdK, candidateId: cand, note: "x" }), "NOT_FOUND");
+  const sub = await staffMod.staffSubmit(t.db, SECRET, t.recA, { jdId: t.jdK, candidateId: cand, note: "Good Tally and GST" });
+  await rejects(staffMod.staffMoveStage(t.db, t.recF, sub.id, { stage: "shortlisted" }), "NOT_FOUND");
+  await rejects(staffMod.staffScheduleInterview(t.db, t.mgrF, sub.id, { round: "HR", scheduledAt: "2026-11-20T05:30:00Z", mode: "phone" }), "NOT_FOUND");
+  await staffMod.staffMoveStage(t.db, t.recA, sub.id, { stage: "shortlisted", note: "Client asked to proceed" });
+  await staffMod.staffScheduleInterview(t.db, t.recA, sub.id, { round: "Technical 1", scheduledAt: "2026-11-20T05:30:00Z", mode: "video" });
+  const row = (await staffMod.staffPipeline(t.db, t.mgrK, t.jdK))[0];
+  assert.deepEqual([row.stage, row.interviews.length], ["interview", 1]);
+  const actors = (await t.db.prepare("SELECT actor FROM pipeline_events WHERE pipeline_id = ? ORDER BY rowid").bind(sub.id).all()).results.map(r => r.actor);
+  assert.ok(actors.includes(`staff:${t.recA.id}`), "history records which staff member acted");
+  assert.equal((await client.pipelineView(t.db, t.compK.id))[0].stage, "interview", "the client sees the same pipeline");
 });
 
 console.log(`\n${passed} portal checks passed.`);

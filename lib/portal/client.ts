@@ -46,6 +46,8 @@ const APPLICATION_STATUS: Record<Stage, string> = {
   submitted: "viewed", shortlisted: "shortlisted", interview: "interview", offered: "offer", offer_accepted: "offer",
   joined: "hired", rejected: "rejected", offer_declined: "rejected", no_show: "rejected", withdrawn: "withdrawn",
 };
+/** Pipeline history label. Company users pass a bare account id; Jobboard300 staff pass "staff:<id>". */
+const actorLabel = (actorId: string) => actorId.includes(":") ? actorId : `company:${actorId}`;
 const MAX_TEAM = 20;
 const INVITE_HOURS = 7 * 24;
 const day = (iso: string) => iso.slice(0, 10);
@@ -195,8 +197,8 @@ export async function addToPipeline(db: Db, companyId: string, actorId: string, 
   await db.batch([
     db.prepare("INSERT INTO pipeline (id, company_id, jd_id, candidate_id, candidate_ref, source, stage, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'shortlisted', ?, ?, ?)")
       .bind(id, companyId, jdId, u.candidate_id, ref, applied ? "application" : "release", actorId, at, at),
-    db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, at) VALUES (?, ?, 'shortlisted', ?, ?)").bind(newId(), id, `company:${actorId}`, at),
-    ...await syncApplication(db, u.candidate_id, jdId, "shortlisted", `company:${actorId}`, { pipelineId: id, at }),
+    db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, at) VALUES (?, ?, 'shortlisted', ?, ?)").bind(newId(), id, actorLabel(actorId), at),
+    ...await syncApplication(db, u.candidate_id, jdId, "shortlisted", actorLabel(actorId), { pipelineId: id, at }),
   ]);
   return { id, created: true };
 }
@@ -276,8 +278,8 @@ export async function moveStage(db: Db, companyId: string, actorId: string, pipe
     db.prepare(`UPDATE pipeline SET ${sets.join(", ")} WHERE id = ? AND stage = ?`).bind(...values, row.id, row.stage),
     // Later statements apply only if this request made the change (guards against a concurrent update).
     db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, note, at) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = ? AND updated_at = ?)")
-      .bind(newId(), row.id, stage, `company:${actorId}`, note, at, row.id, stage, at),
-    ...await syncApplication(db, row.candidate_id, row.jd_id, stage, `company:${actorId}`, { pipelineId: row.id, at }),
+      .bind(newId(), row.id, stage, actorLabel(actorId), note, at, row.id, stage, at),
+    ...await syncApplication(db, row.candidate_id, row.jd_id, stage, actorLabel(actorId), { pipelineId: row.id, at }),
   ];
   if (["rejected", "offer_declined", "no_show", "withdrawn"].includes(stage)) statements.push(db.prepare("UPDATE interviews SET status = 'cancelled', updated_at = ? WHERE pipeline_id = ? AND status = 'scheduled' AND EXISTS (SELECT 1 FROM pipeline WHERE id = ? AND stage = ? AND updated_at = ?)").bind(at, row.id, row.id, stage, at));
   if (stage === "joined") {
@@ -311,8 +313,8 @@ export async function scheduleInterview(db: Db, companyId: string, actorId: stri
       .bind(id, row.id, companyId, round, new Date(when).toISOString(), input.mode, (input.location ?? "").trim().slice(0, 300), (input.interviewer ?? "").trim().slice(0, 120), actorId, at, at),
     ...(row.stage === "shortlisted" ? [
       db.prepare("UPDATE pipeline SET stage = 'interview', updated_at = ? WHERE id = ?").bind(at, row.id),
-      db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, note, at) VALUES (?, ?, 'interview', ?, ?, ?)").bind(newId(), row.id, `company:${actorId}`, `${round} scheduled`, at),
-      ...await syncApplication(db, row.candidate_id, row.jd_id, "interview", `company:${actorId}`, { pipelineId: row.id, at }),
+      db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, note, at) VALUES (?, ?, 'interview', ?, ?, ?)").bind(newId(), row.id, actorLabel(actorId), `${round} scheduled`, at),
+      ...await syncApplication(db, row.candidate_id, row.jd_id, "interview", actorLabel(actorId), { pipelineId: row.id, at }),
     ] : []),
   ]);
   return { id };

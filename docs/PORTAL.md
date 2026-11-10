@@ -42,6 +42,21 @@ Every application made on the public website joins the same candidate records as
 - If the admin deletes the person's last website application, and they have no portal account, their candidate record is erased.
 - Applications made before this change can be added from the admin's **Job portal** tab, 25 at a time.
 
+### Staff roles and the Recruiting tool (added 10 November 2026)
+
+Jobboard300 staff work in the Working Platform's **Recruiting** tool (`/platform/recruiting`), not the owner console (`lib/portal/staff.ts`, migration `0008_staff_assignment.sql`).
+
+| Role | How it is set | Sees | Can assign |
+|---|---|---|---|
+| Admin | Working Platform administrator | Every client and job | Clients to teams, jobs to recruiters, team managers |
+| Team manager | Flag on a team member, set by an admin. A franchise is a team with its own manager. | The team's clients and all their jobs | Jobs to members of their own team |
+| Recruiter | Team member with the Recruiting tool | The team's clients; jobs unassigned or assigned to them | Nothing |
+
+- A client belongs to at most one team, so nobody outside it can read or fulfil its jobs. Out-of-scope records are reported as "not found".
+- Staff with Edit access can submit candidates to managed searches, update pipeline stages with a note, and schedule interviews (phone, video link, in person). History records which staff member acted.
+- New tools default to "no access" on invitations. Admins add people to teams under Operations.
+- Not built yet: a team manager inviting their own staff (an admin does it), and AI interviews.
+
 ## 2. Architecture
 
 - Same app and Worker as the consultancy site. New areas: `/candidate`, `/company`, `/portal/*` (sign-in, register, verify, forgot, reset) and the **Job portal** tab in `/admin`.
