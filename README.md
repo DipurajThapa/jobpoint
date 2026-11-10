@@ -49,7 +49,8 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 |---|---|---|
 | `GET /api/jobs?q=&location=` | Public | Search published roles |
 | `POST /api/applications` | Public | Submit candidate details and a required PDF/DOCX CV as multipart form data |
-| `POST /api/employer-enquiries` | Public | Submit a hiring request as JSON |
+| `GET /api/employer-enquiries` | Public | Free times for a call with a consultant (times only) |
+| `POST /api/employer-enquiries` | Public | Submit a hiring enquiry as JSON, optionally with a call time |
 | `POST /api/privacy-requests` | Public | Submit a privacy request for manual identity verification and review |
 | `GET /api/admin/jobs` | Site owner | List all role records |
 | `POST /api/admin/jobs` | Site owner | Create a draft or published role |
@@ -71,7 +72,9 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 | `GET, POST /api/platform/email-kit/files`; `GET, PUT …/files/{id}` | View / Edit | Attachments (deletes only unused files) |
 | `GET, POST /api/platform/email-kit/snapshots`; `GET …/summary` | View/Edit; Manage | Daily recovery copies; record counts |
 
-Candidate multipart fields: `fullName`, `email`, `phone`, `location`, `experience`, `resume` (PDF or DOCX), `consent=yes`, `adult=yes`; optional `jobId`, `message`, `desiredRole`, `skills`, `education`, `availability`, `shareConsent=yes` and `futureConsent=yes`. General registration requires `futureConsent=yes`. Employer JSON fields: `contactName`, `company`, `email`, `phone`, `roleTitle`, `location`, `headcount`, `details`, `consent:"yes"`. Both forms include an anti-spam `website` honeypot.
+Candidate multipart fields: `fullName`, `email`, `phone`, `resume` (PDF or DOCX) and `agree=yes` (18 or older, use of the details, terms for job seekers); optional `jobId`, `location`, `shareConsent=yes`, `futureConsent=yes` and `whatsappConsent=yes`. General registration requires `futureConsent=yes` (the form sends it). Experience, skills, education and city are read from the CV. Employer JSON fields: `contactName`, `company`, `email`, `phone`, `details` (what they are looking for, in their own words), `consent:"yes"`; optional `meetingAt` (one of the times from `GET /api/employer-enquiries`) and `whatsappConsent:"yes"`. Both forms include an anti-spam `website` honeypot.
+
+After either form the page shows a short confirmation and the details go by email (when `MAIL_API_KEY` and `MAIL_FROM` are set; the outcome is recorded either way). WhatsApp is used only when the person ticked that box, and messages are queued until a provider is connected. Calls with a consultant are 30-minute slots, Monday to Saturday, 10:00 to 18:00 India time (`lib/public-forms.ts`); the owner confirms, holds or cancels each one under **Employer enquiries**.
 
 ## Submission and access behavior
 
@@ -97,7 +100,7 @@ See also [workflows and merge plan](docs/WORKFLOWS_AND_MERGE_PLAN.md) and [keys,
 
 `npm test` runs the suite in `tests/` (no dev server or network needed). It uses the real migrations in an in-memory SQLite database and calls the real API route handlers. It covers: every route's sign-in guard, company-to-company and candidate-to-candidate isolation, recruiter team scope, suspension, deletion (every column of every table is searched for leftover personal data), sign-up and sign-in privacy, the migrations and typed schema, and the blue (candidate) and green (company) themes. `npm run test:all` adds type-check, lint and the older `check:*` scripts. CI runs the same on every pull request.
 
-Migration `drizzle/0013_audit_fixes.sql` adds `jd_requirement_edits` and the erasure fields on `privacy_requests`. The audit behind these changes is [docs/AUDIT_ARCHITECTURE_DATA_SECURITY_2026-11-10.md](docs/AUDIT_ARCHITECTURE_DATA_SECURITY_2026-11-10.md).
+Migration `drizzle/0021_enquiry_call_and_whatsapp_consent.sql` adds WhatsApp consent, the enquiry call request and the acknowledgement outcome. Migration `drizzle/0013_audit_fixes.sql` adds `jd_requirement_edits` and the erasure fields on `privacy_requests`. The audit behind these changes is [docs/AUDIT_ARCHITECTURE_DATA_SECURITY_2026-11-10.md](docs/AUDIT_ARCHITECTURE_DATA_SECURITY_2026-11-10.md).
 
 ## Audit: quality, functional and UAT
 
