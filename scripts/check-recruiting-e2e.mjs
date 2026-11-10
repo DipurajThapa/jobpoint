@@ -65,6 +65,14 @@ ok((await noor.ctx.request.fetch(`${BASE}/api/platform/recruiting/stage`, { meth
 const cands = (await (await noor.get(`/api/platform/recruiting/candidates?jd=${managed.id}`)).json()).candidates;
 const pick = cands.find(c => Number(c.can_share) && !Number(c.in_pipeline));
 ok(!!pick, `the recruiter sees ranked candidates for the managed job (${cands.length})`);
+const adminCands = (await (await admin.get(`/api/platform/recruiting/candidates?jd=${managed.id}`)).json()).candidates;
+ok(cands.length <= 3 && cands.every(c => !("score" in c) && !("lower_bound" in c)) && adminCands.length > 3 && "score" in adminCands[0], `recruiters see at most three candidates and no scores; the admin sees the full list (${adminCands.length})`);
+const hiddenOne = adminCands.find(c => !cands.some(x => x.candidate_id === c.candidate_id) && !Number(c.in_pipeline));
+ok((await noor.post("/api/platform/recruiting/submit", { jdId: managed.id, candidateId: hiddenOne.candidate_id, note: "not on my shortlist" })).status() === 404, "a recruiter cannot submit a candidate who is not on their current shortlist");
+const skipped = cands.find(c => c.candidate_id !== pick.candidate_id);
+ok((await noor.post("/api/platform/recruiting/pass", { jdId: managed.id, candidateId: skipped.candidate_id, reason: "" })).status() === 400 && (await noor.post("/api/platform/recruiting/pass", { jdId: managed.id, candidateId: skipped.candidate_id, reason: "skills_mismatch" })).ok(), "passing on a candidate needs a reason");
+const next = (await (await noor.get(`/api/platform/recruiting/candidates?jd=${managed.id}`)).json()).candidates;
+ok(!next.some(c => c.candidate_id === skipped.candidate_id) && next.some(c => c.candidate_id === pick.candidate_id) && next.length <= 3, "the passed candidate is replaced by the next best");
 ok((await rina.post("/api/platform/recruiting/submit", { jdId: managed.id, candidateId: pick.candidate_id, note: "x" })).status() === 404, "another team cannot submit to this job");
 ok((await noor.post("/api/platform/recruiting/submit", { jdId: managed.id, candidateId: pick.candidate_id, note: "Strong fit; 30 days notice" })).ok(), "the recruiter submits a candidate to the client");
 const pipe = await (await noor.get(`/api/platform/recruiting/pipeline?jd=${managed.id}`)).json();
@@ -104,6 +112,76 @@ ok(true, "the job shows its pipeline with the updated stage");
 await page.getByRole("heading", { name: "WhatsApp set-up" }).waitFor();
 ok(await page.getByRole("heading", { name: "Invite a recruiter to your team" }).isVisible(), "the manager sees team invitations and the WhatsApp set-up");
 await page.screenshot({ path: `${OUT}/recruiting.png`, fullPage: true });
+// ---------- Assessments, Fast Track and the landing pages ----------
+const inviteWith = async (name, access) => { const email = `${name.toLowerCase()}.${stamp}@example.test`; const r = await (await admin.post("/api/platform/admin/users", { email, name, access })).json(); await (await browser.newContext()).request.post(`${BASE}/api/platform/auth/accept`, { data: { token: new URL(r.link).searchParams.get("token"), name, password: PASSWORD }, headers: { origin: BASE } }); return signedIn(email, PASSWORD); };
+const invig = await inviteWith("Invig", { assessments: "edit" });
+ok((await noor.get("/api/platform/assessments/banks")).status() === 403 && (await invig.get("/api/platform/recruiting/work")).status() === 403, "only people given the Assessments tool can open question banks, and an invigilator sees nothing else");
+ok((await invig.post("/api/platform/assessments/sample-load", {})).status() === 403 && (await invig.post("/api/platform/assessments/fast-track-settings", { priceInr: 1, payNote: "free for all now" })).status() === 403, "an invigilator cannot load samples or change Fast Track");
+const banksBefore = (await (await admin.get("/api/platform/assessments/banks")).json()).banks;
+if (!banksBefore.some(b => b.is_sample)) ok((await admin.post("/api/platform/assessments/sample-load", {})).ok(), "the admin loads the sample question banks");
+const bankId = (await (await invig.post("/api/platform/assessments/bank-create", { kind: "technical", title: `SQL ${stamp}`, skillId: "sql" })).json()).id;
+ok(!!bankId && (await invig.post("/api/platform/assessments/bank-status", { bankId, status: "active" })).status() === 400, "an invigilator creates a bank; it cannot go live without enough questions");
+const bad = await invig.post("/api/platform/assessments/question-add", { bankId, level: 5, topic: "Joins", stem: "Which join returns only matching rows?", options: ["INNER JOIN", "LEFT JOIN", "All of the above"], answerIndex: 0 });
+ok(bad.status() === 400 && /shuffled/.test((await bad.json()).error), "a question that depends on option order is refused");
+const up = await (await invig.post("/api/platform/assessments/question-upload", { bankId, text: "level,topic,question,option 1,option 2,option 3,option 4,answer,explanation\n5,Joins,Which join returns only rows that match in both tables?,INNER JOIN,LEFT JOIN,RIGHT JOIN,CROSS JOIN,A,Inner joins keep matches only\n6,Keys,Which constraint stops duplicate values in a column?,UNIQUE,CHECK,DEFAULT,INDEX,UNIQUE,\n6,Keys,Broken row,One,Two,Three,Four,nothing," })).json();
+ok(/2 question\(s\) added/.test(up.message) && up.errors.length === 1, `uploads add the good rows and report the bad ones (${up.message})`);
+const qs = (await (await invig.get(`/api/platform/assessments/questions?bank=${bankId}`)).json()).questions;
+ok(qs.length === 2 && qs.find(q => q.topic === "Keys").options[qs.find(q => q.topic === "Keys").answer_index] === "UNIQUE", "the stored answer key matches what was uploaded");
+ok((await admin.post("/api/platform/assessments/fast-track-settings", { priceInr: 1499, payNote: "Pay by UPI to the Jobboard300 account and quote your reference." })).ok(), "the admin sets the Fast Track price and payment instructions");
+
+const { DatabaseSync } = await import("node:sqlite");
+const { readdirSync } = await import("node:fs");
+const dbDir = ".wrangler/state/v3/d1/miniflare-D1DatabaseObject", sqlite = new DatabaseSync(`${dbDir}/${readdirSync(dbDir).find(f => f.endsWith(".sqlite"))}`, { readOnly: true });
+const candEmail = sqlite.prepare("SELECT a.email FROM portal_accounts a JOIN candidates k ON k.account_id = a.id WHERE a.kind = 'candidate' AND k.status = 'active' AND k.fast_track_at IS NULL AND NOT EXISTS (SELECT 1 FROM fast_track_orders o WHERE o.candidate_id = k.id) ORDER BY a.email LIMIT 1").get().email;
+const candCtx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+const kapi = (method, path, data) => candCtx.request.fetch(`${BASE}${path}`, { method, data, headers: { origin: BASE } });
+ok((await kapi("POST", "/api/portal/auth/sign-in", { email: candEmail, password: "quiet harbour lantern 2026" })).ok(), "a candidate signs in");
+const sample = (await (await kapi("GET", "/api/portal/candidate/tests")).json());
+ok(sample.fastTrack === false && sample.technical.length > 0 && (await kapi("POST", "/api/portal/candidate/test-start", { bankId: sample.technical[0].id })).status() === 402, "technical tests need Fast Track");
+const order = await (await kapi("POST", "/api/portal/candidate/fasttrack-request", {})).json();
+ok(/^FT-/.test(order.reference) && order.amount_inr === 1499 && (await (await kapi("GET", "/api/portal/candidate/tests")).json()).fastTrack === false, "the payment page gives an amount and a reference; asking is not paying");
+const orders = (await (await admin.get("/api/platform/assessments/banks")).json()).fastTrack.orders;
+ok((await admin.post("/api/platform/assessments/order-decide", { orderId: orders.find(o => o.reference === order.reference).id, paid: true, note: "UPI ref 778899" })).ok() && (await (await kapi("GET", "/api/portal/candidate/tests")).json()).fastTrack === true, "the candidate is Fast Track once the admin confirms the payment");
+const sampleBank = sample.technical.find(b => /Sample/.test(b.title));
+let step = await (await kapi("POST", "/api/portal/candidate/test-start", { bankId: sampleBank.id })).json(), seenStems = new Set();
+ok(step.state === "question" && step.question.options.length === 4 && !JSON.stringify(step).match(/answer_index|Computed answer/), "the test serves one question at a time and never the answer");
+const testId = step.id;
+while (step.state === "question") { seenStems.add(step.question.stem); step = await (await kapi("POST", "/api/portal/candidate/test-answer", { testId, choice: 0 })).json(); }
+ok(step.state === "done" && seenStems.size === 20 && ["beginner", "intermediate", "expert"].includes(step.band) && Array.isArray(step.weakTopics), `twenty different questions, then the candidate sees their level (${step.band}, level ${step.level}) and topics to prepare`);
+const cTestPage = await candCtx.newPage();
+await cTestPage.goto(`${BASE}/candidate`, { waitUntil: "networkidle" });
+await cTestPage.getByRole("heading", { name: "Fast Track and tests" }).waitFor();
+ok(await cTestPage.getByText("Your results").isVisible(), "the candidate page shows Fast Track and the result");
+await cTestPage.screenshot({ path: `${OUT}/candidate-fast-track.png`, fullPage: true });
+
+ok([403, 404].includes((await fresh.post("/api/platform/recruiting/job-aptitude", { jdId: managed.id, on: true })).status()) && (await noor.post("/api/platform/recruiting/job-aptitude", { jdId: managed.id, on: true })).ok(), "only a manager or the admin records that the client opted for the aptitude test");
+const jobTests = (await (await noor.get(`/api/platform/recruiting/pipeline?jd=${managed.id}`)).json()).tests;
+const aptBank = jobTests.banks.find(b => b.kind === "aptitude");
+const testInvite = await (await noor.post("/api/platform/recruiting/test-invite", { pipelineId: entry.id, bankId: aptBank.id })).json();
+const anonCtx = await browser.newContext({ viewport: { width: 1280, height: 900 } }), token = new URL(testInvite.link).searchParams.get("token");
+const tPage = await anonCtx.newPage();
+await tPage.goto(`${BASE}/test?token=${token}`, { waitUntil: "networkidle" });
+await tPage.getByRole("button", { name: "Start the test" }).click();
+await tPage.getByText("Question 1 of 20").waitFor();
+await tPage.locator("input[type=radio]").first().check();
+await tPage.getByRole("button", { name: "Next" }).click();
+await tPage.getByText("Question 2 of 20").waitFor();
+ok(true, "an invited candidate opens the one-time link and takes the test without an account");
+await tPage.screenshot({ path: `${OUT}/invited-test.png`, fullPage: true });
+ok((await anonCtx.request.get(`${BASE}/api/portal/public/test?token=${"0".repeat(64)}`)).status() === 404 && (await anonCtx.request.post(`${BASE}/api/portal/public/test-answer`, { data: { token, choice: 0 }, headers: { origin: "https://evil.example" } })).status() === 403, "a wrong link is refused, and so is an answer sent from another site");
+const staffSees = (await (await noor.get(`/api/platform/recruiting/pipeline?jd=${managed.id}`)).json()).pipeline.find(e => e.id === entry.id);
+ok(staffSees.tests.length === 1 && staffSees.tests[0].status === "in_progress", "staff see the test's progress on the candidate");
+
+for (const [path, text] of [["/employers", "7.5% to 8.33%"], ["/job-seekers", "Free to register and apply"], ["/terms/employers", "one replacement"], ["/terms/job-seekers", "at least 60 days"]]) {
+  const r = await anonCtx.request.get(`${BASE}${path}`), body = await r.text();
+  ok(r.ok() && body.includes(text) && !/West Bengal|13\+ years|90 days/.test(body), `${path} is live with the agreed terms`);
+}
+const lp = await anonCtx.newPage();
+await lp.goto(`${BASE}/employers`, { waitUntil: "networkidle" });
+await lp.screenshot({ path: `${OUT}/employers.png`, fullPage: true });
+const enquiry = { contactName: "A Person", company: `Test Co ${stamp}`, email: `hr.${stamp}@example.com`, phone: "9830012345", roleTitle: "Developer", location: "Remote", headcount: "1", details: "Two years of experience in Java.", consent: "yes" };
+ok((await anonCtx.request.post(`${BASE}/api/employer-enquiries`, { data: enquiry, headers: { origin: BASE } })).status() === 400 && (await anonCtx.request.post(`${BASE}/api/employer-enquiries`, { data: { ...enquiry, terms: "yes" }, headers: { origin: BASE } })).ok(), "an employer enquiry is accepted only with the terms for employers");
+
 // Placement-fee model: the client cannot browse or unlock, sees a submitted candidate
 // without contact details, and loses the profile when the process for them closes.
 const clientCtx = await browser.newContext();

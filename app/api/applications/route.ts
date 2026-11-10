@@ -1,3 +1,4 @@
+import { CANDIDATE_TERMS_VERSION } from "@/lib/terms";
 import { DEMO_MODE, demoSubmissionResponse } from "@/lib/demo";
 import { env } from "cloudflare:workers";
 import { getDb } from "@/db";
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
     const education = clean(form.get("education"), 160), availability = clean(form.get("availability"), 100);
     const jobId = clean(form.get("jobId"), 60) || null;
     const shareConsent = form.get("shareConsent") === "yes", futureConsent = form.get("futureConsent") === "yes";
-    if (!fullName || !validEmail(email) || phone.replace(/\D/g, "").length < 7 || !location || !experience || form.get("consent") !== "yes" || form.get("adult") !== "yes") return errorJson("Please complete the required fields and confirm you are at least 18.");
+    if (!fullName || !validEmail(email) || phone.replace(/\D/g, "").length < 7 || !location || !experience || form.get("consent") !== "yes" || form.get("adult") !== "yes" || form.get("terms") !== "yes") return errorJson("Please complete the required fields, confirm you are at least 18 and accept the terms for job seekers.");
     if (!jobId && !futureConsent) return errorJson("Please opt in to future opportunities to register your profile.");
     if (jobId && !await isJobOpen(jobId)) return errorJson("This role is no longer accepting applications.", 410);
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().replace("T", " ").slice(0, 19);
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
       cvBytes = bytes;
     }
     const id = crypto.randomUUID();
-    try { await db.insert(applications).values({ id, jobId, fullName, email, phone, location, experience, desiredRole, skills, education, availability, message, resumeKey, resumeName, resumeType, resumeSize, consent: true, shareConsent, futureConsent, privacyVersion: "2026-11-09", consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); }
+    try { await db.insert(applications).values({ id, jobId, fullName, email, phone, location, experience, desiredRole, skills, education, availability, message, resumeKey, resumeName, resumeType, resumeSize, consent: true, shareConsent, futureConsent, termsVersion: CANDIDATE_TERMS_VERSION, privacyVersion: "2026-11-09", consentAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); }
     catch (e) { if (resumeKey && env.BUCKET) await env.BUCKET.delete(resumeKey); throw e; }
     // One candidate list: the applicant also joins the shared candidate records, within what they ticked.
     // A failure here never loses the application; the admin can add it later from the Job portal tab.

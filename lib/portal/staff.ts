@@ -8,8 +8,10 @@
 // fulfil its jobs. Every read and write below is scoped on the server; a record
 // outside the caller's scope is reported as "not found", never "forbidden".
 
-import { audit, PortalError, type Db } from "./db";
+import { audit, newId, nowIso, PortalError, type Db } from "./db";
 import { messagingFor, saveMessaging } from "./notify";
+import { inviteToTest, testsForPipeline } from "./adaptive";
+import { reissueCommitmentLink } from "./commitment";
 import { moveStage, pipelineView, scheduleInterview, submissionCandidates, submitByRecruiter, type InterviewInput, type StageInput } from "./client";
 
 export type Staff = { id: string; admin: boolean };
@@ -61,18 +63,73 @@ export async function jobForStaff(db: Db, staff: Staff, jdId: string): Promise<J
   return row;
 }
 
+/** How many candidates a recruiter or team manager sees for a job at one time. */
+export const SHORTLIST_SIZE = 3;
+export const PASS_REASONS = ["not_reachable", "not_interested", "no_consent", "skills_mismatch", "experience_mismatch", "salary_mismatch", "location_mismatch", "other"] as const;
+const PASSES_PER_DAY = 15;
+
+/**
+ * Candidates for a job. The admin sees the full ranked list with scores. Recruiters and
+ * team managers see only the three best candidates still to be decided, without scores:
+ * submitting or passing on one brings up the next.
+ */
 export async function staffCandidates(db: Db, staff: Staff, jdId: string) {
   await jobForStaff(db, staff, jdId);
-  return submissionCandidates(db, jdId);
+  const all = await submissionCandidates(db, jdId);
+  if (staff.admin) return all.slice(0, 40);
+  return all.filter(c => !Number(c.in_pipeline) && !c.passed).slice(0, SHORTLIST_SIZE).map(c => { const rest = { ...c }; delete rest.score; delete rest.lower_bound; return rest; });
 }
 
+/** Pass on a shortlisted candidate with a reason. The reasons are what matching is tuned from. */
+export async function staffPass(db: Db, staff: Staff, input: { jdId: string; candidateId: string; reason: string; note?: string }) {
+  if (!(PASS_REASONS as readonly string[]).includes(input.reason)) throw new PortalError("REASON", "Choose why this candidate is not being submitted.");
+  const shown = await staffCandidates(db, staff, input.jdId);
+  if (!shown.some(c => c.candidate_id === input.candidateId)) throw new PortalError("NOT_FOUND", "Candidate not found.", 404);
+  const today = await db.prepare("SELECT COUNT(*) AS n FROM shortlist_passes WHERE staff_id = ? AND jd_id = ? AND created_at >= ?").bind(staff.id, input.jdId, nowIso().slice(0, 10)).first<{ n: number }>();
+  if (!staff.admin && (today?.n ?? 0) >= PASSES_PER_DAY) throw new PortalError("PASS_LIMIT", "You have passed on many candidates for this job today. Speak to your manager or the admin about the job's requirements.", 429);
+  await db.prepare("INSERT OR IGNORE INTO shortlist_passes (id, jd_id, candidate_id, staff_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(newId(), input.jdId, input.candidateId, staff.id, input.reason, (input.note ?? "").trim().slice(0, 500), nowIso()).run();
+  await audit(db, staff.id, "shortlist.pass", "jd", input.jdId, input.reason);
+}
+
+/** The job's pipeline for staff, with each candidate's test results and commitment status (never shown to clients). */
 export async function staffPipeline(db: Db, staff: Staff, jdId: string) {
   const job = await jobForStaff(db, staff, jdId);
-  return pipelineView(db, job.company_id, jdId);
+  const rows = await pipelineView(db, job.company_id, jdId), tests = await testsForPipeline(db, jdId);
+  const { results: extra } = await db.prepare("SELECT p.id, p.candidate_id, c.accepted_at, c.id AS commitment FROM pipeline p LEFT JOIN candidate_commitments c ON c.pipeline_id = p.id WHERE p.jd_id = ?").bind(jdId).all<{ id: string; candidate_id: string; accepted_at: string | null; commitment: string | null }>();
+  return rows.map(r => { const x = extra.find(e => e.id === r.id); return { ...r, commitment: x?.commitment ? (x.accepted_at ? "accepted" : "pending") : null, tests: tests.filter(t => t.candidate_id === x?.candidate_id).map(t => ({ title: t.title, kind: t.kind, status: t.status, level: t.final_level, band: t.band })) }; });
+}
+
+/** Tests that can be sent for this job: the aptitude test if the client opted for it, and this client's own tests. */
+export async function staffJobTests(db: Db, staff: Staff, jdId: string) {
+  const job = await jobForStaff(db, staff, jdId);
+  const jd = await db.prepare("SELECT aptitude_test FROM jds WHERE id = ?").bind(jdId).first<{ aptitude_test: number }>();
+  const { results } = await db.prepare("SELECT id, title, kind FROM question_banks WHERE status = 'active' AND ((kind = 'aptitude' AND ? = 1) OR (kind = 'client' AND company_id = ?)) ORDER BY kind, title").bind(jd?.aptitude_test ?? 0, job.company_id).all();
+  return { aptitudeOpted: !!jd?.aptitude_test, banks: results };
+}
+
+/** Record that the client opted for the aptitude test on this job (admin or the team's manager). */
+export async function setJobAptitude(db: Db, staff: Staff, jdId: string, on: boolean) {
+  const job = await jobForStaff(db, staff, jdId), scope = await staffScope(db, staff);
+  if (!scope.admin && !(job.team_id && scope.managedTeams.includes(job.team_id))) throw new PortalError("MANAGER_ONLY", "Only the team's manager or an administrator can change the tests on a job.", 403);
+  await db.prepare("UPDATE jds SET aptitude_test = ? WHERE id = ?").bind(on ? 1 : 0, jdId).run();
+  await audit(db, staff.id, "jd.aptitude", "jd", jdId, on ? "opted in" : "opted out");
+}
+
+export async function staffInviteToTest(db: Db, staff: Staff, pipelineId: string, bankId: string) {
+  const job = await pipelineJob(db, staff, pipelineId);
+  const p = await db.prepare("SELECT candidate_id, jd_id FROM pipeline WHERE id = ?").bind(pipelineId).first<{ candidate_id: string; jd_id: string }>();
+  return inviteToTest(db, { bankId, candidateId: p!.candidate_id, jdId: p!.jd_id, companyId: job.company_id }, staff.id);
+}
+
+export async function staffCommitmentLink(db: Db, staff: Staff, pipelineId: string) {
+  await pipelineJob(db, staff, pipelineId);
+  return reissueCommitmentLink(db, pipelineId, staff.id);
 }
 
 export async function staffSubmit(db: Db, secret: string, staff: Staff, input: { jdId: string; candidateId: string; note: string }) {
   const job = await jobForStaff(db, staff, input.jdId);
+  // Staff can submit only a candidate currently shown to them.
+  if (!staff.admin && !(await staffCandidates(db, staff, input.jdId)).some(c => c.candidate_id === input.candidateId)) throw new PortalError("NOT_FOUND", "Candidate not found.", 404);
   return submitByRecruiter(db, secret, { companyId: job.company_id, jdId: input.jdId, candidateId: input.candidateId, note: input.note }, staff.id);
 }
 

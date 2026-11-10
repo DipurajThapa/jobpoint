@@ -182,5 +182,5 @@ FutureSkills Prime is the one programme with a clear training-partner route for 
 1. **Candidate dashboard: decided.** You said a candidate dashboard is not really needed.
    - Candidates still need a place to give or withdraw consent, export or delete their data, and upload or update a CV. DPDP requires the first three.
    - **Done (9 November 2026):** `/candidate` is now one page, **"My CV and privacy"**. Job browsing, applications and skill tests are hidden from candidates. Their server endpoints remain, so they can be brought back later.
-2. **Default client terms.** The defaults are a 90-day replacement guarantee and 12-month non-solicitation. Adjust them per client in the admin console.
+2. **Default client terms.** The defaults are a 60-day period with one free replacement (fee 7.5% to 8.33% of annual salary on a successful placement) and 12-month non-solicitation. Adjust them per client in the admin console.
 3. **Career Care timing: decided.** Learning starts from month 1, a career review at month 12, and job openings from month 18.

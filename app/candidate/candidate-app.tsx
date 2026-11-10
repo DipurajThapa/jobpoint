@@ -3,7 +3,8 @@
 // replace the CV with consent, correct what was read, and control sharing,
 // hidden companies, export and deletion. Matching to jobs happens on
 // Jobboard300's side; recruiters contact candidates directly.
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import TestRunner, { type Step } from "@/components/test-runner";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { CONSENT_NOTICE } from "@/lib/portal/notice";
 import { post } from "../portal/forms";
 
@@ -37,6 +38,7 @@ export default function CandidateApp() {
       {profile?.status === "needs_review" && <p className="pj-notice">We could not read your CV automatically. A Jobboard300 reviewer will check it shortly; nothing has been lost.</p>}
       {profile?.profile && <p className="pj-notice">{profile.sharing ? "Your CV is on file. When a role fits, Jobboard300 shares an anonymous summary with the employer, and a recruiter contacts you before anything else happens." : "Your CV is on file, but sharing with employers is off, so no employer can see your profile. You can turn it on below."}</p>}
       <Inbox />
+      <Tests say={say} />
       <Cv data={profile} reload={loadProfile} say={say} />
       {profile?.profile && <Privacy data={profile} reload={loadProfile} say={say} />}
     </main>
@@ -44,6 +46,39 @@ export default function CandidateApp() {
 }
 
 type Message = { id: string; kind: string; title: string; body: string; created_at: string; read_at: string | null };
+
+type TestsView = { test: { questions: number; minutes: number }; fastTrack: boolean; offer: { priceInr: number | null; payNote: string }; order: { reference: string; amount_inr: number } | null; technical: { id: string; title: string; suggested: boolean }[]; tests: { id: string; title: string; kind: string; status: string; final_level: number | null; band: string | null; completed_at: string | null; weakTopics: string[] | null }[] };
+
+/** Fast Track (the paid package) and tests: technical tests the candidate chooses, and any test they were invited to. */
+function Tests({ say }: { say: (t: string, bad?: boolean) => void }) {
+  const [v, setV] = useState<TestsView | null>(null), [sitting, setSitting] = useState<{ bankId?: string } | null>(null), testId = useRef<string | undefined>(undefined);
+  const load = useCallback(() => get<TestsView>("/api/portal/candidate/tests").then(setV).catch(() => undefined), []);
+  useEffect(() => { load(); }, [load]);
+  const call = useCallback(async (action: "load" | "start" | "answer", choice?: number | null) => {
+    if (action === "answer") return post<Step>("/api/portal/candidate/test-answer", { testId: testId.current, choice });
+    // Opening a test shows the instructions first; the clock starts only on Start.
+    if (action === "load") return testId.current ? get<Step>(`/api/portal/candidate/test?id=${testId.current}`) : { id: "", title: v?.technical.find(b => b.id === sitting?.bankId)?.title ?? "Technical test", total: v?.test.questions ?? 20, minutes: v?.test.minutes ?? 25, state: "ready" as const };
+    const s = await post<Step>("/api/portal/candidate/test-start", testId.current ? { testId: testId.current } : { bankId: sitting?.bankId });
+    testId.current = s.id;
+    return s;
+  }, [sitting, v]);
+  if (!v) return null;
+  if (sitting) return <><TestRunner call={call} onDone={load} /><button className="pj-link" onClick={() => { testId.current = undefined; setSitting(null); load(); }}>Back to my tests</button></>;
+  const invited = v.tests.filter(t => t.status === "invited" || t.status === "in_progress"), done = v.tests.filter(t => t.status === "completed");
+  return <section className="pj-card"><h2>Fast Track and tests</h2>
+    {invited.length > 0 && <div className="pj-list">{invited.map(t => <article className="pj-item" key={t.id}><div><b>{t.title}</b><p className="pj-muted">{t.kind === "technical" ? "Your technical test is in progress." : "A recruiter has asked you to take this test for a role you are being considered for."}</p></div><button className="pj-btn" onClick={() => { testId.current = t.id; setSitting({}); }}>{t.status === "in_progress" ? "Continue" : "Open"}</button></article>)}</div>}
+    {v.fastTrack ? <>
+      <p><span className="pj-pill">Fast Track</span> Take a technical test in your own skills whenever you are ready. A strong result is verified on your profile and counts when recruiters shortlist.</p>
+      {v.technical.length === 0 ? <p className="pj-muted">No technical tests are open yet.</p> : <div className="pj-list">{v.technical.map(b => <article className="pj-item" key={b.id}><div><b>{b.title}</b>{b.suggested && <span className="pj-pill">Matches your CV</span>}</div><button className="pj-btn quiet" onClick={() => { testId.current = undefined; setSitting({ bankId: b.id }); }}>Take the test</button></article>)}</div>}
+    </> : <>
+      <p><b>Fast Track</b> is a paid package for candidates who want to prove their skills. It includes the technical tests for your skills, your level on each, the topics to prepare after every test and guidance for future interviews. Registering your CV and applying for jobs remain free.</p>
+      {v.order ? <p className="pj-notice">Pay <b>₹{v.order.amount_inr.toLocaleString("en-IN")}</b> and quote the reference <b>{v.order.reference}</b>. {v.offer.payNote} You are on Fast Track as soon as we confirm the payment.</p>
+        : v.offer.priceInr ? <div className="pj-row"><b>₹{v.offer.priceInr.toLocaleString("en-IN")}</b><button className="pj-btn" onClick={() => post<{ message: string }>("/api/portal/candidate/fasttrack-request", {}).then(r => { say(r.message); load(); }).catch(e => say(e.message, true))}>Join Fast Track</button></div>
+        : <p className="pj-muted">Fast Track opens for payment soon.</p>}
+    </>}
+    {done.length > 0 && <><h3>Your results</h3><table className="pj-table"><thead><tr><th>Test</th><th>Date</th><th>Your level</th><th>Topics to prepare</th></tr></thead><tbody>{done.map(t => <tr key={t.id}><td>{t.title}</td><td>{t.completed_at?.slice(0, 10)}</td><td>{t.band} ({t.final_level} of 10)</td><td>{t.weakTopics ? (t.weakTopics.join(", ") || "None stood out") : "Included in Fast Track"}</td></tr>)}</tbody></table></>}
+  </section>;
+}
 
 function Inbox() {
   const [data, setData] = useState<{ messages: Message[]; whatsapp: string } | null>(null);

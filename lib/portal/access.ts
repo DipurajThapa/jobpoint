@@ -14,6 +14,7 @@ export const LIMITS: Record<string, { windowSec: number; max: number }[]> = {
   match_list: [{ windowSec: 3600, max: 120 }],
   auth: [{ windowSec: 900, max: 20 }],
   register: [{ windowSec: 3600, max: 10 }],
+  public_link: [{ windowSec: 60, max: 90 }],
   cv_upload: [{ windowSec: 30 * 86_400, max: 3 }, { windowSec: 86_400, max: 3 }],
 };
 

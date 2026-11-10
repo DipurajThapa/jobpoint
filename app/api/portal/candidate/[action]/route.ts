@@ -13,6 +13,7 @@ import { CvReadError, MAX_CV_BYTES } from "@/lib/ats/pipeline";
 import { sendMail } from "@/lib/portal/mailer";
 import { audit, nowIso, parseJson } from "@/lib/portal/db";
 import { nameKey } from "@/lib/portal/policy";
+import { answerTest, candidateTests, requestFastTrack, startTechnicalTest, testStep } from "@/lib/portal/adaptive";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ action: string }> };
@@ -27,6 +28,8 @@ export async function GET(request: Request, context: Ctx) {
       const n = (k: string) => url.searchParams.get(k) ? Number(url.searchParams.get(k)) : undefined;
       return json({ jobs: await candidateJobs(db, id, { city: url.searchParams.get("city") ?? undefined, role: url.searchParams.get("role") ?? undefined, minCtcInr: n("minCtc"), maxYears: n("maxYears") }) });
     }
+    if (action === "tests") { const p = await primaryProfile(db, id); return json(await candidateTests(db, id, (p?.profile.skills ?? []).flatMap(k => [k.id, k.name].filter(Boolean) as string[]))); }
+    if (action === "test") return json(await testStep(db, url.searchParams.get("id") ?? "", id));
     if (action === "applications") return json({ applications: await candidateApplications(db, id) });
     if (action === "inbox") { const sender = await resolveSender(db, null); return json({ messages: await candidateInbox(db, id), whatsapp: sender?.number ?? "" }); }
     if (action === "profile") {
@@ -112,6 +115,9 @@ export async function POST(request: Request, context: Ctx) {
       ]);
       return json({ message: body.block === false ? "Removed from your list." : "Saved. Your profile will not be shared with this employer." });
     }
+    if (action === "fasttrack-request") { const o = await requestFastTrack(db, id); return json({ ...o, message: `Pay ₹${o.amount_inr.toLocaleString("en-IN")} and quote the reference ${o.reference}. You are on Fast Track as soon as we confirm the payment.` }, o.created ? 201 : 200); }
+    if (action === "test-start") { const t = typeof body.testId === "string" ? { id: body.testId } : await startTechnicalTest(db, id, String(body.bankId ?? "")); return json(await testStep(db, t.id, id, { start: true })); }
+    if (action === "test-answer") return json(await answerTest(db, String(body.testId ?? ""), id, typeof body.choice === "number" ? body.choice : null));
     if (action === "inbox-read") { await markInboxRead(db, id); return json({ message: "ok" }); }
     if (action === "apply") { await applyToJd(db, id, String(body.jdId ?? "")); await drainQueue(db, portalSecret(), 300); return json({ message: "Application recorded." }); }
     if (action === "delete") {

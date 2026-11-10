@@ -25,7 +25,7 @@ const fx = await buildFixtures();
 // Public intake (real route): a CV is now mandatory.
 async function apply(fields, file) {
   const form = new FormData();
-  for (const [k, v] of Object.entries({ email: `${fields.fullName.split(" ")[0].toLowerCase()}.${Date.now()}@example.com`, phone: "9830012345", location: "Durgapur", experience: "See CV", consent: "yes", adult: "yes", ...fields })) form.set(k, v);
+  for (const [k, v] of Object.entries({ email: `${fields.fullName.split(" ")[0].toLowerCase()}.${Date.now()}@example.com`, phone: "9830012345", location: "Durgapur", experience: "See CV", consent: "yes", adult: "yes", terms: "yes", ...fields })) form.set(k, v);
   if (file) form.set("resume", new File([file.bytes], file.name, { type: file.type }));
   const res = await fetch(`${BASE}/api/applications`, { method: "POST", body: form, headers: { origin: BASE, "x-forwarded-for": `198.51.100.${Math.floor(Math.random() * 200)}` } });
   return { status: res.status, body: await res.json() };

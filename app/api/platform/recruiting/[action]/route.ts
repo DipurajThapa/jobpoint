@@ -4,7 +4,7 @@
 import { auditStatement, authorizeApi, db as platformDb, issueToken, linkUrl, newId, nowIso } from "@/lib/platform/auth";
 import { cleanEmail, cleanName, validEmail } from "@/lib/platform/users";
 import { portalDb, portalSecret, json, fail, failFrom } from "@/lib/portal/session";
-import { assignClientTeam, assignJobRecruiter, canManageTeam, removeTeamMember, setStaffMessaging, setTeamManager, staffCandidates, staffMessaging, staffMoveStage, staffPipeline, staffScheduleInterview, staffSubmit, staffWork, type Staff } from "@/lib/portal/staff";
+import { assignClientTeam, assignJobRecruiter, canManageTeam, removeTeamMember, setStaffMessaging, setTeamManager, staffCandidates, staffMessaging, staffMoveStage, staffPass, PASS_REASONS, staffPipeline, staffJobTests, setJobAptitude, staffInviteToTest, staffCommitmentLink, staffScheduleInterview, staffSubmit, staffWork, type Staff } from "@/lib/portal/staff";
 import { REASONS, STAGE_LABEL } from "@/lib/portal/client";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +18,8 @@ export async function GET(request: Request, context: Ctx) {
   const db = portalDb(), staff: Staff = { id: user.id, admin: user.role === "admin" }, url = new URL(request.url);
   try {
     if (action === "work") return json({ ...await staffWork(db, staff), canEdit: user.access.recruiting !== "view", me: user.id, messaging: await staffMessaging(db, staff) });
-    if (action === "candidates") return json({ candidates: await staffCandidates(db, staff, url.searchParams.get("jd") ?? "") });
-    if (action === "pipeline") return json({ pipeline: await staffPipeline(db, staff, url.searchParams.get("jd") ?? ""), reasons: REASONS, labels: STAGE_LABEL });
+    if (action === "candidates") return json({ candidates: await staffCandidates(db, staff, url.searchParams.get("jd") ?? ""), passReasons: PASS_REASONS, full: staff.admin });
+    if (action === "pipeline") { const jd = url.searchParams.get("jd") ?? ""; return json({ pipeline: await staffPipeline(db, staff, jd), reasons: REASONS, labels: STAGE_LABEL, tests: await staffJobTests(db, staff, jd) }); }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }
 }
@@ -31,6 +31,10 @@ export async function POST(request: Request, context: Ctx) {
   const db = portalDb(), staff: Staff = { id: user.id, admin: user.role === "admin" };
   try {
     const b = await request.json().catch(() => ({})) as Record<string, unknown>;
+    if (action === "job-aptitude") { await setJobAptitude(db, staff, s(b.jdId, 60), b.on === true); return json({ message: b.on === true ? "Recorded: the client opted for the aptitude test on this job." : "The aptitude test is off for this job." }); }
+    if (action === "test-invite") { const out = await staffInviteToTest(db, staff, s(b.pipelineId, 60), s(b.bankId, 60)); return json({ message: "Test sent. One-time link for the candidate (valid for 7 days):", link: out.link }, 201); }
+    if (action === "commitment-link") return json({ message: "New one-time link for the candidate's commitment (the old one no longer works):", link: await staffCommitmentLink(db, staff, s(b.pipelineId, 60)) });
+    if (action === "pass") { await staffPass(db, staff, { jdId: s(b.jdId, 60), candidateId: s(b.candidateId, 60), reason: s(b.reason, 40), note: s(b.note, 500) }); return json({ message: "Noted. The next best candidate is shown." }); }
     if (action === "submit") { const out = await staffSubmit(db, portalSecret(), staff, { jdId: s(b.jdId, 60), candidateId: s(b.candidateId, 60), note: s(b.note, 2000) }); return json({ ...out, message: "Submitted to the client." }, 201); }
     if (action === "stage") {
       const out = await staffMoveStage(db, staff, s(b.pipelineId, 60), { stage: s(b.stage, 20), reason: s(b.reason, 40), note: s(b.note, 1000), offerCtcInr: b.offerCtcInr == null || b.offerCtcInr === "" ? null : Number(b.offerCtcInr), offerDate: s(b.offerDate, 10), joiningDate: s(b.joiningDate, 10), lastWorkingDay: s(b.lastWorkingDay, 10), competingOffers: s(b.competingOffers, 300) });
