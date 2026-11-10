@@ -18,7 +18,11 @@
     "check:portal": "node scripts/check-portal.mjs && node scripts/check-portal-ranking.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-transform-types --no-warnings --test tests/*.test.mjs",
-    "test:all": "npm run typecheck && npm run lint && npm test && npm run check:portal && npm run check:ats"
+    "test:all": "npm run typecheck && npm run lint && npm test && npm run check:portal && npm run check:ats",
+    "audit": "node scripts/audit/run.mjs",
+    "audit:functional": "node scripts/audit/run.mjs --only functional",
+    "audit:quality": "node scripts/audit/run.mjs --only quality",
+    "audit:uat": "node scripts/audit/run.mjs --only uat"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.4.0",

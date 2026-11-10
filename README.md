@@ -99,6 +99,22 @@ See also [workflows and merge plan](docs/WORKFLOWS_AND_MERGE_PLAN.md) and [keys,
 
 Migration `drizzle/0013_audit_fixes.sql` adds `jd_requirement_edits` and the erasure fields on `privacy_requests`. The audit behind these changes is [docs/AUDIT_ARCHITECTURE_DATA_SECURITY_2026-11-10.md](docs/AUDIT_ARCHITECTURE_DATA_SECURITY_2026-11-10.md).
 
+## Audit: quality, functional and UAT
+
+Three auditors test the whole product against the local dev server and its local database. They never run against a hosted site.
+
+- **Functional** (`scripts/audit/functional.mjs`): makes every kind of entry and checks it in the database and in each role's view; walks the hiring workflow and every way out of it.
+- **Quality** (`scripts/audit/quality.mjs`): opens every page and screen for a visitor and each signed-in role, follows every link and presses every safe button.
+- **UAT** (`scripts/audit/uat.mjs`): plays each person's part through the real screens, from an employer's enquiry to a hire.
+
+With `npm run dev` running in another terminal:
+
+```bash
+npm run audit
+```
+
+This resets the local database, runs all three and writes `docs/audit/RESULTS_<date>.md`. Raw records and screenshots go to `test-results/audit/`. The findings, the fix order and what was not tested are in [docs/audit/AUDIT_REPORT_2026-11-10.md](docs/audit/AUDIT_REPORT_2026-11-10.md). The same three roles are defined as Claude Code agents in `.claude/agents/` (quality-auditor, functional-auditor, uat-auditor).
+
 ## Demo verification
 
 Working Platform: with `npm run dev` running, `npm run db:local` applies the migrations to the local D1 (`-- --reset` starts empty). Then run `USHA_STANDALONE=/path/to/Usha-3.0.html npm run check:platform`. It is a browser and API test of the whole journey with fictional data, and blocks every external request.
