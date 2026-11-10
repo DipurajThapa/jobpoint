@@ -34,7 +34,7 @@ export async function GET(request: Request, context: Ctx) {
     if (action === "inbox") { const sender = await resolveSender(db, null); return json({ messages: await candidateInbox(db, id), whatsapp: sender?.number ?? "" }); }
     if (action === "profile") {
       const p = await primaryProfile(db, id);
-      return json({ profile: p?.profile ?? null, status: p?.status ?? "none", sharing: await consentActive(db, id, "share_with_companies") });
+      return json({ profile: p?.profile ?? null, status: p?.status ?? "none", sharing: await consentActive(db, id, "share_with_companies"), whatsapp: !!(await db.prepare("SELECT whatsapp_consent_at FROM candidates WHERE id = ?").bind(id).first<{ whatsapp_consent_at: string | null }>())?.whatsapp_consent_at });
     }
     if (action === "export") {
       // DPDP access right: the candidate's data, its corrections, consents and who received it.
@@ -66,15 +66,17 @@ export async function POST(request: Request, context: Ctx) {
       const file = form.get("resume");
       if (!(file instanceof File) || !file.size) return fail("Attach your CV as a PDF or DOCX file.");
       if (form.get("consentProfile") !== "yes") return fail("Agree to the processing notice to upload your CV.", 400, "CONSENT");
-      await recordConsent(db, id, "profile_processing", "granted", ip);
-      if (form.get("consentShare") === "yes") await recordConsent(db, id, "share_with_companies", "granted", ip);
-      if (form.get("consentOffers") === "yes") await recordConsent(db, id, "service_offers", "granted", ip);
-      // WhatsApp follows the latest upload form: ticked turns it on, unticked turns it off.
-      await setWhatsappConsent(db, id, form.get("consentWhatsapp") === "yes", CONSENT_NOTICE_VERSION);
       const cand = await db.prepare("SELECT display_name, current_city FROM candidates WHERE id = ?").bind(id).first<{ display_name: string; current_city: string }>();
       let result;
       try { result = await ingestCv(db, env.BUCKET ?? null, id, { bytes: new Uint8Array(await file.arrayBuffer()), fileName: file.name.replace(/[\\/\r\n\0]/g, "_").slice(0, 140), knownName: cand?.display_name, knownLocation: cand?.current_city }); }
       catch (error) { if (error instanceof CvReadError) return fail(error.message, 422, "UNREADABLE"); throw error; }
+      // Consents are recorded only once the CV has been accepted, so a refused file changes nothing.
+      // The ticks on the form are shown as they stand today; only a change is written, in either direction.
+      await recordConsent(db, id, "profile_processing", "granted", ip);
+      const sharing = await consentActive(db, id, "share_with_companies"), wantsShare = form.get("consentShare") === "yes";
+      if (wantsShare && !sharing) await recordConsent(db, id, "share_with_companies", "granted", ip);
+      if (form.get("consentOffers") === "yes" && !await consentActive(db, id, "service_offers")) await recordConsent(db, id, "service_offers", "granted", ip);
+      await setWhatsappConsent(db, id, form.get("consentWhatsapp") === "yes", CONSENT_NOTICE_VERSION);
       await drainQueue(db, portalSecret(), 300);
       return json({ status: result.status, profile: result.profile, message: result.status === "parsed" ? "Your CV has been read. Check the details below and correct anything we got wrong." : "We could not read your CV automatically (it may be a scanned image). A Jobboard300 reviewer will check it; nothing has been lost." }, 201);
     }

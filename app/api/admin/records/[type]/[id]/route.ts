@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { sendCallUpdate } from "@/lib/public-forms";
 import { adminActor, isOwnerRequest } from "@/lib/admin";
 import { clean, errorJson, json, sameOrigin, validEmail } from "@/lib/http";
 import { portalDb } from "@/lib/portal/session";
@@ -52,10 +53,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ type:
     }
     if (type === "enquiries" && ["confirmed", "done", "cancelled"].includes(clean(body.meetingStatus, 20))) {
       // The call the employer asked for: confirmed, held or cancelled (a cancelled slot is free again).
-      const r = await env.DB!.prepare("UPDATE employer_enquiries SET meeting_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND meeting_at IS NOT NULL").bind(clean(body.meetingStatus, 20), id).run();
-      if (!r.meta.changes) return errorJson("This enquiry has no call request.", 404);
-      await audit(request, `call.${clean(body.meetingStatus, 20)}`, "employer_enquiry", id).run();
-      return json({ message: `Call marked ${clean(body.meetingStatus, 20)}.` });
+      const next = clean(body.meetingStatus, 20) as "confirmed" | "done" | "cancelled";
+      const q = await env.DB!.prepare("SELECT contact_name, email, meeting_at, meeting_status FROM employer_enquiries WHERE id = ? AND meeting_at IS NOT NULL").bind(id).first<{ contact_name: string; email: string; meeting_at: string; meeting_status: string }>();
+      if (!q) return errorJson("This enquiry has no call request.", 404);
+      // A confirmed call also moves a new enquiry on, so it stops counting as waiting.
+      await env.DB!.batch([
+        env.DB!.prepare("UPDATE employer_enquiries SET meeting_status = ?, status = CASE WHEN status = 'new' AND ? = 'confirmed' THEN 'contacted' ELSE status END, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(next, next, id),
+        audit(request, `call.${next}`, "employer_enquiry", id),
+      ]);
+      // The employer is told by email when the call is confirmed or cancelled.
+      const emailed = next === "done" || q.meeting_status === next ? null : await sendCallUpdate(q.email, { name: q.contact_name, meetingAt: q.meeting_at, status: next });
+      return json({ message: `Call marked ${next === "done" ? "held" : next}.${emailed === "sent" ? " The employer has been emailed." : emailed ? " The employer was NOT emailed (email is not set up): please tell them yourself." : ""}` });
     }
     if (type === "enquiries" && employerStages.includes(clean(body.status, 30))) {
       const existing = await env.DB!.prepare("SELECT id FROM employer_enquiries WHERE id = ?").bind(id).first();

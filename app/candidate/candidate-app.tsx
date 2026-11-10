@@ -95,7 +95,7 @@ function Inbox() {
   </section>;
 }
 
-function Cv({ data, reload, say }: { data: { profile: Profile | null; status: string } | null; reload: () => void; say: (t: string, bad?: boolean) => void }) {
+function Cv({ data, reload, say }: { data: { profile: Profile | null; status: string; sharing?: boolean; whatsapp?: boolean } | null; reload: () => void; say: (t: string, bad?: boolean) => void }) {
   const [busy, setBusy] = useState(false);
   async function upload(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); setBusy(true);
@@ -120,9 +120,9 @@ function Cv({ data, reload, say }: { data: { profile: Profile | null; status: st
       <form className="pj-list" onSubmit={upload}>
         <label>CV file <span className="pj-muted">PDF or DOCX with selectable text, up to 5 MB</span><input name="resume" type="file" required accept=".pdf,.docx" /></label>
         <label className="pj-row"><input type="checkbox" name="consentProfile" value="yes" required /> <span><b>Required.</b> {CONSENT_NOTICE.profile_processing}</span></label>
-        <label className="pj-row"><input type="checkbox" name="consentShare" value="yes" defaultChecked /> <span><b>Recommended.</b> {CONSENT_NOTICE.share_with_companies}</span></label>
+        <label className="pj-row"><input type="checkbox" name="consentShare" value="yes" key={`share-${p ? data?.sharing : "new"}`} defaultChecked={p ? !!data?.sharing : true} /> <span><b>Recommended.</b> {CONSENT_NOTICE.share_with_companies}</span></label>
         <label className="pj-row"><input type="checkbox" name="consentOffers" value="yes" /> <span>{CONSENT_NOTICE.service_offers}</span></label>
-        <label className="pj-row"><input type="checkbox" name="consentWhatsapp" value="yes" /> <span>Send me updates on WhatsApp at my mobile number, as well as in my inbox. Leave unticked for no WhatsApp messages.</span></label>
+        <label className="pj-row"><input type="checkbox" name="consentWhatsapp" value="yes" key={`wa-${data?.whatsapp}`} defaultChecked={!!data?.whatsapp} /> <span>Send me updates on WhatsApp at my mobile number, as well as in my inbox. Leave unticked for no WhatsApp messages.</span></label>
         <button className="pj-btn" disabled={busy}>{busy ? "Reading your CV…" : "Upload CV"}</button>
       </form>
     </section>

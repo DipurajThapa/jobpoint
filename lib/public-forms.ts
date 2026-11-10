@@ -77,6 +77,14 @@ export function enquiryAckText(input: { name: string; company: string; reference
   return { subject, text, whatsapp };
 }
 
+/** What the employer is told when the owner confirms or cancels the call they asked for. */
+export function callUpdateText(input: { name: string; meetingAt: string; status: "confirmed" | "cancelled" }) {
+  return input.status === "confirmed"
+    ? { subject: "Your call with Jobboard300 is confirmed", text: [`Dear ${input.name},`, `Your call with a Jobboard300 consultant is confirmed for ${callTimeText(input.meetingAt)}. It takes about 30 minutes. We will call the phone number you gave us.`, "If the time no longer suits you, reply to this email and we will arrange another.", SIGN_OFF].join("\n\n") }
+    : { subject: "Your call with Jobboard300 needs a new time", text: [`Dear ${input.name},`, `We are sorry: we cannot hold the call you asked for on ${callTimeText(input.meetingAt)}. A consultant will contact you to agree another time, or you can reply to this email with times that suit you.`, SIGN_OFF].join("\n\n") };
+}
+export const sendCallUpdate = (to: string, input: Parameters<typeof callUpdateText>[0]) => { const m = callUpdateText(input); return email(to, m.subject, m.text); };
+
 export const sendApplicationAck = (to: string, input: Parameters<typeof applicationAckText>[0]) => { const m = applicationAckText(input); return email(to, m.subject, m.text); };
 export const sendEnquiryAck = (to: string, input: Parameters<typeof enquiryAckText>[0]) => { const m = enquiryAckText(input); return email(to, m.subject, m.text); };
 
