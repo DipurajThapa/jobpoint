@@ -278,7 +278,7 @@ export async function submitByRecruiter(db: Db, secret: string, input: { company
     db.prepare("INSERT INTO pipeline (id, company_id, jd_id, candidate_id, candidate_ref, source, stage, recruiter_note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'job_point', 'submitted', ?, ?, ?, ?)")
       .bind(id, companyId, jdId, candidateId, ref, input.note.trim().slice(0, 2000), `admin:${adminId}`, at, at),
     db.prepare("INSERT INTO pipeline_events (id, pipeline_id, stage, actor, note, at) VALUES (?, ?, 'submitted', ?, 'Submitted by Jobboard300', ?)").bind(newId(), id, `admin:${adminId}`, at),
-    db.prepare("INSERT INTO access_log (id, actor_kind, actor_id, company_id, action, jd_id, candidate_ref, ip_hash, at) VALUES (?, 'admin', ?, ?, 'submit', ?, ?, '', ?)").bind(newId(), adminId, companyId, jdId, ref, at),
+    db.prepare("INSERT INTO audit_events (id, kind, target_type, target_id, actor_kind, actor_id, company_id, action, jd_id, candidate_ref, created_at) VALUES (?, 'access', 'access', ?, 'admin', ?, ?, 'submit', ?, ?, ?)").bind(newId(), ref, adminId, companyId, jdId, ref, at),
   ]);
   await audit(db, adminId, "candidate.submitted", "company", companyId, `jd ${jdId}, ref ${ref}`);
   await notifyCandidate(db, candidateId, "stage.submitted", `Your profile was put forward for ${jd.title}`, "A Jobboard300 recruiter reviewed your CV and shared it with the employer for this role. We will tell you what they decide.", companyId);

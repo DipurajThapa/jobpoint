@@ -895,7 +895,7 @@ await check("CV intake and applications message the candidate, naming what is mi
 await check("WhatsApp sender: the client's team number first, admin as fallback, admin override wins; nothing is sent without a provider", async () => {
   const t = await staffSetup();
   const cand = await makeCandidate(t.db, "Queue Candidate");
-  const last = async () => t.db.prepare("SELECT sender_scope, status, status_detail FROM outbound_messages ORDER BY rowid DESC LIMIT 1").first();
+  const last = async () => t.db.prepare("SELECT sender_scope, status, status_detail FROM messages WHERE channel != 'inbox' ORDER BY rowid DESC LIMIT 1").first();
   await notify.notifyCandidate(t.db, cand, "test", "T", "B", t.compK.id);
   assert.deepEqual([(await last()).status, (await last()).sender_scope], ["skipped", ""], "no number configured: recorded, not sent");
   await rejects(staffMod.setStaffMessaging(t.db, t.mgrK, "admin", { number: "+919830012345", enabled: true }), "ADMIN_ONLY");
@@ -911,7 +911,7 @@ await check("WhatsApp sender: the client's team number first, admin as fallback,
   assert.deepEqual([(await last()).status, (await last()).sender_scope], ["queued", "team:kolkata"]);
   await staffMod.setStaffMessaging(t.db, t.admin, "admin", { number: "+91 90000 00001", enabled: true, override: true });
   assert.equal((await notify.resolveSender(t.db, t.compK.id)).scope, "admin", "admin override wins");
-  assert.equal((await t.db.prepare("SELECT COUNT(*) AS n FROM outbound_messages WHERE status = 'sent'").first()).n, 0);
+  assert.equal((await t.db.prepare("SELECT COUNT(*) AS n FROM messages WHERE status = 'sent'").first()).n, 0);
   const seen = await staffMod.staffMessaging(t.db, t.mgrK);
   assert.deepEqual(seen.scopes.map(x => x.scope), ["team:kolkata"], "a manager sees only their own team's set-up");
 });
@@ -930,7 +930,7 @@ await check("A manager manages only their own team's members; deleting a candida
   const cand = await makeCandidate(t.db, "Erase Me");
   await notify.notifyCandidate(t.db, cand, "test", "T", "B");
   await candidate.deleteCandidateData(t.db, cand, "candidate");
-  assert.equal((await t.db.prepare("SELECT (SELECT COUNT(*) FROM candidate_messages WHERE candidate_id = ?) + (SELECT COUNT(*) FROM outbound_messages WHERE recipient_id = ?) AS n").bind(cand, cand).first()).n, 0);
+  assert.equal((await t.db.prepare("SELECT (SELECT COUNT(*) FROM messages WHERE recipient_kind = 'candidate' AND recipient_id = ?) + (SELECT COUNT(*) FROM messages WHERE recipient_id = ?) AS n").bind(cand, cand).first()).n, 0);
 });
 
 // ---------- Placement-fee model and client access lock-down ----------

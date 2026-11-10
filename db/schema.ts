@@ -90,7 +90,14 @@ export const auditEvents = sqliteTable("audit_events", {
   targetId: text("target_id").notNull(),
   detail: text("detail").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [index("audit_events_created_idx").on(table.createdAt)]);
+  // "change": who changed what. "access": who viewed what (the former access_log).
+  kind: text("kind", { enum: ["change", "access"] }).notNull().default("change"),
+  actorKind: text("actor_kind").notNull().default(""),
+  companyId: text("company_id"),
+  jdId: text("jd_id"),
+  candidateRef: text("candidate_ref"),
+  ipHash: text("ip_hash").notNull().default(""),
+}, (table) => [index("audit_events_created_idx").on(table.createdAt), index("audit_events_kind_created_idx").on(table.kind, table.createdAt)]);
 
 export const rateLimits = sqliteTable("rate_limits", {
   key: text("key").primaryKey(),

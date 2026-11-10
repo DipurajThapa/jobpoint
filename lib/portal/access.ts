@@ -1,5 +1,6 @@
 // Access logging, rate limits and scraping detection for company browsing.
-// Every list, preview, unlock, full view and download is logged. Exceeding a
+// Every list, preview, unlock, full view and download is logged in the audit
+// table as kind 'access' (changes are kind 'change'). Exceeding a
 // limit blocks the request (429) and raises an abuse flag for the admin.
 
 import { newId, now, nowIso, type Db } from "./db";
@@ -19,8 +20,8 @@ export const LIMITS: Record<string, { windowSec: number; max: number }[]> = {
 };
 
 export async function logAccess(db: Db, e: { actorKind: "company_user" | "candidate" | "admin"; actorId: string; companyId?: string | null; action: AccessAction; jdId?: string | null; candidateRef?: string | null; ipHash?: string; detail?: string }) {
-  await db.prepare("INSERT INTO access_log (id, actor_kind, actor_id, company_id, action, jd_id, candidate_ref, ip_hash, detail, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(newId(), e.actorKind, e.actorId, e.companyId ?? null, e.action, e.jdId ?? null, e.candidateRef ?? null, e.ipHash ?? "", (e.detail ?? "").slice(0, 200), nowIso()).run();
+  await db.prepare("INSERT INTO audit_events (id, kind, target_type, target_id, actor_kind, actor_id, company_id, action, jd_id, candidate_ref, ip_hash, detail, created_at) VALUES (?, 'access', 'access', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(newId(), e.candidateRef ?? e.jdId ?? "", e.actorKind, e.actorId, e.companyId ?? null, e.action, e.jdId ?? null, e.candidateRef ?? null, e.ipHash ?? "", (e.detail ?? "").slice(0, 200), nowIso()).run();
 }
 
 /** Fixed-window counters in the existing rate_limits table. Returns false when over the limit. */
@@ -48,7 +49,7 @@ export async function flagAbuse(db: Db, subjectKind: "company_user" | "candidate
 /** Pattern checks run after each company list view: browsing many previews but unlocking almost none. */
 export async function detectScraping(db: Db, userId: string, companyId: string) {
   const since = new Date(now().getTime() - 86_400_000).toISOString();
-  const row = await db.prepare("SELECT SUM(action IN ('list','match_list')) AS views, SUM(action = 'unlock') AS unlocks, COUNT(DISTINCT jd_id) AS jds FROM access_log WHERE actor_id = ? AND at >= ?")
+  const row = await db.prepare("SELECT SUM(action IN ('list','match_list')) AS views, SUM(action = 'unlock') AS unlocks, COUNT(DISTINCT jd_id) AS jds FROM audit_events WHERE kind = 'access' AND actor_id = ? AND created_at >= ?")
     .bind(userId, since).first<{ views: number | null; unlocks: number | null; jds: number | null }>();
   const views = row?.views ?? 0, unlocks = row?.unlocks ?? 0;
   if (views >= 200 && unlocks <= views / 100) await flagAbuse(db, "company_user", userId, companyId, "high_browse_low_unlock", `${views} list views and ${unlocks} unlocks in 24 hours`);

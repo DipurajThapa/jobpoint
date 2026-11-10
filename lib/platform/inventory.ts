@@ -67,11 +67,11 @@ const PLAN: { merge: string; title: string; lines: [string, string, string?][] }
     ["Email Kit contacts", "email_kit_records", "tbl = 'contacts'"],
   ] },
   { merge: "7", title: "Messages and logs", lines: [
-    ["Audit log entries", "audit_events"],
-    ["Access log entries", "access_log"],
-    ["Candidate inbox messages", "candidate_messages"],
-    ["Client notices", "company_notices"],
-    ["Outbound message queue", "outbound_messages"],
+    ["Audit log: changes", "audit_events", "kind = 'change'"],
+    ["Audit log: views (the former access log)", "audit_events", "kind = 'access'"],
+    ["Candidate inbox messages", "messages", "recipient_kind = 'candidate' AND channel = 'inbox'"],
+    ["Client notices", "messages", "recipient_kind = 'company' AND channel = 'inbox'"],
+    ["Outbound message queue", "messages", "channel != 'inbox'"],
   ] },
 ];
 

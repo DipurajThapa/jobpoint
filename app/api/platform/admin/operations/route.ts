@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     db().prepare(`SELECT (SELECT count(*) FROM platform_users WHERE status='active') activeUsers,
       (SELECT count(*) FROM platform_sessions WHERE datetime(expires_at) > datetime('now')) sessions,
       (SELECT count(*) FROM email_kit_records WHERE tbl='convs') conversations,
-      (SELECT count(*) FROM audit_events WHERE created_at >= datetime('now','-7 days')) events,
+      (SELECT count(*) FROM audit_events WHERE kind='change' AND created_at >= datetime('now','-7 days')) events,
       (SELECT count(*) FROM platform_integrations WHERE enabled=1) integrations`).first(),
     db().prepare("SELECT id,name,description,created_at createdAt FROM platform_teams ORDER BY name").all(),
     db().prepare("SELECT m.team_id teamId,m.user_id userId,u.email FROM platform_team_members m JOIN platform_users u ON u.id=m.user_id ORDER BY u.email").all(),
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     db().prepare("SELECT c.integration_id integrationId,c.status,c.http_status httpStatus,c.message,c.checked_at checkedAt FROM platform_integration_checks c WHERE c.id IN (SELECT id FROM platform_integration_checks x WHERE x.integration_id=c.integration_id ORDER BY checked_at DESC LIMIT 1)").all(),
     db().prepare("SELECT key,value FROM platform_settings").all<{key:string;value:string}>(),
     db().prepare("SELECT tool_key toolKey,enabled FROM platform_features").all(),
-    db().prepare("SELECT a.created_at createdAt,a.actor_id actorId,a.action,a.target_type targetType,a.target_id targetId FROM audit_events a ORDER BY a.created_at DESC LIMIT 100").all(),
+    db().prepare("SELECT a.created_at createdAt,a.actor_id actorId,a.action,a.target_type targetType,a.target_id targetId FROM audit_events a WHERE a.kind='change' ORDER BY a.created_at DESC LIMIT 100").all(),
     db().prepare("SELECT action,count(*) total FROM audit_events WHERE action LIKE 'email_kit.%' AND created_at >= datetime('now','-30 days') GROUP BY action ORDER BY total DESC LIMIT 20").all(),
   ]);
   return apiJson({ counts, teams:teams.results, memberships:memberships.results,

@@ -68,7 +68,15 @@ and tests. They are ordered so each one makes the next smaller.
 | 6 | **Link employers**: an enquiry records the client it became; Email Kit contacts carry the client id. | Two new columns; no data removed. | None. |
 | 7 | **One message table and one audit table.** | Internal only. | None. |
 
-Before merges 1 to 5 I need one fact from the live database, because they move
-or drop data: the row counts of the tables being retired. The owner console can
-run a count; I will add a read-only "data inventory" screen in the next change
-so you can paste me the numbers.
+## Progress
+
+| # | Status |
+|---|---|
+| Data inventory | **Done.** Working Platform → Admin → Operations → Data inventory → "Count now", then "Copy as text". Numbers only. |
+| 6 | **Done** (migration `0015`). Owner console → Employer enquiries: pick the client an enquiry became. Owner console → Job portal → Companies: pick the client's Email Kit organisation. |
+| 7 | **Done** (migration `0016`). `candidate_messages`, `company_notices` and `outbound_messages` are now `messages`; `access_log` is now part of `audit_events` (`kind = 'access'`). Existing rows are copied across by the migration. No screen changes. |
+| 1 to 5 | Waiting for the decisions in the table above and for the data inventory numbers, because they move or drop data. |
+
+Before merges 1 to 5 I need one fact from the live database: the row counts of
+the tables being retired. Run the data inventory after this change is live and
+paste me the text.

@@ -123,8 +123,9 @@ export async function mergeCandidates(db: Db, survivorId: string, duplicateId: s
     db.prepare("UPDATE OR IGNORE unlocks SET candidate_id = ? WHERE candidate_id = ?").bind(survivorId, duplicateId),
     db.prepare("UPDATE OR IGNORE portal_applications SET candidate_id = ? WHERE candidate_id = ?").bind(survivorId, duplicateId),
     // The hiring history follows the person: pipeline, placements, tests, commitments, messages and sources.
-    ...["pipeline", "placements", "adaptive_tests", "candidate_commitments", "candidate_messages", "candidate_sources", "fast_track_orders", "shortlist_passes"]
+    ...["pipeline", "placements", "adaptive_tests", "candidate_commitments", "candidate_sources", "fast_track_orders", "shortlist_passes"]
       .map(table => db.prepare(`UPDATE OR IGNORE ${table} SET candidate_id = ? WHERE candidate_id = ?`).bind(survivorId, duplicateId)),
+    db.prepare("UPDATE messages SET recipient_id = ? WHERE recipient_kind = 'candidate' AND recipient_id = ?").bind(survivorId, duplicateId),
     db.prepare("UPDATE candidates SET fast_track_at = COALESCE(fast_track_at, (SELECT fast_track_at FROM candidates WHERE id = ?)) WHERE id = ?").bind(duplicateId, survivorId),
     db.prepare("UPDATE duplicate_flags SET status = 'merged', resolved_by = ? WHERE (a_id IN (?, ?) AND b_id IN (?, ?)) AND status = 'open'").bind(adminId, survivorId, duplicateId, survivorId, duplicateId),
     enqueue(db, "candidate", survivorId, "merged"),
@@ -140,7 +141,7 @@ export async function mergeCandidates(db: Db, survivorId: string, duplicateId: s
  * so a new table cannot be forgotten.
  */
 export const CANDIDATE_DATA: Record<string, "erase" | "keep"> = {
-  cvs: "erase", matches: "erase", pipeline: "erase", candidate_messages: "erase", portal_applications: "erase",
+  cvs: "erase", matches: "erase", pipeline: "erase", portal_applications: "erase",
   assessment_attempts: "erase", service_orders: "erase", service_enrolments: "erase", adaptive_tests: "erase",
   candidate_commitments: "erase", fast_track_orders: "erase", shortlist_passes: "erase", candidate_sources: "erase",
   candidate_consents: "keep", // the consent ledger must be kept for at least a year (DPDP Rules)
@@ -190,7 +191,7 @@ export async function deleteCandidateData(db: Db, candidateId: string, actor: st
     // Pipeline notes and interview feedback are about the person: erased (interviews go with the pipeline rows).
     // A placement row (company, role, dates, fee basis) is kept as the consultancy's business record.
     ...Object.entries(CANDIDATE_DATA).filter(([, rule]) => rule === "erase").map(([table]) => erase(table)),
-    db.prepare("DELETE FROM outbound_messages WHERE recipient_kind = 'candidate' AND recipient_id = ?").bind(candidateId),
+    db.prepare("DELETE FROM messages WHERE recipient_kind = 'candidate' AND recipient_id = ?").bind(candidateId),
     db.prepare("DELETE FROM score_queue WHERE kind = 'candidate' AND ref_id = ?").bind(candidateId),
     db.prepare("DELETE FROM duplicate_flags WHERE a_id = ? OR b_id = ?").bind(candidateId, candidateId),
     db.prepare("DELETE FROM abuse_flags WHERE subject_kind = 'candidate' AND subject_id = ?").bind(candidateId),
