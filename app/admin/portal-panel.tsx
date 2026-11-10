@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Row = Record<string, string | number | null>;
-type Overview = { selfService?: boolean; websiteUnlinked?: number; companies: Row[]; paramRequests: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; plans: Row[]; heldAttempts?: Row[]; clientWork?: { managed: Row[]; placements: Row[] }; outreachOrgs?: { id: string; name: string }[] };
+type Overview = { selfService?: boolean; websiteUnlinked?: number; companies: Row[]; paramRequests: Row[]; pendingJds: Row[]; reviews: Row[]; duplicates: Row[]; flags: Row[]; log: Row[]; queue: number; plans: Row[]; clientWork?: { managed: Row[]; placements: Row[] }; outreachOrgs?: { id: string; name: string }[] };
 const ROLE_FAMILIES = ["accounts-finance", "sales-bd", "customer-support", "operations-supply", "hr-admin", "software-it", "marketing", "manufacturing-engineering", "healthcare", "education", "hospitality-retail", "field-services"];
 const SENIORITY = ["fresher", "junior", "mid", "senior", "lead"];
 
@@ -96,7 +96,7 @@ export default function PortalPanel() {
   return <div className="admin-portal">
     {notice && <p className="admin-notice" role="status">{notice}</p>}
     <section className="admin-records"><h2>Overview</h2>
-      <p>{pending.length} company application(s) · {o.paramRequests.length} parameter request(s) · {o.pendingJds.length} JD(s) awaiting approval · {o.reviews.length} CV(s) in manual review · {o.duplicates.length} duplicate flag(s) · {o.flags.length} abuse flag(s) · {o.heldAttempts?.length ?? 0} test attempt(s) on hold · {o.queue} scoring job(s) queued</p>
+      <p>{pending.length} company application(s) · {o.paramRequests.length} parameter request(s) · {o.pendingJds.length} JD(s) awaiting approval · {o.reviews.length} CV(s) in manual review · {o.duplicates.length} duplicate flag(s) · {o.flags.length} abuse flag(s) · {o.queue} scoring job(s) queued</p>
       <div className="admin-record-actions"><button className="button button-small" onClick={() => act("run-queue", {})}>Run scoring now</button>
         <form onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); act("verify-link", { email: f.get("email"), purpose: f.get("purpose") }); }} className="admin-record-actions">
           <input name="email" type="email" placeholder="account email" required /><select name="purpose"><option value="verify">Verification link</option><option value="reset">Password reset link</option></select><button className="text-link">Issue link</button></form></div>
@@ -177,11 +177,6 @@ export default function PortalPanel() {
         <div className="admin-record-actions"><button className="text-link" onClick={() => act("merge", { survivorId: keep, duplicateId: drop }, `Merge ${dropName || "the later record"} into ${keepName || "the earlier record"}? Releases and unlocks follow the earlier record.`)}>Merge into earlier</button><button className="text-link" onClick={() => act("duplicate-dismiss", { flagId: d.id })}>Not a duplicate</button></div></article>; })}
     </section>
 
-    <section className="admin-records"><h2>Test attempts on hold <span>{o.heldAttempts?.length ?? 0}</span></h2>
-      {(o.heldAttempts ?? []).map(a => { const i = JSON.parse(String(a.integrity || "{}")) as { hidden?: number; pastes?: number; rapid?: number };
-        return <article key={String(a.id)}><div><b>{a.display_name || "Candidate"}</b> · {a.title} · score {Math.round(Number(a.score) * 100)}%<p>Tab switches {i.hidden ?? 0} · pastes {i.pastes ?? 0} · rapid answers {i.rapid ?? 0} · {String(a.submitted_at).slice(0, 16)}</p></div>
-          <div className="admin-record-actions"><button className="button button-small" onClick={() => act("attempt-review", { attemptId: a.id, accept: true })}>Clear, let it count</button><button className="delete-link" onClick={() => act("attempt-review", { attemptId: a.id, accept: false }, "Void this attempt? It will not count towards matching.")}>Void</button></div></article>; })}
-    </section>
     <section className="admin-records"><h2>Abuse flags <span>{o.flags.length}</span></h2>
       {o.flags.map(f => <article key={String(f.id)}><div><b>{f.rule}</b> · {f.display_name ?? ""}<p>{f.detail} · {String(f.created_at).slice(0, 16)}</p></div>
         <div className="admin-record-actions"><button className="delete-link" onClick={() => act("flag-resolve", { flagId: f.id, suspend: true }, "Suspend this account and sign it out?")}>Suspend account</button><button className="text-link" onClick={() => act("flag-resolve", { flagId: f.id, suspend: false })}>Dismiss</button></div></article>)}

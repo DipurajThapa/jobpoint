@@ -7,11 +7,10 @@ import { ingestCv } from "@/lib/portal/ingest";
 import { drainQueue } from "@/lib/portal/queue";
 import { candidateApplications, candidateJobs, candidateSharing } from "@/lib/portal/views";
 import { withinLimits, flagAbuse } from "@/lib/portal/access";
-import { attemptQuestions, startAttempt, submitAttempt } from "@/lib/portal/assessment";
 import { enqueue } from "@/lib/portal/company";
 import { CvReadError, MAX_CV_BYTES } from "@/lib/ats/pipeline";
 import { sendMail } from "@/lib/portal/mailer";
-import { audit, nowIso, parseJson } from "@/lib/portal/db";
+import { nowIso, parseJson } from "@/lib/portal/db";
 import { nameKey } from "@/lib/portal/policy";
 import { answerTest, candidateTests, requestFastTrack, startTechnicalTest, testStep } from "@/lib/portal/adaptive";
 
@@ -43,17 +42,10 @@ export async function GET(request: Request, context: Ctx) {
       return new Response(JSON.stringify({ exportedAt: nowIso(), profile: p?.profile ?? null, consents, applications: await candidateApplications(db, id), sharedWith: await candidateSharing(db, id) }, null, 2),
         { headers: { "content-type": "application/json", "content-disposition": 'attachment; filename="jobboard300-my-data.json"', "cache-control": "no-store" } });
     }
-    if (action === "attempt") return json(await attemptQuestions(db, url.searchParams.get("id") ?? "", id));
     if (action === "companies") {
       // Only the names this candidate typed are returned. The list of client companies is never shown to candidates.
       const row = await db.prepare("SELECT hidden_company_names FROM candidates WHERE id = ?").bind(id).first<{ hidden_company_names: string }>();
       return json({ hidden: parseJson<string[]>(row?.hidden_company_names, []), sharing: await candidateSharing(db, id) });
-    }
-    if (action === "assessments") {
-      const { results } = await db.prepare(`SELECT s.id, s.title, s.description, s.skill_id, s.items_per_form, s.time_limit_sec, s.owner_kind, s.jd_id,
-          (SELECT MAX(started_at) FROM assessment_attempts a WHERE a.assessment_id = s.id AND a.candidate_id = ?) AS last_attempt
-        FROM assessments s WHERE s.status = 'approved' AND (s.owner_kind = 'platform' OR s.jd_id IN (SELECT jd_id FROM matches WHERE candidate_id = ? AND hard_pass = 1))`).bind(id, id).all();
-      return json({ assessments: results });
     }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }
@@ -126,14 +118,6 @@ export async function POST(request: Request, context: Ctx) {
       if (env.BUCKET) for (const key of r2Keys) await env.BUCKET.delete(key);
       await notifyCompanies(db, companiesToNotify);
       return json({ message: "Your account and CV have been deleted." });
-    }
-    if (action === "assessment-start") return json(await startAttempt(db, id, String(body.assessmentId ?? ""), { jdId: typeof body.jdId === "string" ? body.jdId : null, extraTime: body.extraTime === true }));
-    if (action === "assessment-submit") {
-      const out = await submitAttempt(db, String(body.attemptId ?? ""), id, Array.isArray(body.answers) ? body.answers as never : [], (body.events ?? { hidden: 0, pastes: 0 }) as never);
-      await enqueue(db, "candidate", id, "assessment").run();
-      await drainQueue(db, portalSecret(), 300);
-      await audit(db, account.id, "assessment.submitted", "candidate", id, out.onHold ? "on hold" : "ok");
-      return json({ ...out, message: out.onHold ? "Submitted. This attempt is on hold for a quick review by Jobboard300 before it counts. Your CV-based matching is not affected." : "Submitted. Your result now counts towards matching jobs." });
     }
     return fail("Unknown action.", 404);
   } catch (error) { return failFrom(error); }

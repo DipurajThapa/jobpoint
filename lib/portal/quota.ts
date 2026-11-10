@@ -22,15 +22,12 @@ export async function assignPlan(db: Db, companyId: string, planCode: string, ad
   }
   const start = now(), end = new Date(start.getTime() + plan.validity_days * 86_400_000);
   const subId = newId(), at = nowIso();
-  // A stub payment intent records what would be charged once payments exist.
-  const intentId = plan.is_free ? null : newId();
   const statements = [
-    db.prepare("INSERT INTO company_subscriptions (id, company_id, plan_id, quota_total, starts_at, ends_at, assigned_by, payment_intent_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(subId, companyId, plan.id, plan.unlock_quota, start.toISOString(), end.toISOString(), adminId, intentId, at),
+    db.prepare("INSERT INTO company_subscriptions (id, company_id, plan_id, quota_total, starts_at, ends_at, assigned_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(subId, companyId, plan.id, plan.unlock_quota, start.toISOString(), end.toISOString(), adminId, at),
     db.prepare("INSERT INTO quota_ledger (id, company_id, subscription_id, delta, reason, note, created_by, created_at) VALUES (?, ?, ?, ?, 'grant', ?, ?, ?)")
       .bind(newId(), companyId, subId, plan.unlock_quota, `Plan ${planCode}`, adminId, at),
   ];
-  if (intentId) statements.push(db.prepare("INSERT INTO payment_intents (id, payer_kind, payer_id, purpose, ref_id, amount_inr, status, created_at) SELECT ?, 'company', ?, 'plan', ?, COALESCE(price_inr, 0), 'stub', ? FROM plans WHERE id = ?").bind(intentId, companyId, subId, at, plan.id));
   await db.batch(statements);
   await audit(db, adminId, "plan.assigned", "company", companyId, planCode);
   return subId;

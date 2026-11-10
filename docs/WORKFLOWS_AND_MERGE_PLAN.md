@@ -75,8 +75,13 @@ and tests. They are ordered so each one makes the next smaller.
 | Data inventory | **Done.** Working Platform → Admin → Operations → Data inventory → "Count now", then "Copy as text". Numbers only. |
 | 6 | **Done** (migration `0015`). Owner console → Employer enquiries: pick the client an enquiry became. Owner console → Job portal → Companies: pick the client's Email Kit organisation. |
 | 7 | **Done** (migration `0016`). `candidate_messages`, `company_notices` and `outbound_messages` are now `messages`; `access_log` is now part of `audit_events` (`kind = 'access'`). Existing rows are copied across by the migration. No screen changes. |
-| 1 to 5 | Waiting for the decisions in the table above and for the data inventory numbers, because they move or drop data. |
+| 4 | **Done** (migration `0017`). The first test system is removed from every screen and from matching, which now reads adaptive test results only. Its four tables are renamed `retired_…`, not dropped. |
+| 5 | **Done** (migration `0018`). `fast_track_orders` is now `orders` with a `kind`; a later paid service is a new kind. The unused services catalogue and payment stub are renamed `retired_…`, not dropped. |
+| 1 to 3 | Decisions confirmed 10 Nov 2026 (the recommendations in the table above). In progress. |
+
+The `retired_…` tables hold whatever the old tables held. They are dropped in a
+later migration once the data inventory shows nothing in them is needed.
 
 Before merges 1 to 5 I need one fact from the live database: the row counts of
-the tables being retired. Run the data inventory after this change is live and
+the tables being retired. Run the data inventory once this is live and
 paste me the text.
