@@ -425,7 +425,7 @@ export async function scheduleInterview(db: Db, companyId: string, actorId: stri
   const jdTitle = (await db.prepare("SELECT title FROM jds WHERE id = ?").bind(row.jd_id).first<{ title: string }>())?.title ?? "your application";
   const whenText = new Date(when).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit" });
   const where = (input.location ?? "").trim();
-  await notifyCandidate(db, row.candidate_id, "interview.scheduled", `Interview for ${jdTitle}: ${round}`, `${whenText} India time, ${input.mode === "in_person" ? "in person" : input.mode === "phone" ? "by phone" : "by video"}${where ? `. ${input.mode === "in_person" ? "Address" : "Link"}: ${where.slice(0, 300)}` : ""}. Reply to your recruiter if you cannot attend.`, companyId);
+  await notifyCandidate(db, row.candidate_id, "interview.scheduled", `Interview for ${jdTitle}: ${round}`, `${whenText} India time, ${input.mode === "in_person" ? "in person" : input.mode === "phone" ? "by phone" : "by video"}${where ? `. ${input.mode === "in_person" ? "Address" : "Link"}: ${where.slice(0, 300)}` : ""}. Reply to your recruiter if you cannot attend.`, companyId, input.mode === "in_person" ? "" : where);
   if (actorId.startsWith("staff:")) await notifyCompany(db, companyId, "interview.scheduled", `Interview scheduled for ${jdTitle}`, `Jobboard300 scheduled “${round}” on ${whenText} India time.`);
   else await notifyStaff(db, companyId, "interview.scheduled", `The client scheduled “${round}” for ${jdTitle}`, `${whenText} India time.`, { jdId: row.jd_id, pipelineId: row.id });
   return { id };
@@ -452,7 +452,7 @@ export async function rescheduleInterview(db: Db, companyId: string, actorId: st
   await audit(db, actorId, "interview.rescheduled", "interview", iv.id, iso);
   const jdTitle = (await db.prepare("SELECT title FROM jds WHERE id = ?").bind(iv.jd_id).first<{ title: string }>())?.title ?? "your application";
   const modeText = mode === "in_person" ? "in person" : mode === "phone" ? "by phone" : "by video";
-  await notifyCandidate(db, iv.candidate_id, "interview.rescheduled", `Interview for ${jdTitle} rescheduled: ${iv.round}`, `It is now ${indiaTime(iso)} India time, ${modeText}${location ? `. ${mode === "in_person" ? "Address" : "Link"}: ${location}` : ""}. Reply to your recruiter if you cannot attend.`, companyId);
+  await notifyCandidate(db, iv.candidate_id, "interview.rescheduled", `Interview for ${jdTitle} rescheduled: ${iv.round}`, `It is now ${indiaTime(iso)} India time, ${modeText}${location ? `. ${mode === "in_person" ? "Address" : "Link"}: ${location}` : ""}. Reply to your recruiter if you cannot attend.`, companyId, mode === "in_person" ? "" : location);
   if (actorId.startsWith("staff:")) await notifyCompany(db, companyId, "interview.rescheduled", `Interview rescheduled for ${jdTitle}`, `Jobboard300 moved “${iv.round}” to ${indiaTime(iso)} India time.`);
   else await notifyStaff(db, companyId, "interview.rescheduled", `The client rescheduled “${iv.round}” for ${jdTitle}`, `Now ${indiaTime(iso)} India time.`, { jdId: iv.jd_id, pipelineId: iv.pipeline_id });
 }

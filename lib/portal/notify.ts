@@ -53,8 +53,8 @@ export async function notifyCandidate(db: Db, candidateId: string, kind: string,
   const sender = await resolveSender(db, companyId), at = nowIso();
   // A link is kept as a path on this site and shown as a button in the inbox, so it works on any address.
   // The WhatsApp copy needs the full address.
-  const path = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@%/?#]*$/.test(link) ? link.slice(0, 400) : "";
-  const whatsappText = `${title}\n${body.slice(0, 700)}${path ? `\n${SITE_URL}${path}` : ""}`;
+  const path = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@%/?#]*$/.test(link) || /^https:\/\/[^\s<>"']{4,380}$/.test(link) ? link.slice(0, 400) : "";
+  const whatsappText = `${title}\n${body.slice(0, 700)}${path ? `\n${path.startsWith("/") ? SITE_URL : ""}${path}` : ""}`;
   // WhatsApp only with the person's own consent (given on a website form or at CV upload).
   const agreed = !!(await db.prepare("SELECT whatsapp_consent_at FROM candidates WHERE id = ?").bind(candidateId).first<{ whatsapp_consent_at: string | null }>())?.whatsapp_consent_at;
   await db.batch([

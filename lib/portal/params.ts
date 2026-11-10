@@ -27,7 +27,9 @@ export function sanitiseParams(input: unknown): CompanyParams | string {
   if (!input || typeof input !== "object") return "Parameters are missing.";
   const r = input as Record<string, unknown>;
   const list = (v: unknown) => (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).filter((x): x is string => typeof x === "string" && !!x.trim()).map(x => x.trim());
-  const minScore = Number(r.minScore);
+  // The minimum score and the release cap belonged to self-service browsing, which was removed. They are kept in the
+  // record for old clients but are no longer asked for; a recruiter judges every candidate.
+  const minScore = r.minScore === undefined || r.minScore === "" ? DEFAULT_PARAMS.minScore : Number(r.minScore);
   if (!Number.isFinite(minScore) || minScore < 40 || minScore > 95) return "Minimum score must be between 40 and 95.";
   const roleFamilies = list(r.roleFamilies).filter(id => roleFamilyById(id));
   if (!roleFamilies.length) return "Choose at least one permitted role family.";

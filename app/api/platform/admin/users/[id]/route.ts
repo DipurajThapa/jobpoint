@@ -41,6 +41,8 @@ export async function PATCH(request: Request, { params }: Params) {
   if (nextStatus && nextStatus !== user.status) {
     statements.push(db().prepare(`UPDATE platform_users SET status = ?, updated_at = ? WHERE id = ?${keepsAdmin}`).bind(nextStatus, now, id, ...guardArgs), auditStatement(actor, `platform.user_${nextStatus === "disabled" ? "disabled" : "enabled"}`, "platform_user", id));
     if (nextStatus === "disabled") statements.push(
+      // Their jobs go back to "Unassigned" so the team can pick them up.
+      db().prepare("UPDATE jds SET recruiter_id = NULL WHERE recruiter_id = ?").bind(id),
       db().prepare("DELETE FROM platform_sessions WHERE user_id = ?").bind(id),
       db().prepare("UPDATE platform_tokens SET used_at = ? WHERE user_id = ? AND used_at IS NULL").bind(now, id));
   }

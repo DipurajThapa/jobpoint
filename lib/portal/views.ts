@@ -56,7 +56,8 @@ export async function companyDashboard(db: Db, companyId: string) {
   const params = await currentParams(db, companyId);
   const { results: jds } = await db.prepare(`SELECT j.id, j.title, j.status, j.decision_note, j.updated_at,
       (SELECT COUNT(*) FROM releases r WHERE r.jd_id = j.id AND r.revoked_at IS NULL) AS released,
-      (SELECT COUNT(*) FROM unlocks u WHERE u.first_jd_id = j.id) AS unlocked
+      (SELECT COUNT(*) FROM unlocks u WHERE u.first_jd_id = j.id) AS unlocked,
+      (SELECT COUNT(*) FROM pipeline p WHERE p.jd_id = j.id AND p.stage IN ('submitted','shortlisted','interview')) AS open_candidates
       FROM jds j WHERE j.company_id = ? ORDER BY j.status = 'closed', j.updated_at DESC LIMIT 200`).bind(companyId).all();
   return { company, params, jds };
 }
@@ -92,7 +93,7 @@ export async function unlockedCandidate(db: Db, companyId: string, ref: string, 
 export async function adminOverview(db: Db) {
   const q = (sql: string) => db.prepare(sql).all().then(r => r.results);
   const [companies, pendingJds, reviews, duplicates, flags, log, queue] = await Promise.all([
-    q("SELECT c.id, c.display_name, c.legal_name, c.city, c.status, c.created_at, c.guarantee_days, c.non_solicit_months, c.fee_terms, c.fee_percent, c.email_kit_org_id, (SELECT COALESCE(json_extract(data, '$.name'), '') FROM email_kit_records WHERE tbl = 'orgs' AND id = c.email_kit_org_id) AS outreach_org, (SELECT COUNT(*) FROM employer_enquiries e WHERE e.company_id = c.id) AS enquiries, (SELECT email FROM company_users cu JOIN portal_accounts a ON a.id = cu.account_id WHERE cu.company_id = c.id AND cu.role = 'owner' LIMIT 1) AS owner_email FROM companies c ORDER BY CASE c.status WHEN 'applied' THEN 0 ELSE 1 END, c.created_at DESC LIMIT 200"),
+    q("SELECT c.id, c.display_name, c.legal_name, c.city, c.status, c.created_at, c.guarantee_days, c.non_solicit_months, c.fee_terms, c.fee_percent, c.email_kit_org_id, (SELECT params FROM company_parameters cp WHERE cp.company_id = c.id AND cp.status = 'approved') AS params, (SELECT COALESCE(json_extract(data, '$.name'), '') FROM email_kit_records WHERE tbl = 'orgs' AND id = c.email_kit_org_id) AS outreach_org, (SELECT COUNT(*) FROM employer_enquiries e WHERE e.company_id = c.id) AS enquiries, (SELECT email FROM company_users cu JOIN portal_accounts a ON a.id = cu.account_id WHERE cu.company_id = c.id AND cu.role = 'owner' LIMIT 1) AS owner_email FROM companies c ORDER BY CASE c.status WHEN 'applied' THEN 0 ELSE 1 END, c.created_at DESC LIMIT 200"),
     q("SELECT j.id, j.title, j.company_id, c.display_name, j.requirements, j.raw_text, j.updated_at FROM jds j JOIN companies c ON c.id = j.company_id WHERE j.status = 'pending' ORDER BY j.updated_at"),
     q("SELECT k.id, k.display_name, v.file_name, v.created_at FROM candidates k JOIN cvs v ON v.candidate_id = k.id AND v.is_primary = 1 WHERE v.parse_status = 'needs_review' ORDER BY v.created_at"),
     q(`SELECT d.id, d.kind, d.a_id, d.b_id, d.signal, d.created_at, a.display_name AS a_name, b.display_name AS b_name, a.created_at AS a_created, b.created_at AS b_created

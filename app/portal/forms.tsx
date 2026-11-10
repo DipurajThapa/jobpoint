@@ -58,9 +58,10 @@ export function Register({ kind }: { kind: "candidate" | "company" }) {
     <label>Mobile number<input name="phone" type="tel" required maxLength={16} autoComplete="tel" /></label>
     <label>Password <span className="pj-muted">at least 12 characters</span><input name="password" type="password" required minLength={12} autoComplete="new-password" /></label>
     {kind === "candidate" && <label className="pj-row"><input type="checkbox" name="adult" value="yes" required /> I am 18 or older.</label>}
-    <label className="pj-row"><input type="checkbox" name="terms" value="yes" required /> I accept the <a href="/terms" target="_blank">terms</a>{kind === "company" ? ", including using candidate data only for hiring, never contacting candidates outside Jobboard300 before unlocking, and deleting CVs on request." : " and have read the "}{kind === "candidate" && <a href="/privacy" target="_blank">privacy notice</a>}.</label>
+    <label className="pj-row"><input type="checkbox" name="terms" value="yes" required /> I accept the <a href="/terms" target="_blank">terms</a>{kind === "company" ? ", including using candidate data only for hiring, never contacting candidates outside Jobboard300, and deleting CVs on request." : " and have read the "}{kind === "candidate" && <a href="/privacy" target="_blank">privacy notice</a>}.</label>
     <button className="wp-btn" disabled={f.busy}>{f.busy ? "Creating…" : "Create account"}</button>
-    {kind === "company" && <p className="pj-muted">Jobboard300 reviews every company and sets its matching rules before any candidate is shared.</p>}
+    {kind === "company" && <p className="pj-muted">Jobboard300 reviews every company before any candidate is put in front of it.</p>}
+    <p className="pj-muted">Already have an account? <a href="/portal/sign-in">Sign in</a></p>
   </form>;
 }
 
@@ -83,6 +84,7 @@ export function Forgot() {
   return <form onSubmit={submit} method="post" className="pj-list">
     {f.error && <p className="pj-notice bad">{f.error}</p>}{f.notice && <p className="pj-notice good">{f.notice}</p>}{f.link && <a href={f.link}>Local development: reset link</a>}
     <label>Email<input name="email" type="email" required /></label><button className="wp-btn" disabled={f.busy}>Send reset link</button>
+    <p className="pj-muted">Remembered it? <a href="/portal/sign-in">Back to sign in</a></p>
   </form>;
 }
 
