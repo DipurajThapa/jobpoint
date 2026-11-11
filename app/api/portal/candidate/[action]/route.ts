@@ -1,3 +1,4 @@
+import { readLimitedForm } from "@/lib/intake-security";
 import { env } from "cloudflare:workers";
 import { CONSENT_NOTICE_VERSION } from "@/lib/portal/notice";
 import { candidateInbox, markInboxRead, resolveSender, setWhatsappConsent } from "@/lib/portal/notify";
@@ -72,7 +73,7 @@ async function handlePost(request: Request, context: Ctx) {
       if (Number(request.headers.get("content-length") ?? 0) > MAX_CV_BYTES + 50_000) return fail("The CV exceeds the 5 MB limit.", 413);
       const limit = await withinLimits(db, id, "cv_upload");
       if (!limit.ok) { await flagAbuse(db, "candidate", id, null, "rate:cv_upload", limit.rule); return fail("You can upload up to 3 CV versions a month.", 429, "RATE_LIMIT"); }
-      const form = await request.formData();
+      const form = await readLimitedForm(request, MAX_CV_BYTES + 50000);
       const file = form.get("resume");
       if (!(file instanceof File) || !file.size) return fail("Attach your CV as a PDF or DOCX file.");
       if (form.get("consentProfile") !== "yes") return fail("Agree to the processing notice to upload your CV.", 400, "CONSENT");

@@ -1,19 +1,22 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import PublicEnquiryDialog from "./public-enquiry-dialog";
 
 type Audience = "candidate" | "employer";
 const Registration = createContext<(audience: Audience) => void>(() => {});
 export const useRegistration = () => useContext(Registration);
 
+const subscribeLocation = (notify: () => void) => { window.addEventListener("popstate", notify); return () => window.removeEventListener("popstate", notify); };
+const registrationLocation = (): Audience | null => { const url = new URL(window.location.href); return url.pathname === "/portal/register" ? url.searchParams.get("kind") === "company" ? "employer" : "candidate" : null; };
+
 /** One dialog instance for all public registration entry points, including legacy URLs. */
 export default function RegistrationProvider({ children }: { children: ReactNode }) {
-  const [audience, setAudience] = useState<Audience | null>(null);
+  const initialAudience = useSyncExternalStore(subscribeLocation, registrationLocation, () => null);
+  const [selection, setAudience] = useState<Audience | null | undefined>(undefined);
+  const audience = selection === undefined ? initialAudience : selection;
   const open = useCallback((kind: Audience) => setAudience(kind), []);
   const close = useCallback(() => setAudience(null), []);
   useEffect(() => {
-    const initial = new URL(window.location.href);
-    if (initial.pathname === "/portal/register") open(initial.searchParams.get("kind") === "company" ? "employer" : "candidate");
     const follow = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;

@@ -27,6 +27,7 @@ function routeFiles(dir = resolve(root, "app/api"), out = []) {
 
 // Routes that are meant to work without signing in. Anything not listed here must refuse an anonymous caller.
 const PUBLIC = new Set([
+  "blog/media/[id] GET", // only published media; dedicated tests verify draft assets stay private
   "jobs GET", "applications POST", "employer-enquiries POST", "privacy-requests POST",
   "employer-enquiries GET", // free times for a call with a consultant: times only, no personal data
   "portal/registration POST", // public unified signup, protected by origin checks and rate limits
