@@ -56,7 +56,9 @@ export async function GET(request: Request, context: Ctx) {
 /** After every change, send a few of the queued update emails (there is no scheduler on this hosting). */
 export async function POST(request: Request, context: Ctx) {
   const response = await handlePost(request, context);
-  try { await deliverEmails(portalDb(), 10); } catch (error) { console.error("email delivery failed", error instanceof Error ? error.message : error); }
+  if (response.ok) {
+    try { await deliverEmails(portalDb(), 10); } catch (error) { console.error("email delivery failed", error instanceof Error ? error.message : error); }
+  }
   return response;
 }
 
