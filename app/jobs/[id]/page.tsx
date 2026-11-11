@@ -13,7 +13,7 @@ import ApplicationForm from "./application-form";
 
 export const dynamic = "force-dynamic";
 
-const SHARE_IMAGE = "/images/career-conversation.webp";
+const SHARE_IMAGE = "/images/candidate-meeting.webp";
 
 /** schema.org employment types that Google accepts. The stored value is free text, so anything unrecognised becomes OTHER. */
 const EMPLOYMENT_TYPES: Record<string, string> = { fulltime: "FULL_TIME", parttime: "PART_TIME", contract: "CONTRACTOR", contractor: "CONTRACTOR", temporary: "TEMPORARY", temp: "TEMPORARY", internship: "INTERN", intern: "INTERN" };

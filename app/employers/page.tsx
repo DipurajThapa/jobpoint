@@ -6,7 +6,7 @@ import { SITE_URL } from "@/lib/site";
 const title = "Hire Accounts, Sales & Support Staff";
 const description = "Hire accounts, sales and support staff. Recruiter-screened shortlist, 7.5% to 8.33% fee only when your hire joins, 60-day replacement.";
 const shareTitle = `${title} | Jobboard300`;
-const shareImage = "/images/career-conversation.webp";
+const shareImage = "/images/candidate-meeting.webp";
 
 export const metadata: Metadata = {
   title, description, alternates: { canonical: "/employers" },

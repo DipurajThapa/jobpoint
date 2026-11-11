@@ -47,7 +47,7 @@ export const CANDIDATE_PAGE: Landing = {
   intro: `Jobboard300 is a job board and job consultancy with recruiters behind it. In our pilot we recruit for accounts and finance, sales and business development, and customer support and operations roles at small and growing businesses. Registering your CV is free and takes about a minute. A recruiter contacts you only if there is a fit.`,
   cta: "Upload your CV",
   secondary: { label: "Browse current jobs", href: "/#jobs" },
-  image: { src: "/images/career-conversation.webp", alt: "A candidate talking through their experience with a Jobboard300 recruiter" },
+  image: { src: "/images/candidate-meeting.webp", alt: "A candidate talking through their experience with a Jobboard300 recruiter" },
   proof: ["ACCOUNTS, SALES AND SUPPORT ROLES", "Free to register and apply", "Your CV is shared only with your consent", "Recruiter-reviewed matches"],
   steps: { eyebrow: "HOW IT WORKS", title: ["How to register your CV", "and apply for jobs."], intro: "You should know what happens to your CV at every step.", items: [
     ["Upload your CV", "Give your name, email, mobile number and CV, and choose what we may do with it. We read your skills and experience from the CV."],

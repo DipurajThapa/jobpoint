@@ -6,7 +6,7 @@ import { SITE_URL } from "@/lib/site";
 const title = "Accounts, Sales & Support Jobs: Free CV Registration";
 const description = "Register your CV free for accounts, sales and customer support jobs. Your CV goes to an employer only with your consent.";
 const shareTitle = `${title} | Jobboard300`;
-const shareImage = "/images/career-conversation.webp";
+const shareImage = "/images/candidate-meeting.webp";
 
 export const metadata: Metadata = {
   title, description, alternates: { canonical: "/job-seekers" },
