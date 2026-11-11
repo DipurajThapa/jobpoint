@@ -15,8 +15,8 @@ export const metadata: Metadata = {
   title: { default: "Accounts, Sales & Support Jobs and Hiring | Jobboard300", template: "%s | Jobboard300" },
   description: "Jobboard300 recruits for accounts, sales and customer support roles. Register your CV free, or send a hiring enquiry.",
   applicationName: "Jobboard300",
-  openGraph: { type: "website", url: siteUrl, siteName: "Jobboard300", locale: "en_IN", title: "Accounts, Sales & Support Jobs and Hiring | Jobboard300", description: "Find accounts, sales and support jobs, or hire through recruiter-screened shortlists. CV registration and applications are free.", images: ["/images/career-conversation.webp"] },
-  twitter: { card: "summary_large_image", title: "Accounts, Sales & Support Jobs and Hiring | Jobboard300", description: "Find accounts, sales and support jobs, or hire through recruiter-screened shortlists. CV registration and applications are free.", images: ["/images/career-conversation.webp"] },
+  openGraph: { type: "website", url: siteUrl, siteName: "Jobboard300", locale: "en_IN", title: "Accounts, Sales & Support Jobs and Hiring | Jobboard300", description: "Find accounts, sales and support jobs, or hire through recruiter-screened shortlists. CV registration and applications are free.", images: ["/images/candidate-meeting.webp"] },
+  twitter: { card: "summary_large_image", title: "Accounts, Sales & Support Jobs and Hiring | Jobboard300", description: "Find accounts, sales and support jobs, or hire through recruiter-screened shortlists. CV registration and applications are free.", images: ["/images/candidate-meeting.webp"] },
   robots: { index: !DEMO_MODE, follow: !DEMO_MODE, googleBot: { index: !DEMO_MODE, follow: !DEMO_MODE, "max-image-preview": "large" } },
   icons: {
     icon: [{ url: "/favicon.ico", sizes: "any" }, { url: "/icon-192.png", type: "image/png", sizes: "192x192" }],

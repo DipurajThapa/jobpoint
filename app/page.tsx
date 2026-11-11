@@ -12,7 +12,7 @@ export default async function Home() {
   catch { listings = { jobs: [], locations: [] }; initialLoaded = false; }
   const url = SITE_URL;
   const company = {
-    "@context": "https://schema.org", "@type": "EmploymentAgency", "@id": `${url}/#agency`, name: "Jobboard300", alternateName: ["Job Board 300", "Jobboard300 job board"], url, logo: `${url}/images/jobboard300-logo.png`, image: `${url}/images/career-conversation.webp`,
+    "@context": "https://schema.org", "@type": "EmploymentAgency", "@id": `${url}/#agency`, name: "Jobboard300", alternateName: ["Job Board 300", "Jobboard300 job board"], url, logo: `${url}/images/jobboard300-logo.png`, image: `${url}/images/candidate-meeting.webp`,
     description: "Jobboard300 is a job board and recruitment consultancy for small and growing businesses. In its pilot it recruits in three role families: accounts and finance, sales and business development, and customer support and operations. Candidates register a CV and apply free of charge; employers hire recruiter-screened candidates and pay 7.5% to 8.33% of annual salary only on a successful placement.",
     knowsAbout: ["Accounts and finance hiring", "Sales and business development hiring", "Customer support and operations hiring", "Permanent recruitment", "CV screening"],
     makesOffer: [
