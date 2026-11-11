@@ -20,14 +20,14 @@ export default function PublicFooter({ onCandidate, onEmployer }: { onCandidate?
         {onCandidate ? <button onClick={onCandidate}>{cv}</button> : <Link href="/job-seekers">{cv}</Link>}
         <Link href="/job-seekers">How it works for job seekers</Link>
         <Link href="/terms/job-seekers">Terms for job seekers</Link>
-        <Link href="/portal/sign-in">Candidate sign-in</Link>
+        <Link href="/portal/sign-in?kind=candidate">Candidate sign-in</Link>
       </div>
       <div><b>Employers</b>
         <Link href="/employers">Hire through Jobboard300</Link>
         {onEmployer ? <button onClick={onEmployer}>{enquiry}</button> : <Link href="/employers">{enquiry}</Link>}
         <Link href="/employers#page-terms">Fee and terms</Link>
         <Link href="/terms/employers">Terms for employers</Link>
-        <Link href="/portal/sign-in">Client sign-in</Link>
+        <Link href="/portal/sign-in?kind=company">Employer sign-in</Link>
       </div>
       <div><b>Jobboard300</b>
         <Link href="/#about">About us</Link>

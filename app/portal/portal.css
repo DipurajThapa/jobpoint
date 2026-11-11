@@ -31,3 +31,26 @@
 .pj-actions{align-content:start;justify-content:flex-end}.pj-actions select{padding:9px;border:1px solid var(--tint-line,#cfd8ea);border-radius:10px;font:600 14px var(--font)}
 .pj-item .pj-form{margin-top:10px}
 .pj-list>label.pj-row{flex-wrap:nowrap;align-items:flex-start}.pj-list>label.pj-row input[type=checkbox]{margin-top:4px;flex:none}
+
+/* Public account access: distinct candidate and employer entrances. */
+.account-access-main{background:var(--tint-2);padding:64px 0 80px}
+.account-access-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:64px;align-items:center;max-width:1080px}
+.account-access-intro{max-width:460px}
+.account-access-icon{display:flex;width:64px;height:64px;align-items:center;justify-content:center;border-radius:16px;background:var(--blue);color:#fff;margin-bottom:24px}
+.wp-root .account-access-icon .material-symbols-rounded{font-size:32px}
+.wp-root .account-access-intro h1{font-size:clamp(32px,4vw,48px);font-weight:600;margin-bottom:20px}
+.account-access-intro p,.account-access-intro li{color:var(--muted);font-size:17px;line-height:1.65}
+.account-access-intro ul{padding-left:20px;margin:20px 0 28px}
+.account-access-intro li{margin:10px 0}
+.account-access-card{background:#fff;border:1px solid var(--tint-line);border-top:4px solid var(--blue);border-radius:16px;padding:32px;box-shadow:0 16px 42px #0a1f5c0c;min-width:0}
+.wp-root .account-access-card h2{font-size:28px;font-weight:600;margin-bottom:12px}
+.account-access-card .eyebrow{margin-bottom:10px}
+.account-access-card .wp-btn{width:100%;justify-content:center;text-align:center}
+.account-access-card .pj-muted a,.account-switch a{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
+.account-switch{border-top:1px solid var(--line);margin-top:24px;padding-top:20px;font-size:14px}
+.account-switch a{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.account-access-page .nav-signup{color:var(--blue)}
+.account-access-page .header .button{color:#fff}
+.account-access-page .footer{color:#fff}
+.account-access-page .footer p{color:#cbd6ed}
+@media(max-width:800px){.account-access-grid{grid-template-columns:1fr;gap:28px;max-width:620px}.account-access-main{padding:36px 0 48px}.account-access-intro{max-width:none}.account-access-intro ul{display:none}.account-access-icon{width:48px;height:48px;margin-bottom:16px}.account-access-card{padding:24px}}

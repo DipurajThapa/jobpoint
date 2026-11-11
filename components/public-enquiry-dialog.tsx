@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { DEMO_MODE, DEMO_MESSAGE } from "@/lib/demo";
 import CandidateFields from "./candidate-fields";
@@ -12,10 +12,11 @@ import { attributionFields } from "@/lib/attribution";
 /** Adds where the visitor came from (campaign tags, referring site) to a form about to be sent. */
 function withArrival(data: FormData) { for (const [name, value] of Object.entries(attributionFields())) if (value) data.set(name, String(value)); return data; }
 
-type Props = { type: "candidate" | "employer"; onClose: () => void };
+type Props = { type: "candidate" | "employer"; onClose: () => void; inline?: boolean };
 
-export default function PublicEnquiryDialog({ type, onClose }: Props) {
+export default function PublicEnquiryDialog({ type, onClose, inline = false }: Props) {
   const dialog = useRef<HTMLElement>(null);
+  const titleId = useId(), introId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<{ title: string; message: string } | null>(null);
@@ -27,6 +28,7 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
   }, [type]);
 
   useEffect(() => {
+    if (inline) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -42,7 +44,7 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
     };
     document.addEventListener("keydown", keys);
     return () => { document.removeEventListener("keydown", keys); document.body.style.overflow = overflow; previous?.focus(); };
-  }, [onClose]);
+  }, [onClose, inline]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,13 +76,13 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
   const days = [...new Map(slots.map(s => [dayOf(s), dayLabel(s)])).entries()];
 
   // Closed only by the close button or Escape: a stray tap outside must not throw away what was typed.
-  return <div className="modal-backdrop">
-    <section ref={dialog} className="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-intro">
-      <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
+  return <div className={inline ? "enquiry-inline" : "modal-backdrop"}>
+    <section ref={dialog} className={inline ? "enquiry-panel" : "modal"} role={inline ? "region" : "dialog"} aria-modal={inline ? undefined : true} aria-labelledby={titleId} aria-describedby={introId}>
+      {!inline && <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>}
       <span className="eyebrow">{candidate ? "FOR JOB SEEKERS" : "FOR EMPLOYERS"}</span>
-      <h2 id="dialog-title">{candidate ? "Register your CV for relevant roles" : "Tell us about your hiring need"}</h2>
-      {done ? <><p id="dialog-intro" className="visually-hidden">{done.title}</p><FormConfirmation title={done.title} message={done.message} onClose={onClose} /></> : <>
-      <p id="dialog-intro">{DEMO_MODE ? "Preview the information we would request when recruitment intake opens." : candidate ? "Register your CV free. Send your CV and how to reach you; we read your skills and experience from the CV. A recruiter reviews applications for the roles we are recruiting for and may contact you about a relevant opening. Registering does not guarantee contact, an interview or a job." : "A few lines are enough; you do not need a job description. Choose a time for a call if you like. A consultant will go through the role with you, and nothing is charged until a person you choose joins."}</p>
+      <h2 id={titleId}>{candidate ? "Register your CV for relevant roles" : "Tell us about your hiring need"}</h2>
+      {done ? <><p id={introId} className="visually-hidden">{done.title}</p><FormConfirmation title={done.title} message={done.message} onClose={inline ? undefined : onClose} /></> : <>
+      <p id={introId}>{DEMO_MODE ? "Preview the information we would request when recruitment intake opens." : candidate ? "Register your CV free. Send your CV and how to reach you; we read your skills and experience from the CV. A recruiter reviews applications for the roles we are recruiting for and may contact you about a relevant opening. Registering does not guarantee contact, an interview or a job." : "A few lines are enough; you do not need a job description. Choose a time for a call if you like. A consultant will go through the role with you, and nothing is charged until a person you choose joins."}</p>
       {/* method="post" so that a press before the script has loaded never puts the details in the address bar. */}
       <form method="post" action={candidate ? "/api/applications" : "/api/employer-enquiries"} encType={candidate ? "multipart/form-data" : undefined} onSubmit={submit}>
         <DemoFormNotice />

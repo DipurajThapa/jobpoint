@@ -154,3 +154,22 @@ html{scroll-padding-top:104px}.header{height:88px}.brand img{width:200px;height:
 .contact-content .button-quiet{background:transparent;border-color:#ffffff80;color:#fff}
 .contact-content .button-quiet:hover{background:#ffffff18;border-color:#fff}
 @media(max-width:720px){.audience-section{padding-block:48px}}
+
+.nav-auth{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.nav-links{gap:18px}
+.nav-links .nav-signin,.nav-links .nav-signup{border-radius:9px;padding:9px 12px;font-size:15px}
+.nav-signup{background:var(--tint,#eef3ff);border:1px solid var(--tint-line,#cfd8ea);color:var(--blue)}
+.nav-signup:hover{background:var(--tint-2,#eaf1ff)}
+.employer-enquiry-section{background:#fff}
+.employer-enquiry-grid{display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr);gap:48px;align-items:start}
+.employer-enquiry-intro h2{font-size:clamp(28px,3vw,40px);font-weight:600}
+.employer-enquiry-intro p{color:var(--muted)}
+.enquiry-panel{padding:32px;border:1px solid var(--tint-line,#cfd8ea);border-radius:16px;background:var(--tint-3,#f4f7ff)}
+.enquiry-panel>h2{font-size:26px;font-weight:600;margin-bottom:12px}
+.enquiry-panel>p{font-size:16px;color:var(--muted)}
+.enquiry-panel .public-form .form-section-heading>.material-symbols-rounded{background:var(--tint,#eef3ff)}
+.enquiry-panel .public-form .call-picker{background:#fff}
+.enquiry-panel .label-note{display:block}
+@media(max-width:1180px){.menu-button{display:flex}.nav-links{display:none;position:absolute;top:87px;left:0;right:0;padding:24px 32px;background:white;border-bottom:1px solid var(--line);box-shadow:0 14px 25px #0a1f5c10;align-items:stretch;gap:18px}.nav-links.open{display:flex;flex-direction:column}.nav-auth>a{flex:1;text-align:center}.nav-links .button{width:100%}}
+@media(max-width:800px){.employer-enquiry-grid{grid-template-columns:1fr;gap:24px}.enquiry-panel{padding:22px 18px}}
+@media(max-width:720px){.nav-links{top:69px;padding-inline:20px}}

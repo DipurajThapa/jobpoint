@@ -16,7 +16,7 @@ function useForm() {
   return { error, setError, notice, setNotice, busy, setBusy, link, setLink };
 }
 
-export function SignIn({ next }: { next: string }) {
+export function SignIn({ next, kind = "candidate" }: { next: string; kind?: "candidate" | "company" }) {
   const f = useForm();
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const d = new FormData(e.currentTarget); f.setBusy(true); f.setError("");
@@ -25,10 +25,10 @@ export function SignIn({ next }: { next: string }) {
   }
   return <form onSubmit={submit} method="post" className="pj-list">
     {f.error && <p className="pj-notice bad" role="alert">{f.error}</p>}
-    <label>Email<input name="email" type="email" required autoComplete="username" /></label>
+    <label>{kind === "company" ? "Work email" : "Email"}<input name="email" type="email" required autoComplete="username" /></label>
     <label>Password<input name="password" type="password" required autoComplete="current-password" /></label>
-    <button className="wp-btn" disabled={f.busy}>{f.busy ? "Signing in…" : "Sign in"}</button>
-    <p className="pj-muted"><a href="/portal/register">Create an account</a> · <a href="/portal/forgot">Forgot password?</a></p>
+    <button className="wp-btn" disabled={f.busy}>{f.busy ? "Signing in…" : kind === "company" ? "Sign in to your hiring account" : "Sign in to your candidate account"}</button>
+    <p className="pj-muted"><a href={`/portal/register?kind=${kind}`}>Sign up</a> · <a href="/portal/forgot">Forgot password?</a></p>
   </form>;
 }
 
@@ -61,7 +61,7 @@ export function Register({ kind }: { kind: "candidate" | "company" }) {
     <label className="pj-row"><input type="checkbox" name="terms" value="yes" required /> I accept the <a href="/terms" target="_blank">terms</a>{kind === "company" ? ", including using candidate data only for hiring, never contacting candidates outside Jobboard300, and deleting CVs on request." : " and have read the "}{kind === "candidate" && <a href="/privacy" target="_blank">privacy notice</a>}.</label>
     <button className="wp-btn" disabled={f.busy}>{f.busy ? "Creating…" : "Create account"}</button>
     {kind === "company" && <p className="pj-muted">Jobboard300 reviews every company before any candidate is put in front of it.</p>}
-    <p className="pj-muted">Already have an account? <a href="/portal/sign-in">Sign in</a></p>
+    <p className="pj-muted">Already have an account? <a href={`/portal/sign-in?kind=${kind}`}>Sign in</a></p>
   </form>;
 }
 
