@@ -2,7 +2,7 @@
 // Landing pages for the two audiences, built from the same blocks and styles as the
 // home page so the design, theme and voice stay consistent.
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useEffect, useState } from "react";
 import { DEMO_MODE } from "@/lib/demo";
 import Icon from "./icon";

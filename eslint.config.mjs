@@ -14,6 +14,11 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
   ]),
   {
+    // next/link breaks in production builds of vinext 1.0.0-beta.5 (clicks are swallowed). Use the plain link.
+    files: ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}"],
+    rules: { "no-restricted-imports": ["error", { paths: [{ name: "next/link", message: "Use @/components/app-link: next/link does not navigate in production builds." }] }] },
+  },
+  {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
     rules: {
       // These files are vendored verbatim from shadcn@4.17.0. Keep the

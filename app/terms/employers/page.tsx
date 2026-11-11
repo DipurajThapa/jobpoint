@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/app-link";
 import LegalPage from "@/components/legal-page";
 
 export const metadata = { title: "Terms for employers", description: "The terms an employer accepts when sending a hiring enquiry to Jobboard300.", alternates: { canonical: "/terms/employers" } };

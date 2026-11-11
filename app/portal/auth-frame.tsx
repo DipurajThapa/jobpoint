@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/app-link";
 
 export default function AuthFrame({ title, intro, children }: { title: string; intro?: React.ReactNode; children: React.ReactNode }) {
   return <main className="wp-auth">
