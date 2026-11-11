@@ -127,3 +127,30 @@ html{scroll-padding-top:104px}.header{height:88px}.brand img{width:200px;height:
 .form-confirmation-icon .material-symbols-rounded{font-size:36px}
 .admin-sources{border-collapse:collapse;margin:8px 0 18px;font-size:14px}.admin-sources caption{text-align:left;font-weight:700;color:var(--navy);padding-bottom:6px}.admin-sources th,.admin-sources td{text-align:left;padding:5px 18px 5px 0;border-bottom:1px solid var(--line)}
 .contact-direct{margin-top:18px;font-size:16px}.contact-direct a,.footer-bottom span a{text-decoration:underline}
+
+.role-cards-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:900px){.role-cards-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.role-cards-grid{grid-template-columns:1fr}}
+
+/* Shared section rhythm: white, audience tint, then a dark anchor section. */
+.hero{background:var(--tint-2,#eaf1ff)}
+.about-section,.jobs-section,.faq-section{background:#fff}
+.services-section,.steps-section{background:var(--tint-2,#eaf1ff);border-block:1px solid var(--tint-line,#cfd8ea)}
+.audience-section{padding-block:72px;background:var(--tint,#eef3ff);border-block:1px solid var(--tint-line,#cfd8ea)}
+.sectors-section{background:var(--navy);color:#fff}
+.sectors-section .section-heading h2{color:#fff}
+.sectors-section .eyebrow{color:var(--accent)}
+.sectors-section .section-heading p{color:#d8e4f7}
+.sectors-section .sector-item{background:#ffffff0d;border-color:#ffffff38}
+.sectors-section .sector-item:hover{background:#ffffff18;border-color:#ffffff70}
+.sectors-section .sector-item b{color:#fff;font-weight:600}
+.sectors-section .sector-item span{color:var(--accent)}
+.contact-band{background:var(--navy);color:#fff;border:0}
+.contact-content .eyebrow{color:var(--accent)}
+.contact-content h2{color:#fff}
+.contact-content p{color:#e0e8f5}
+.contact-content .button:not(.button-quiet){background:#fff;border-color:#fff;color:var(--navy)}
+.contact-content .button:not(.button-quiet):hover{background:#e8effb;border-color:#e8effb}
+.contact-content .button-quiet{background:transparent;border-color:#ffffff80;color:#fff}
+.contact-content .button-quiet:hover{background:#ffffff18;border-color:#fff}
+@media(max-width:720px){.audience-section{padding-block:48px}}

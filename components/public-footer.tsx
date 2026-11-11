@@ -13,7 +13,7 @@ import { CONTACT } from "@/lib/site";
 export default function PublicFooter({ onCandidate, onEmployer }: { onCandidate?: () => void; onEmployer?: () => void }) {
   const cv = DEMO_MODE ? "Preview CV form" : "Upload your CV", enquiry = DEMO_MODE ? "Preview enquiry form" : "Send a hiring enquiry";
   return <footer className="footer"><div className="container footer-top">
-    <div><Image src="/images/jobboard300-logo-on-dark.png" alt="Jobboard300" width={499} height={81} /><p>Jobboard300 is a job board and recruitment consultancy for accounts and finance, sales and business development, and customer support and operations roles.</p></div>
+    <div><Image src="/images/jobboard300-logo-on-dark.png" alt="Jobboard300" width={499} height={81} /><p>Jobboard300 is a job board and recruitment consultancy for IT and non-IT roles, including software, data, IT support, accounts, sales and operations.</p></div>
     <div className="footer-links">
       <div><b>Job seekers</b>
         <Link href="/#jobs">Find jobs</Link>

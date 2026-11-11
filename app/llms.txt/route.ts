@@ -10,11 +10,12 @@ export async function GET() {
   const origin = SITE_URL;
   const body = `# Jobboard300
 
-> Jobboard300 is a job board and recruitment consultancy for small and growing businesses. In its pilot it recruits in three role families: accounts and finance, sales and business development, and customer support and operations. Other role families are not covered in the pilot. Job seekers register a CV and apply for jobs free of charge. Employers send an enquiry, speak to a consultant and hire recruiter-screened candidates. Employers pay a placement fee of 7.5% to 8.33% of the hired person's annual salary, only when that person joins.
+> Jobboard300 is a job board and recruitment consultancy for small and growing businesses. It supports both IT and non-IT hiring. IT roles include software development and testing, data and analytics, and IT support and infrastructure. Non-IT roles include accounts and finance, sales and business development, and customer support and operations. Job seekers register a CV and apply for jobs free of charge. Employers send an enquiry, speak to a consultant and hire recruiter-screened candidates. Employers pay a placement fee of 7.5% to 8.33% of the hired person's annual salary, only when that person joins.
 
 ## Key facts
 - What it is: a job board and recruitment consultancy (placement agency)
-- Roles: accounts and finance; sales and business development; customer support and operations. IT and software roles are not covered in the pilot.
+- IT roles: software development and testing; data and analytics; IT support and infrastructure
+- Non-IT roles: accounts and finance; sales and business development; customer support and operations
 - Clients: small and growing businesses
 - Cost to job seekers: nothing to register a CV, apply or be placed. Payment never affects who is shortlisted.
 - Cost to employers: 7.5% to 8.33% of the hire's annual salary, agreed in advance, payable when the hire joins. No charge for an enquiry, a call, a shortlist or interviews.
