@@ -27,7 +27,7 @@ export default function LandingPage({ page }: { page: Landing }) {
   const employer = page.audience === "employer", cta = DEMO_MODE ? "Preview the form" : page.cta;
   const openEnquiry = () => { if (employer) document.getElementById("hiring-enquiry")?.scrollIntoView({ behavior: "smooth" }); else setOpen(true); };
   return <div className={`theme-wrap ${employer ? "theme-company" : "theme-candidate"}`}>
-    <PublicHeader audience={employer ? "employer" : "candidate"} onHire={employer ? openEnquiry : undefined} />
+    <PublicHeader audience={employer ? "employer" : "candidate"} />
     <main id="page-top">
       <section className="hero"><div className="container hero-grid"><div className="hero-copy"><span className="eyebrow"><i /> {page.eyebrow}</span><h1>{page.title[0]}<br /><em>{page.title[1]}</em></h1><p>{page.intro}</p><div className="hero-actions"><button className="button" onClick={openEnquiry}>{cta} <Icon name="north_east" /></button>{page.secondary && <Link className="button button-quiet" href={page.secondary.href}>{page.secondary.label}</Link>}</div></div><div className="hero-visual"><div className="photo-frame"><Image src={page.image.src} alt={page.image.alt} fill priority sizes="(max-width: 760px) 90vw, 48vw" /></div></div></div></section>
       <section className="proof-strip"><div className="container proof-row"><span>{page.proof[0]}</span><b>{page.proof[1]}</b><i /><b>{page.proof[2]}</b><span>{page.proof[3]}</span></div></section>
