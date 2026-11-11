@@ -137,6 +137,8 @@ This resets the local database, runs all three and writes `docs/audit/RESULTS_<d
 
 Apply new files in `drizzle/` before the new code serves traffic. If the order is ever wrong, both public forms still save what was sent, without the newest fields; check with `node scripts/check-deploy-order.mjs` (needs `npm run dev`). Set `PUBLIC_SITE_URL` to the site's own address when it moves to its own domain: links in emails, the sitemap and `llms.txt` follow it.
 
+Employment Intelligence: migration `drizzle/0026_employment_intelligence.sql` adds an admin-only research source register, supervised editorial queue and privacy-minimal blog engagement counters. The daily research briefing remains draft-only; publication requires a human action in the existing CMS. See [docs/EMPLOYMENT_INTELLIGENCE.md](docs/EMPLOYMENT_INTELLIGENCE.md) for the workflow, controls and limitations.
+
 ## Demo verification
 
 Working Platform: with `npm run dev` running, `npm run db:local` applies the migrations to the local D1 (`-- --reset` starts empty). Then run `USHA_STANDALONE=/path/to/Usha-3.0.html npm run check:platform`. It is a browser and API test of the whole journey with fictional data, and blocks every external request.

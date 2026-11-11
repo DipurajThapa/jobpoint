@@ -183,6 +183,13 @@
       "when": 1795230500001,
       "tag": "0025_blog_cms",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795230500002,
+      "tag": "0026_employment_intelligence",
+      "breakpoints": true
     }
   ]
 }
