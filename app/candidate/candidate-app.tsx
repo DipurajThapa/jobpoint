@@ -141,7 +141,7 @@ function Cv({ data, reload, say }: { data: { profile: Profile | null; status: st
       </div>
       <form className="pj-form" onSubmit={correct}>
         <label>Current city<input name="currentCity" defaultValue={p.india.currentCity} /></label>
-        <label>Preferred cities<input name="preferredCities" defaultValue={p.india.preferredCities.join(", ")} placeholder="e.g. Bengaluru" /></label>
+        <label>Preferred cities<input name="preferredCities" defaultValue={p.india.preferredCities.join(", ")} placeholder="List preferred cities, or leave blank" /></label>
         <label>Current CTC (LPA)<input name="ctcCurrent" type="number" step={0.1} min={0} defaultValue={lpa(p.india.ctcCurrentInr)} /></label>
         <label>Expected CTC (LPA)<input name="ctcExpected" type="number" step={0.1} min={0} defaultValue={lpa(p.india.ctcExpectedInr)} /></label>
         <label>Notice period (days)<input name="noticeDays" type="number" min={0} max={180} defaultValue={p.india.noticeDays ?? ""} /></label>

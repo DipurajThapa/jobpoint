@@ -1,17 +1,16 @@
 import type { Landing } from "@/components/landing-page";
-import { PILOT } from "@/lib/site";
 
 /** Copy for the two landing pages. The FAQ entries also feed each page's structured data. */
 export const EMPLOYER_PAGE: Landing = {
   audience: "employer",
   eyebrow: "FOR EMPLOYERS",
-  title: [`Hire accounts, sales and support staff in ${PILOT.city}.`, "Pay only when your hire joins."],
-  intro: `Jobboard300 is a recruitment consultancy in ${PILOT.city} for small and growing businesses. In our pilot we recruit for accounts and finance, sales and business development, and customer support and operations roles. Send a short enquiry and, if you like, choose a time for a call. A recruiter screens candidates against your requirements and submits only those who meet them. You pay only when the person you choose joins.`,
+  title: [`Hire accounts, sales and support staff.`, "Pay only when your hire joins."],
+  intro: `Jobboard300 is a recruitment consultancy for small and growing businesses. In our pilot we recruit for accounts and finance, sales and business development, and customer support and operations roles. Send a short enquiry and, if you like, choose a time for a call. A recruiter screens candidates against your requirements and submits only those who meet them. You pay only when the person you choose joins.`,
   cta: "Send a hiring enquiry",
   secondary: { label: "See the terms", href: "#page-terms" },
   image: { src: "/images/candidate-meeting.webp", alt: "A hiring manager and a Jobboard300 recruiter reviewing a role together" },
   proof: ["NO JOB DESCRIPTION NEEDED TO ENQUIRE", "Fee of 7.5% to 8.33%, only when your hire joins", "One free replacement within 60 days", "NO CHARGE FOR A CALL OR A SHORTLIST"],
-  steps: { eyebrow: "HOW HIRING WORKS", title: ["From your brief", "to joining day."], intro: "You know what happens at each step, from the first call to joining day.", items: [
+  steps: { eyebrow: "HOW HIRING WORKS", title: ["How our recruitment service", "works for employers."], intro: "You know what happens at each step, from the first call to joining day.", items: [
     ["Send an enquiry, choose a call time", "Tell us in a few lines what you are looking for and, if you like, choose a time. On a 30-minute call a consultant goes through the role, salary range, location and timeline."],
     ["Review the shortlist", "We screen our candidate pool and submit only candidates who meet your requirements, each with a recruiter's note."],
     ["Interview through us", "Interviews are arranged through Jobboard300. You see each candidate's profile while your process with them is open."],
@@ -33,7 +32,7 @@ export const EMPLOYER_PAGE: Landing = {
     { question: "How much does it cost to hire through Jobboard300?", answer: "Jobboard300 charges employers a placement fee of 7.5% to 8.33% of the hired person's annual salary. The percentage is agreed for your account in advance, and the fee is payable only when the person joins. The enquiry, the call with a consultant, the shortlist and the interviews cost nothing. Taxes are added as the law requires." },
     { question: "How do we start hiring through Jobboard300?", answer: "To start hiring through Jobboard300, send a short enquiry saying what you are looking for; no job description is needed. You can pick a time for a 30-minute call, Monday to Saturday, and a consultant confirms it or offers another. If you pick no time, a consultant contacts you within two working days. Terms are agreed in writing before we start." },
     { question: "What happens if the person we hire leaves?", answer: "If a person placed by Jobboard300 leaves within 60 days of joining, we provide one replacement for the same role free of charge. The replacement does not apply if the fee is unpaid, if the role or its terms changed materially after the offer, or if the departure was caused by redundancy or a breach on the employer's side." },
-    { question: "Which roles does Jobboard300 recruit for?", answer: "Jobboard300 recruits for small and growing businesses in Bengaluru, in three role families: accounts and finance, sales and business development, and customer support and operations. Other roles, including IT and software roles, are not covered in the current pilot. If your role is outside these, a consultant will tell you so before anything is agreed." },
+    { question: "Which roles does Jobboard300 recruit for?", answer: "Jobboard300 recruits for small and growing businesses in three role families: accounts and finance, sales and business development, and customer support and operations. Other roles, including IT and software roles, are not covered in the current pilot. If your role is outside these, a consultant will tell you so before anything is agreed." },
     { question: "Can we search your candidate database ourselves?", answer: "No. Employers cannot search or browse the Jobboard300 candidate database. A recruiter selects candidates for each role and submits them to you with a note on why each one fits. This protects candidates' personal data, and it means you spend your time only on people who meet the requirements you gave us." },
     { question: "When do we see a candidate's contact details?", answer: "You see a candidate's phone number and email when you make an offer. Until then you see the profile and CV with contact details removed, for as long as your hiring process with that person is open. Every CV you download carries a watermark that identifies your company." },
     { question: "Do we need to sign a contract?", answer: "Yes. You accept the terms for employers when you send an enquiry, and Jobboard300 signs a recruitment services agreement with each employer before submitting any candidate. The agreement sets your fee percentage and confirms the 60-day replacement. Under the terms, a candidate we introduce is hired through us for 12 months from the introduction." },
@@ -44,13 +43,13 @@ export const EMPLOYER_PAGE: Landing = {
 export const CANDIDATE_PAGE: Landing = {
   audience: "candidate",
   eyebrow: "FOR JOB SEEKERS",
-  title: ["Upload your CV once.", `Accounts, sales and support jobs in ${PILOT.city}.`],
-  intro: `Jobboard300 is a job board and job consultancy in ${PILOT.city}, with recruiters behind it. In our pilot we recruit for accounts and finance, sales and business development, and customer support and operations roles at small and growing businesses in ${PILOT.city}. Registering your CV is free and takes about a minute. A recruiter contacts you only if there is a fit.`,
+  title: ["Find accounts, sales and support jobs.", `Register your CV for free.`],
+  intro: `Jobboard300 is a job board and job consultancy with recruiters behind it. In our pilot we recruit for accounts and finance, sales and business development, and customer support and operations roles at small and growing businesses. Registering your CV is free and takes about a minute. A recruiter contacts you only if there is a fit.`,
   cta: "Upload your CV",
   secondary: { label: "Browse current jobs", href: "/#jobs" },
   image: { src: "/images/career-conversation.webp", alt: "A candidate talking through their experience with a Jobboard300 recruiter" },
-  proof: ["ACCOUNTS, SALES AND SUPPORT ROLES", "Free to register and apply", "Your CV is shared only with your consent", "BENGALURU PILOT"],
-  steps: { eyebrow: "HOW IT WORKS", title: ["From your CV", "to joining day."], intro: "You should know what happens to your CV at every step.", items: [
+  proof: ["ACCOUNTS, SALES AND SUPPORT ROLES", "Free to register and apply", "Your CV is shared only with your consent", "Recruiter-reviewed matches"],
+  steps: { eyebrow: "HOW IT WORKS", title: ["How to register your CV", "and apply for jobs."], intro: "You should know what happens to your CV at every step.", items: [
     ["Upload your CV", "Give your name, email, mobile number and CV, and choose what we may do with it. We read your skills and experience from the CV."],
     ["A recruiter reviews it", "Software reads your skills and experience from the CV. A recruiter reviews applications for the roles we are currently recruiting for."],
     ["Interviews", "If there is a fit, we contact you. We ask before sharing your CV, unless you have already agreed, and interviews are arranged through us."],
@@ -61,18 +60,18 @@ export const CANDIDATE_PAGE: Landing = {
     ["Accurate information", "Your CV and details must be true and your own. False information can end your application."],
     ["Your consent decides", "We share your CV with an employer only with your consent. You can withdraw it or ask us to delete your data at any time."],
   ], link: { label: "Read the full terms for job seekers", href: "/terms/job-seekers" } },
-  extra: { eyebrow: "ROLES IN THE PILOT", title: ["Three role families,", `in ${PILOT.city} only.`], intro: "During the pilot we recruit for these roles only, for small and growing businesses.", cards: [
+  extra: { eyebrow: "ROLES IN THE PILOT", title: ["Three role families,", "one focused service."], intro: "During the pilot we recruit for these roles only, for small and growing businesses.", cards: [
     { icon: "account_balance", title: "Accounts and finance", text: "Accounting, GST and tax, payroll and billing roles." },
     { icon: "trending_up", title: "Sales and business development", text: "Sales, business development and client acquisition roles." },
     { icon: "support_agent", title: "Customer support and operations", text: "Customer service, voice and chat support, and operations roles." },
-    { icon: "info", title: "Other roles", text: `IT and software roles, other role families and jobs outside ${PILOT.city} are not covered in the pilot.` },
+    { icon: "info", title: "Other roles", text: `IT and software roles and other role families are not covered in this pilot.` },
   ] },
   faqs: [
     { question: "Is Jobboard300 free for job seekers?", answer: "Yes, Jobboard300 is free for job seekers. Registering your CV, applying for jobs and being put forward to an employer cost nothing, and we never charge you for being considered or placed. Payment never affects who is shortlisted: a recruiter shortlists on how well your experience fits the role." },
     { question: "What do I need to register my CV?", answer: "To register with Jobboard300 you need your name, email, mobile number and your CV as a PDF or DOCX file of up to 5 MB, and you tick two boxes: one to accept the terms for job seekers and one to let us store and use your CV. It takes about a minute. Where you would like to work is optional." },
     { question: "What happens after I upload my CV?", answer: "After you upload your CV, Jobboard300 shows you a reference number to keep. Software reads your skills and experience from the CV. A recruiter reviews applications for the roles we are currently recruiting for and contacts you only if there is a fit. We ask before sharing your CV, unless you already agreed on the form." },
     { question: "Who sees my CV?", answer: "Jobboard300 recruiters see your CV. An employer sees it only with your consent, for a role that suits you, and only while they are considering you for it. Your phone number and email reach the employer only at offer stage. Employers cannot search our candidate records, and every downloaded copy is watermarked with the employer's name." },
-    { question: "Which jobs can I apply for?", answer: "You can apply for jobs in Bengaluru in three role families: accounts and finance, sales and business development, and customer support and operations. Open roles are listed on the Jobboard300 home page with their location and work mode. IT and software roles and jobs in other cities are not covered in the current pilot." },
+    { question: "Which jobs can I apply for?", answer: "You can apply for jobs in three role families: accounts and finance, sales and business development, and customer support and operations. Open roles are listed on the Jobboard300 home page with their location and work mode. Other role families, including IT and software roles, are not covered in the current pilot." },
     { question: "Can I delete my data?", answer: "Yes. You can ask Jobboard300 to delete your data, correct it or stop sharing your CV at any time, using the privacy request form on the privacy notice page. A recruiter verifies that the request comes from you before acting on it." },
   ],
   closing: { title: "Looking for accounts, sales or support work?", text: "Upload your CV. It is free, and a recruiter contacts you only if there is a fit with a role we are recruiting for." },

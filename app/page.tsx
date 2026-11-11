@@ -13,12 +13,10 @@ export default async function Home() {
   const url = SITE_URL;
   const company = {
     "@context": "https://schema.org", "@type": "EmploymentAgency", "@id": `${url}/#agency`, name: "Jobboard300", alternateName: ["Job Board 300", "Jobboard300 job board"], url, logo: `${url}/images/jobboard300-logo.png`, image: `${url}/images/career-conversation.webp`,
-    description: "Jobboard300 is a job board and recruitment consultancy based in Bengaluru, India. In its pilot it recruits for small and growing businesses in Bengaluru in three role families: accounts and finance, sales and business development, and customer support and operations. Candidates register a CV and apply free of charge; employers hire recruiter-screened candidates and pay 7.5% to 8.33% of annual salary only on a successful placement.",
-    address: { "@type": "PostalAddress", addressLocality: "Bengaluru", addressRegion: "Karnataka", addressCountry: "IN" },
-    areaServed: { "@type": "City", name: "Bengaluru" },
+    description: "Jobboard300 is a job board and recruitment consultancy for small and growing businesses. In its pilot it recruits in three role families: accounts and finance, sales and business development, and customer support and operations. Candidates register a CV and apply free of charge; employers hire recruiter-screened candidates and pay 7.5% to 8.33% of annual salary only on a successful placement.",
     knowsAbout: ["Accounts and finance hiring", "Sales and business development hiring", "Customer support and operations hiring", "Permanent recruitment", "CV screening"],
     makesOffer: [
-      { "@type": "Offer", itemOffered: { "@type": "Service", name: "Permanent recruitment", description: "Recruiter-screened shortlists for accounts and finance, sales and business development, and customer support and operations roles in Bengaluru. The fee is 7.5% to 8.33% of annual salary, charged only on a successful placement, with one free replacement if the hire leaves within 60 days." } },
+      { "@type": "Offer", itemOffered: { "@type": "Service", name: "Permanent recruitment", description: "Recruiter-screened shortlists for accounts and finance, sales and business development, and customer support and operations roles. The fee is 7.5% to 8.33% of annual salary, charged only on a successful placement, with one free replacement if the hire leaves within 60 days." } },
       { "@type": "Offer", price: "0", priceCurrency: "INR", itemOffered: { "@type": "Service", name: "CV registration and job applications for candidates", description: "Candidates register a CV and apply for jobs free of charge." } },
     ],
   };

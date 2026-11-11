@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     const [job] = await getDb().select().from(jobs).where(eq(jobs.id, id)).limit(1);
     if (job?.status !== "published") return { title: "Job opportunity", robots: { index: false, follow: false } };
     const path = `/jobs/${encodeURIComponent(id)}`;
-    // "Junior Accountant job in Bengaluru": the place is half of every job search. A remote role has no place to name.
+    // Include a job location when one is provided. A remote role may have no specific city.
     const title = /remote|work from home|anywhere/i.test(job.location) ? `${job.title} job (${job.location})` : `${job.title} job in ${job.location}`;
     const description = `${title} (${job.employmentType}, ${job.workMode}) through Jobboard300. Apply free with your CV; a recruiter contacts you if you fit.`;
     const shareTitle = `${title} | Jobboard300`;
@@ -78,7 +78,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         <hr />
         <h2>About the role</h2><p>{job.description}</p>
         {job.requirements && <><h2>Requirements</h2><p className="requirements-text">{job.requirements}</p></>}
-        <div className="job-note"><b>About Jobboard300</b><p>{DEMO_MODE ? "This is a preview of a job listing. Applications will open after the company completes its launch checks." : "Jobboard300 is a recruitment consultancy in Bengaluru. A recruiter reviews applications for this role and contacts you only if your experience fits. Your CV goes to the employer only with your consent. Applying is free."}</p></div>
+        <div className="job-note"><b>About Jobboard300</b><p>{DEMO_MODE ? "This is a preview of a job listing. Applications will open after the company completes its launch checks." : "Jobboard300 is a recruitment consultancy. A recruiter reviews applications for this role and contacts you only if your experience fits. Your CV goes to the employer only with your consent. Applying is free."}</p></div>
       </article>
       <aside className="apply-card"><h2>Apply for this role</h2><p>{DEMO_MODE ? "Review the application fields in this demo. No details can be sent." : "Send your name, contact details and CV. It is free and takes about a minute."}</p><ApplicationForm jobId={job.id} /></aside>
     </div>{posting && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(posting) }} />}{breadcrumbs && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbs) }} />}</main>

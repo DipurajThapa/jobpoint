@@ -10,13 +10,12 @@ export async function GET() {
   const origin = SITE_URL;
   const body = `# Jobboard300
 
-> Jobboard300 is a job board and recruitment consultancy based in Bengaluru, India. In its pilot it recruits for small and growing businesses in Bengaluru, in three role families: accounts and finance, sales and business development, and customer support and operations. Other roles and other cities are not covered in the pilot. Job seekers register a CV and apply for jobs free of charge. Employers send an enquiry, speak to a consultant and hire recruiter-screened candidates. Employers pay a placement fee of 7.5% to 8.33% of the hired person's annual salary, only when that person joins.
+> Jobboard300 is a job board and recruitment consultancy for small and growing businesses. In its pilot it recruits in three role families: accounts and finance, sales and business development, and customer support and operations. Other role families are not covered in the pilot. Job seekers register a CV and apply for jobs free of charge. Employers send an enquiry, speak to a consultant and hire recruiter-screened candidates. Employers pay a placement fee of 7.5% to 8.33% of the hired person's annual salary, only when that person joins.
 
 ## Key facts
 - What it is: a job board and recruitment consultancy (placement agency)
-- Where it is based and recruits: Bengaluru, Karnataka, India (pilot)
 - Roles: accounts and finance; sales and business development; customer support and operations. IT and software roles are not covered in the pilot.
-- Clients: small and growing businesses in Bengaluru
+- Clients: small and growing businesses
 - Cost to job seekers: nothing to register a CV, apply or be placed. Payment never affects who is shortlisted.
 - Cost to employers: 7.5% to 8.33% of the hire's annual salary, agreed in advance, payable when the hire joins. No charge for an enquiry, a call, a shortlist or interviews.
 - Replacement for employers: one free replacement for the same role if the hire leaves within 60 days of joining. Conditions are in the terms for employers.
