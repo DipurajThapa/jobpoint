@@ -14,6 +14,7 @@ import { sendMail } from "@/lib/portal/mailer";
 import { nowIso, parseJson } from "@/lib/portal/db";
 import { nameKey } from "@/lib/portal/policy";
 import { answerTest, candidateTests, requestFastTrack, startTechnicalTest, testStep } from "@/lib/portal/adaptive";
+import { deliverEmails } from "@/lib/portal/outbox";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ action: string }> };
@@ -52,7 +53,14 @@ export async function GET(request: Request, context: Ctx) {
   } catch (error) { return failFrom(error); }
 }
 
+/** After every change, send a few of the queued update emails (there is no scheduler on this hosting). */
 export async function POST(request: Request, context: Ctx) {
+  const response = await handlePost(request, context);
+  try { await deliverEmails(portalDb(), 10); } catch (error) { console.error("email delivery failed", error instanceof Error ? error.message : error); }
+  return response;
+}
+
+async function handlePost(request: Request, context: Ctx) {
   const account = await requireApi(request, "candidate", true);
   if (account instanceof Response) return account;
   const { action } = await context.params;

@@ -48,7 +48,7 @@ export default function CandidateApp() {
 
 type Message = { id: string; kind: string; title: string; body: string; link?: string; created_at: string; read_at: string | null };
 
-type TestsView = { test: { questions: number; minutes: number }; fastTrack: boolean; offer: { priceInr: number | null; payNote: string }; order: { reference: string; amount_inr: number } | null; technical: { id: string; title: string; suggested: boolean }[]; tests: { id: string; title: string; kind: string; status: string; final_level: number | null; band: string | null; completed_at: string | null; weakTopics: string[] | null }[] };
+type TestsView = { test: { questions: number; minutes: number }; fastTrack: boolean; fastTrackOffered?: boolean; offer: { priceInr: number | null; payNote: string }; order: { reference: string; amount_inr: number } | null; technical: { id: string; title: string; suggested: boolean }[]; tests: { id: string; title: string; kind: string; status: string; final_level: number | null; band: string | null; completed_at: string | null; weakTopics: string[] | null }[] };
 
 /** Fast Track (the paid package) and tests: technical tests the candidate chooses, and any test they were invited to. */
 function Tests({ say }: { say: (t: string, bad?: boolean) => void }) {
@@ -71,12 +71,12 @@ function Tests({ say }: { say: (t: string, bad?: boolean) => void }) {
   if (!v) return null;
   if (sitting) return <><TestRunner call={call} onDone={load} /><button className="pj-link" onClick={() => { testId.current = undefined; setSitting(null); load(); }}>Back to my tests</button></>;
   const invited = v.tests.filter(t => t.status === "invited" || t.status === "in_progress"), done = v.tests.filter(t => t.status === "completed");
-  return <section className="pj-card"><h2>Fast Track and tests</h2>
+  return <section className="pj-card"><h2>{v.fastTrackOffered || v.fastTrack ? "Fast Track and tests" : "Tests"}</h2>
     {invited.length > 0 && <div className="pj-list">{invited.map(t => <article className="pj-item" key={t.id}><div><b>{t.title}</b><p className="pj-muted">{t.kind === "technical" ? "Your technical test is in progress." : "A recruiter has asked you to take this test for a role you are being considered for."}</p></div><button className="pj-btn" onClick={() => { testId.current = t.id; setSitting({}); }}>{t.status === "in_progress" ? "Continue" : "Open"}</button></article>)}</div>}
     {v.fastTrack ? <>
       <p><span className="pj-pill">Fast Track</span> Take a technical test in your own skills whenever you are ready. A strong result is verified on your profile and counts when recruiters shortlist.</p>
       {v.technical.length === 0 ? <p className="pj-muted">No technical tests are open yet.</p> : <div className="pj-list">{v.technical.map(b => <article className="pj-item" key={b.id}><div><b>{b.title}</b>{b.suggested && <span className="pj-pill">Matches your CV</span>}</div><button className="pj-btn quiet" onClick={() => { testId.current = undefined; setSitting({ bankId: b.id }); }}>Take the test</button></article>)}</div>}
-    </> : <>
+    </> : !v.fastTrackOffered ? <p className="pj-muted">If a recruiter asks you to take a test for a role, it appears here. Registering and applying are free, and payment never affects who is shortlisted.</p> : <>
       <p><b>Fast Track</b> is a paid package for candidates who want to prove their skills. It includes the technical tests for your skills, your level on each, the topics to prepare after every test and guidance for future interviews. Registering your CV and applying for jobs remain free.</p>
       {v.order ? <p className="pj-notice">Pay <b>₹{v.order.amount_inr.toLocaleString("en-IN")}</b> and quote the reference <b>{v.order.reference}</b>. {v.offer.payNote} You are on Fast Track as soon as we confirm the payment.</p>
         : v.offer.priceInr ? <div className="pj-row"><b>₹{v.offer.priceInr.toLocaleString("en-IN")}</b><button className="pj-btn" onClick={() => post<{ message: string }>("/api/portal/candidate/fasttrack-request", {}).then(r => { say(r.message); load(); }).catch(e => say(e.message, true))}>Join Fast Track</button></div>
@@ -141,7 +141,7 @@ function Cv({ data, reload, say }: { data: { profile: Profile | null; status: st
       </div>
       <form className="pj-form" onSubmit={correct}>
         <label>Current city<input name="currentCity" defaultValue={p.india.currentCity} /></label>
-        <label>Preferred cities<input name="preferredCities" defaultValue={p.india.preferredCities.join(", ")} placeholder="e.g. Kolkata, Bengaluru" /></label>
+        <label>Preferred cities<input name="preferredCities" defaultValue={p.india.preferredCities.join(", ")} placeholder="e.g. Bengaluru" /></label>
         <label>Current CTC (LPA)<input name="ctcCurrent" type="number" step={0.1} min={0} defaultValue={lpa(p.india.ctcCurrentInr)} /></label>
         <label>Expected CTC (LPA)<input name="ctcExpected" type="number" step={0.1} min={0} defaultValue={lpa(p.india.ctcExpectedInr)} /></label>
         <label>Notice period (days)<input name="noticeDays" type="number" min={0} max={180} defaultValue={p.india.noticeDays ?? ""} /></label>

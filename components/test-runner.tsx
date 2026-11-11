@@ -41,7 +41,7 @@ export default function TestRunner({ call, onDone }: { call: Call; onDone?: () =
     {step.state === "done" && <>
       <p>You have finished. {step.level ? <>Your level on this test is <b>{step.band}</b> (level {step.level} of 10).</> : "Your result is recorded."}</p>
       {step.weakTopics && (step.weakTopics.length ? <p>Topics to prepare: <b>{step.weakTopics.join(", ")}</b>.</p> : <p>No weak topics stood out in this sitting.</p>)}
-      {step.weakTopics === null && <p className="pj-muted">Fast Track members also see which topics to prepare.</p>}
+      
     </>}
     {step.state === "expired" && <p className="pj-notice bad">This test is no longer open. Ask your recruiter if you need a new link.</p>}
   </section>;

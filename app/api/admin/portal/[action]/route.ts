@@ -7,13 +7,15 @@ import { drainQueue } from "@/lib/portal/queue";
 import { adminOverview } from "@/lib/portal/views";
 import { audit } from "@/lib/portal/db";
 import { placementFee } from "@/lib/portal/policy";
+import { authoriseVacancy, emailLog, funnelCsv, leadSources, logCost, readiness, recordCollection, recordInvoice, setHourlyCost, setMandate, unitEconomics, weeklyFunnel } from "@/lib/portal/pilot";
+import { mailConfigured, mailProvider, sendMail } from "@/lib/portal/mailer";
 import { adminClientWork, inviteClient, linkClientToOutreach, linkEnquiryToClient, outreachOrgs, setJdOpenings, submissionCandidates, submitByRecruiter, updateClientTerms } from "@/lib/portal/client";
-import { sendMail } from "@/lib/portal/mailer";
 import { weeklySummaries } from "@/lib/portal/notify";
 import { countUnlinkedWebsiteApplications, linkWebsiteApplication, unlinkedWebsiteApplications } from "@/lib/portal/website";
 import { canonicalCity, seniorityFor } from "@/lib/portal/india";
 import { resolveSkill } from "@/lib/ats/taxonomy";
 import { roleFamilyFor } from "@/lib/portal/roles";
+import { deliverEmails } from "@/lib/portal/outbox";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ action: string }> };
@@ -26,6 +28,8 @@ export async function GET(request: Request, context: Ctx) {
     if (action === "overview") {
       return json({ ...await adminOverview(db), clientWork: await adminClientWork(db), websiteUnlinked: await countUnlinkedWebsiteApplications(db), outreachOrgs: await outreachOrgs(db) });
     }
+    if (action === "pilot") return json({ readiness: await readiness(db), funnel: await weeklyFunnel(db, 8), sources: await leadSources(db), economics: await unitEconomics(db), email: { ...await emailLog(db), configured: mailConfigured(), provider: mailProvider() } });
+    if (action === "funnel.csv") return new Response(await funnelCsv(db), { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="jobboard300-weekly-funnel.csv"`, "cache-control": "private, no-store" } });
     if (action === "submission-candidates") return json({ candidates: await submissionCandidates(db, new URL(request.url).searchParams.get("jd") ?? "") });
     if (action === "review-cv") {
       // Admin opens an unreadable CV to transcribe it. Audited.
@@ -40,7 +44,14 @@ export async function GET(request: Request, context: Ctx) {
   } catch (error) { return failFrom(error); }
 }
 
+/** After every change, send a few of the queued update emails (there is no scheduler on this hosting). */
 export async function POST(request: Request, context: Ctx) {
+  const response = await handlePost(request, context);
+  try { await deliverEmails(portalDb(), 10); } catch (error) { console.error("email delivery failed", error instanceof Error ? error.message : error); }
+  return response;
+}
+
+async function handlePost(request: Request, context: Ctx) {
   if (!sameOrigin(request)) return fail("Cross-site requests are not accepted.", 403);
   if (!await isOwnerRequest(request)) return fail("Sign-in required.", 401);
   const { action } = await context.params;
@@ -100,6 +111,19 @@ export async function POST(request: Request, context: Ctx) {
         await db.prepare("UPDATE placements SET ctc_inr = ?, fee_inr = ? WHERE id = ?").bind(ctc, fee, id).run();
         await audit(db, admin, "placement.edited", "placement", id, `CTC ${pl.ctc_inr ?? "none"} to ${ctc}; fee ${pl.fee_inr ?? "none"} to ${fee}; ${reason}`);
         return json({ message: pl.replaces_placement_id ? "Salary saved. This hire replaces an earlier one, so there is no new fee." : "Salary and fee saved." });
+      }
+      case "mandate": await setMandate(db, s(b.companyId, 60), s(b.signedOn, 10) || null, s(b.reference, 200), admin); return json({ message: s(b.signedOn, 10) ? "Signed mandate recorded." : "Mandate cleared." });
+      case "vacancy-authorise": await authoriseVacancy(db, s(b.jdId, 60), s(b.authorisedBy, 160), s(b.authorisedOn, 10), admin); return json({ message: "Recorded who authorised the vacancy." });
+      case "placement-invoice": await recordInvoice(db, s(b.placementId, 60), { invoiceNumber: s(b.invoiceNumber, 60), invoicedOn: s(b.invoicedOn, 10) }, admin); return json({ message: "Invoice recorded." });
+      case "placement-collected": await recordCollection(db, s(b.placementId, 60), { collectedOn: s(b.collectedOn, 10), amountInr: Number(b.amountInr) }, admin); return json({ message: "Payment recorded." });
+      case "cost-log": await logCost(db, { jdId: s(b.jdId, 60) || undefined, kind: s(b.kind, 40), amountInr: Number(b.amountInr), note: s(b.note, 300), spentOn: s(b.spentOn, 10) }, admin); return json({ message: "Cost recorded." });
+      case "hourly-cost": await setHourlyCost(db, Number(b.inr), admin); return json({ message: "Hourly recruiter cost saved." });
+      case "mail-test": {
+        // One real email to an address the owner gives, to prove delivery; the outcome is in the email log.
+        const to = s(b.to, 254).trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) return fail("Enter an email address to send the test to.");
+        const r = await sendMail({ to, subject: "Jobboard300 test email", text: "This is a test from the Jobboard300 owner console. If you can read it, email delivery works.", kind: "test" });
+        return json({ message: r.sent ? `Test email accepted by ${mailProvider()}. Check the inbox (and spam) of ${to}.` : `Not sent: ${r.reason ?? "unknown reason"}` }, r.sent ? 200 : 502);
       }
       case "company-activate": await activateCompany(db, s(b.companyId, 60), b.params, admin); return done("Company approved with its matching rules.");
       case "company-params": { const id = await requestParamChange(db, s(b.companyId, 60), b.params, admin); const out = await decideParamRequest(db, id, true, admin, "Set by admin"); return done(`Parameters updated.${out.paused.length ? ` ${out.paused.length} live JD(s) paused because they no longer fit.` : ""}`); }

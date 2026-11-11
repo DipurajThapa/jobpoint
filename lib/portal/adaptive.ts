@@ -18,6 +18,7 @@
 
 import { audit, newId, now, nowIso, parseJson, PortalError, sha256Hex, type Db } from "./db";
 import { notifyCandidate } from "./notify";
+import { PILOT_RULES } from "./policy";
 
 export const TEST = { questions: 20, minutes: 25, startLevel: 5, levels: 10, cooldownDays: 30, validityDays: 365, inviteDays: 7 } as const;
 export const KINDS = ["technical", "aptitude", "client"] as const;
@@ -189,6 +190,7 @@ export const isFastTrack = async (db: Db, candidateId: string) => !!(await db.pr
 
 /** The candidate asks for Fast Track: an order with a payment reference. They become Fast Track only when the admin confirms the money arrived. */
 export async function requestFastTrack(db: Db, candidateId: string) {
+  if (!PILOT_RULES.fastTrack) throw new PortalError("NOT_OFFERED", "Fast Track is not offered at the moment. Registering and applying are free, and payment never affects who is shortlisted.", 409);
   if (await isFastTrack(db, candidateId)) throw new PortalError("ALREADY", "You are already on Fast Track.", 409);
   const offer = await fastTrackOffer(db);
   if (!offer.priceInr) throw new PortalError("NOT_OPEN", "Fast Track is not open for payment yet.", 409);
@@ -344,7 +346,7 @@ export async function candidateTests(db: Db, candidateId: string, profileSkills:
   const { results: tests } = await db.prepare(`SELECT t.id, t.bank_id, t.status, t.final_level, t.band, t.weak_topics, t.completed_at, t.deadline_at, b.title, b.kind FROM adaptive_tests t JOIN question_banks b ON b.id = t.bank_id WHERE t.candidate_id = ? ORDER BY t.created_at DESC LIMIT 50`)
     .bind(candidateId).all<{ weak_topics: string; status: string }>();
   return {
-    fastTrack, offer: { priceInr: offer.priceInr, payNote: order ? offer.payNote : "" }, order, test: { questions: TEST.questions, minutes: TEST.minutes },
+    fastTrack, fastTrackOffered: PILOT_RULES.fastTrack, offer: { priceInr: offer.priceInr, payNote: order ? offer.payNote : "" }, order, test: { questions: TEST.questions, minutes: TEST.minutes },
     technical: banks.map(b => ({ id: b.id, title: b.title, suggested: skills.has(b.skill_id) })).sort((a, b) => Number(b.suggested) - Number(a.suggested)),
     tests: tests.map(t => ({ ...t, weak_topics: undefined, weakTopics: fastTrack && t.status === "completed" ? parseJson<string[]>(t.weak_topics, []) : null })),
   };
@@ -352,6 +354,8 @@ export async function candidateTests(db: Db, candidateId: string, profileSkills:
 
 /** Verified technical levels as evidence for ranking: a strong result lifts the candidate for that skill; paying alone does nothing. */
 export async function adaptiveEvidence(db: Db, candidateId: string): Promise<Record<string, { y: number; e: number; label: string }>> {
+  // Technical tests are part of the paid package: while that is so, their results must not change the ranking.
+  if (!PILOT_RULES.paidResultsAffectSelection) return {};
   const since = new Date(now().getTime() - TEST.validityDays * 86_400_000).toISOString();
   const { results } = await db.prepare(`SELECT b.skill_id, b.title, t.final_level FROM adaptive_tests t JOIN question_banks b ON b.id = t.bank_id
     WHERE t.candidate_id = ? AND t.status = 'completed' AND b.kind = 'technical' AND b.is_sample = 0 AND b.skill_id != '' AND t.completed_at >= ? ORDER BY t.completed_at`).bind(candidateId, since).all<{ skill_id: string; title: string; final_level: number }>();

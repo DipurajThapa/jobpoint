@@ -1,18 +1,17 @@
 // The written commitment a candidate accepts when an offer is made. It is created
 // when a pipeline entry moves to "offered" and accepted through a one-time link (or
-// from the candidate's inbox link). Leaving within 60 days of joining is recorded on
-// the candidate's profile and lowers their shortlist priority for 12 months. No money
-// is charged.
+// from the candidate's inbox link). Leaving within 60 days of joining is recorded and shown
+// to recruiters; it lowers shortlist priority only if PILOT_RULES.earlyLeaverLowerPriority is
+// switched on (off during the pilot). No money is charged.
 import { audit, newId, nowIso, PortalError, sha256Hex, type Db } from "./db";
 import { notifyCandidate } from "./notify";
 
-export const COMMITMENT_VERSION = "commitment-2026-11";
+export const COMMITMENT_VERSION = "commitment-2026-11b";
 export const EARLY_EXIT = { days: 60, lowPriorityMonths: 12 } as const;
 export const commitmentText = (role: string) => [
   `I have received an offer for the role of ${role} through Jobboard300.`,
   "If I accept the offer, I will join on the agreed date and I intend to stay in the role for at least 60 days.",
   "If my plans change before joining, I will tell my Jobboard300 recruiter at once.",
-  "I understand that if I leave within 60 days of joining without a serious reason (such as unpaid salary, an unsafe workplace, harassment, a role materially different from the one offered, or a medical or family emergency), Jobboard300 will record this on my profile and give my profile lower priority for other roles for 12 months.",
   "I understand that Jobboard300 does not charge me any fee or penalty under this commitment.",
 ].join("\n");
 

@@ -10,6 +10,7 @@ import { clientOverview, closeJob, closeOpenCandidates, inviteMember, moveStage,
 import { sendMail } from "@/lib/portal/mailer";
 import { companyNotices, markNoticesRead, notifyCandidate } from "@/lib/portal/notify";
 import { redactContacts } from "@/lib/portal/policy";
+import { deliverEmails } from "@/lib/portal/outbox";
 
 // Placement-fee model: clients do not browse, unlock or add candidates themselves.
 // A Jobboard300 recruiter submits each candidate, and the client works them in the pipeline.
@@ -67,7 +68,14 @@ export async function GET(request: Request, context: Ctx) {
   } catch (error) { return failFrom(error); }
 }
 
+/** After every change, send a few of the queued update emails (there is no scheduler on this hosting). */
 export async function POST(request: Request, context: Ctx) {
+  const response = await handlePost(request, context);
+  try { await deliverEmails(portalDb(), 10); } catch (error) { console.error("email delivery failed", error instanceof Error ? error.message : error); }
+  return response;
+}
+
+async function handlePost(request: Request, context: Ctx) {
   const { action } = await context.params;
   const account = await requireApi(request, ["team-invite", "team-reinvite", "team-remove"].includes(action) ? "company_owner" : "company", true);
   if (account instanceof Response) return account;

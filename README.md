@@ -7,7 +7,7 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 ## Product features
 
 - Responsive employer and candidate journeys, animated with reduced-motion support.
-- Live role search backed by D1. Only published D1 roles appear in production. Four clearly marked Dummy references appear only in local development; none are seeded into D1 or accepts applications.
+- Live role search backed by D1. Only roles the owner has published appear, in every environment. There are no sample or placeholder vacancies.
 - Public candidate application and employer enquiry forms with validation, explicit consent, honeypot and IP-hash rate limits.
 - Structured candidate fields, recruiter search, possible-duplicate flags and human-controlled application stages.
 - Mandatory PDF/DOCX CV upload (5 MB maximum), stored in private R2 and delivered only through an owner-protected admin endpoint.
@@ -113,6 +113,10 @@ Migration `drizzle/0023_open_audit_items.sql` (11 Nov 2026) closes the open audi
 - **Recruiting tool.** What changed, joining soon (with last working day and other offers), profile and reading copy of the CV, phone and email on every row, the client's feedback, interview link and interviewer, technical test results, undo a pass, one-time links in a box with Copy.
 - **CV screening** (engine `portal-match-2026.11.2`; see [the review](docs/reviews/ATS_MATCHING_REVIEW_2026-11-11.md)). Not found in a CV is a question for the recruiter, not a filter, unless the client is set to strict; the two level checks only advise; a career break costs little.
 
+## Pilot and investor pack (Bengaluru)
+
+Start with [docs/pilot/INVESTOR_READINESS.md](docs/pilot/INVESTOR_READINESS.md). It lists what the product now does for each of the investor's conditions, what only the founder can do, and the free tools for each. Also in the pack: the [prospect list](docs/pilot/PROSPECTS_BENGALURU_2026-11.md), [outreach](docs/pilot/OUTREACH.md), the [mandate template](docs/pilot/MANDATE_TEMPLATE.md), [free email set-up](docs/pilot/EMAIL_SETUP.md), and the [deployed test runbook](docs/pilot/DEPLOYED_TEST_RUNBOOK.md) (`node scripts/live-check.mjs https://<live site>`). The numbers live in the owner console under **Pilot and investor** (migration `0024`).
+
 ## Audit: quality, functional and UAT
 
 Three auditors test the whole product against the local dev server and its local database. They never run against a hosted site.
@@ -137,7 +141,7 @@ Apply new files in `drizzle/` before the new code serves traffic. If the order i
 
 Working Platform: with `npm run dev` running, `npm run db:local` applies the migrations to the local D1 (`-- --reset` starts empty). Then run `USHA_STANDALONE=/path/to/Usha-3.0.html npm run check:platform`. It is a browser and API test of the whole journey with fictional data, and blocks every external request.
 
-Run `node --experimental-vm-modules scripts/check-demo.mjs` for the intake boundary (read-only in demo mode; cross-site submissions refused when live) and anonymous admin checks. Run `node --experimental-vm-modules scripts/check-local-dummy-jobs.mjs` for local-only sample vacancy behavior. Native Sites remote build validates the complete TSX bundle. Public URL access must be confirmed using Sites access settings; local tests do not prove the platform authentication boundary.
+Run `node --experimental-vm-modules scripts/check-demo.mjs` for the intake boundary (read-only in demo mode; cross-site submissions refused when live) and anonymous admin checks. Native Sites remote build validates the complete TSX bundle. Public URL access must be confirmed using Sites access settings; local tests do not prove the platform authentication boundary.
 
 ## Website audit
 

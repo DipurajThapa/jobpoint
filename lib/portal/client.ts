@@ -17,7 +17,7 @@ import { ACTIVE_CONSENT_SQL, consentActive } from "./consent";
 import { issuePortalToken } from "./accounts";
 import { activateCompany, currentParams } from "./company";
 import { notifyCandidate, notifyCompany, notifyStaff, notifyStage } from "./notify";
-import { FEE, feePercent, nameKey, placementFee } from "./policy";
+import { FEE, feePercent, nameKey, PILOT_RULES, placementFee } from "./policy";
 import { createCommitment, EARLY_EXIT } from "./commitment";
 
 export const STAGES = ["submitted", "shortlisted", "interview", "offered", "offer_accepted", "joined", "rejected", "offer_declined", "no_show", "withdrawn"] as const;
@@ -618,8 +618,9 @@ export async function submissionCandidates(db: Db, jdId: string) {
       k.fast_track_at IS NOT NULL AS fast_track,
       (SELECT sp.reason FROM shortlist_passes sp WHERE sp.jd_id = m.jd_id AND sp.candidate_id = m.candidate_id) AS passed
     FROM matches m JOIN candidates k ON k.id = m.candidate_id WHERE m.jd_id = ? AND k.status = 'active' ORDER BY m.hard_pass DESC, applied DESC, m.lower_bound DESC LIMIT 200`).bind(lowPrioritySince, jdId).all<{ explanation: string; candidate_id: string; in_pipeline: number; passed: string | null; recent_early_exits: number; score?: number; lower_bound?: number }>();
-  // A candidate who left a placement inside the replacement period in the last 12 months ranks after everyone else.
-  results.sort((a, b) => Number(!!a.recent_early_exits) - Number(!!b.recent_early_exits));
+  // A candidate who left a placement inside the replacement period in the last 12 months ranks after everyone else,
+  // only if the pilot rule is on (it is off while the rule is reviewed with candidates; the recruiter still sees the exit).
+  if (PILOT_RULES.earlyLeaverLowerPriority) results.sort((a, b) => Number(!!a.recent_early_exits) - Number(!!b.recent_early_exits));
   return results.map(r => ({ ...r, questions: parseJson<{ questions?: string[] }>(r.explanation, {}).questions ?? [], explanation: parseJson<{ summary?: string }>(r.explanation, {}).summary ?? "" }));
 }
 

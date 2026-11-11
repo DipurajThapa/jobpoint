@@ -18,7 +18,10 @@ function configuredSiteUrl(): string {
  * How to reach Jobboard300. Shown in the footer, the contact section and the privacy notice.
  * The postal address is still to come from the owner.
  */
-export const CONTACT = { phone: "+91 96119 87667", phoneHref: "tel:+919611987667", email: "dipuraj.thapa@gmail.com", city: "Kolkata, India" } as const;
+export const CONTACT = { phone: "+91 96119 87667", phoneHref: "tel:+919611987667", email: "dipuraj.thapa@gmail.com", city: "Bengaluru, India" } as const;
+
+/** The pilot: one city and three role families. Public copy names only these; other roles are not covered yet. */
+export const PILOT = { city: "Bengaluru", roles: ["Accounts and finance", "Sales and business development", "Customer support and operations"] } as const;
 
 /** The public address of the site, used in links sent to candidates and in search metadata. No trailing slash. */
 export const SITE_URL = configuredSiteUrl();

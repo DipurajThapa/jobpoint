@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import PublicHeader from "@/components/public-header";
 import PublicFooter from "@/components/public-footer";
 

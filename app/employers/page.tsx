@@ -3,8 +3,8 @@ import LandingPage from "@/components/landing-page";
 import { EMPLOYER_PAGE } from "@/lib/landing";
 import { SITE_URL } from "@/lib/site";
 
-const title = "Recruitment agency in Kolkata for employers";
-const description = "Hire IT and office staff through Jobboard300, Kolkata. A recruiter-screened shortlist, a 7.5% to 8.33% fee only when your hire joins, 60-day replacement.";
+const title = "Recruitment agency in Bengaluru for employers";
+const description = "Hire accounts, sales and support staff in Bengaluru. Recruiter-screened shortlist, 7.5% to 8.33% fee only when your hire joins, 60-day replacement.";
 const shareTitle = `${title} | Jobboard300`;
 const shareImage = "/images/career-conversation.webp";
 

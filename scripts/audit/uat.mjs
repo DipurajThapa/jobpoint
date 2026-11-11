@@ -713,47 +713,14 @@ await step("U11.7", "\"Forgot password\" on the portal gives a working reset lin
 }
 
 // ------------------------------------------------------------------ Fast Track and a test, on screen
-section("12. Fast Track and a technical test, on screen");
-await step("U12.1", "the candidate asks to join Fast Track and is shown the amount and a payment reference", async () => {
+section("12. No paid package during the pilot");
+await step("U12.1", "the candidate's page offers no paid Fast Track, and says payment never affects who is shortlisted", async () => {
   await candidate.go("/candidate");
-  await candidate.page.getByRole("button", { name: "Join Fast Track" }).click();
-  await candidate.page.getByText(/quote the reference/).first().waitFor();
-  return count("orders", "candidate_id = ? AND status = 'awaiting_payment'", CAND.id) === 1;
+  await candidate.page.getByRole("heading", { name: "Tests" }).waitFor();
+  await candidate.shot("22-candidate-tests-no-fast-track");
+  const t = await candidate.text();
+  return !(await candidate.page.getByRole("button", { name: "Join Fast Track" }).count()) && /payment never affects who is shortlisted/i.test(t) && count("orders", "candidate_id = ?", CAND.id) === 0;
 }, { severity: "high" });
-await step("U12.2", "the administrator confirms the payment in the Assessments tool", async () => {
-  await staffAdmin.go("/platform/assessments");
-  const line = staffAdmin.page.locator("tr", { hasText: CAND.name }).first();
-  await line.waitFor();
-  staffAdmin.page.__answer = "UPI ref UAT-1";
-  await line.getByRole("button", { name: "Payment received" }).click();
-  await staffAdmin.page.getByText(/Payment confirmed/).waitFor();
-  staffAdmin.page.__answer = undefined;
-  return !!row("SELECT fast_track_at FROM candidates WHERE id = ?", CAND.id)?.fast_track_at;
-}, { severity: "high" });
-await step("U12.3", "the candidate takes a technical test to the end and sees their level", async () => {
-  await candidate.go("/candidate");
-  await candidate.page.getByRole("button", { name: "Take the test" }).first().click();
-  await candidate.page.getByRole("button", { name: "Start the test" }).click();
-  for (let i = 0; i < 25; i++) {
-    if (await candidate.page.getByText(/You have finished/).count()) break;
-    await candidate.page.locator("input[type=radio]").first().check();
-    await candidate.page.getByRole("button", { name: "Next" }).click();
-    await candidate.page.waitForTimeout(250);
-  }
-  await candidate.page.getByText(/You have finished/).waitFor();
-  await candidate.shot("22-candidate-test-finished");
-  return /Your level on this test is/.test(await candidate.text());
-}, { severity: "high" });
-{
-  // With the result on screen and nobody touching anything, the page should be quiet.
-  let calls = 0; const seen = new Map();
-  const onReq = q => { const u = new URL(q.url()); if (u.pathname.startsWith("/api/")) { calls++; seen.set(u.pathname, (seen.get(u.pathname) ?? 0) + 1); } };
-  candidate.page.on("request", onReq);
-  await candidate.page.waitForTimeout(5000);
-  candidate.page.off("request", onReq);
-  check("U12.4", "the finished-test screen is quiet (no requests while nobody is doing anything)", calls <= 4, { severity: "high", kind: "defect", title: "After a test finishes, the candidate's page calls the server in an endless loop", actual: `With "You have finished" on screen and nothing being pressed, the page sent ${calls} requests in 5 seconds (${[...seen].map(([k, v]) => `${v} × ${k}`).join(", ")}), and keeps going until the candidate presses "Back to my tests" or closes the tab. Every candidate who finishes a test in the portal does this; neither address is rate limited.`, expected: "The result is loaded once.", fix: "In app/candidate/candidate-app.tsx the `call` function depends on `v`, and finishing a test reloads `v`, which re-creates `call`, which makes components/test-runner.tsx load again and report \"done\" again. Keep `v` in a ref inside `call` (or make TestRunner call onDone once).", where: "app/candidate/candidate-app.tsx Tests; components/test-runner.tsx" });
-  await candidate.page.getByRole("button", { name: "Back to my tests" }).click().catch(() => {});
-}
 
 // ------------------------------------------------------------------ 13. deleting an account
 section("13. The candidate's \"Delete my account\"");

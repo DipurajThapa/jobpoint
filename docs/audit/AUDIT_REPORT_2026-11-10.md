@@ -321,5 +321,4 @@ These are short changes and each removes a real risk today.
 - **Load, speed and many users at once.**
 - **Payments.** There is no payment gateway; Fast Track is confirmed by hand.
 - **Phones.** Every public page was checked at 360 px for sideways scrolling and passed. The signed-in areas were not checked at phone width.
-- In local development four clearly marked sample roles appear on the home page. They are not in the database and do not appear on the live site.
 - Icons are loaded from Google Fonts. With that address unreachable, icon names show as words ("north_east"). The auditors block outside addresses, so their screenshots show this; a visitor sees it only if Google Fonts is blocked.

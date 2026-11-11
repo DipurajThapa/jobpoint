@@ -12,11 +12,11 @@ const iconFontUrl = "https://fonts.googleapis.com/css2?family=Material+Symbols+R
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   alternates: { canonical: "/" },
-  title: { default: "Jobboard300 | Job board and recruitment agency in Kolkata", template: "%s | Jobboard300" },
-  description: "Jobboard300 is a job board and recruitment consultancy in Kolkata for IT and office roles. Register your CV free, or send a short hiring enquiry.",
+  title: { default: "Jobboard300 | Recruitment agency in Bengaluru", template: "%s | Jobboard300" },
+  description: "Jobboard300 is a recruitment consultancy in Bengaluru for accounts, sales and customer support roles. Register your CV free, or send a hiring enquiry.",
   applicationName: "Jobboard300",
-  openGraph: { type: "website", url: siteUrl, siteName: "Jobboard300", locale: "en_IN", title: "Jobboard300 | Jobs and recruitment in Kolkata", description: "Find IT and office jobs, or hire through a recruiter who screens every candidate. A recruitment consultancy in Kolkata. Free for job seekers.", images: ["/images/career-conversation.webp"] },
-  twitter: { card: "summary_large_image", title: "Jobboard300 | Jobs and recruitment in Kolkata", description: "Jobs for professionals and screened shortlists for employers, from a recruitment consultancy in Kolkata. Free for job seekers.", images: ["/images/career-conversation.webp"] },
+  openGraph: { type: "website", url: siteUrl, siteName: "Jobboard300", locale: "en_IN", title: "Jobboard300 | Jobs and recruitment in Bengaluru", description: "Accounts, sales and customer support jobs in Bengaluru, and recruiter-screened shortlists for employers. Free for job seekers.", images: ["/images/career-conversation.webp"] },
+  twitter: { card: "summary_large_image", title: "Jobboard300 | Jobs and recruitment in Bengaluru", description: "Accounts, sales and customer support jobs in Bengaluru, and recruiter-screened shortlists for employers. Free for job seekers.", images: ["/images/career-conversation.webp"] },
   robots: { index: !DEMO_MODE, follow: !DEMO_MODE, googleBot: { index: !DEMO_MODE, follow: !DEMO_MODE, "max-image-preview": "large" } },
   icons: {
     icon: [{ url: "/favicon.ico", sizes: "any" }, { url: "/icon-192.png", type: "image/png", sizes: "192x192" }],

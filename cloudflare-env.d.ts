@@ -12,6 +12,8 @@ declare namespace Cloudflare {
     /** Transactional email: provider API key and sender address for portal verification and notices. */
     MAIL_API_KEY?: string;
     MAIL_FROM?: string;
+    /** "brevo" (free, recommended), "resend" (free) or "zeptomail" (default). */
+    MAIL_PROVIDER?: string;
     /** Optional override of the ZeptoMail endpoint (for example the India data-centre host). */
     MAIL_API_URL?: string;
     /** "true" opens portal registration in production (after legal sign-off). */

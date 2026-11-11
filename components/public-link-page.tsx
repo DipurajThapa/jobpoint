@@ -2,7 +2,7 @@
 // Pages opened from a one-time link sent to a candidate: an invited test, or the
 // commitment they accept when an offer is made. No account is needed.
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/app-link";
 import { useCallback, useEffect, useState } from "react";
 import TestRunner, { type Step } from "./test-runner";
 

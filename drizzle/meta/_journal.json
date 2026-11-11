@@ -169,6 +169,13 @@
       "when": 1795226900000,
       "tag": "0023_open_audit_items",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795230500000,
+      "tag": "0024_pilot_evidence",
+      "breakpoints": true
     }
   ]
 }

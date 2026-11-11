@@ -61,6 +61,8 @@ export async function notifyCandidate(db: Db, candidateId: string, kind: string,
     db.prepare("INSERT INTO messages (id, recipient_kind, recipient_id, channel, kind, title, body, link, created_at) VALUES (?, 'candidate', ?, 'inbox', ?, ?, ?, ?, ?)").bind(newId(), candidateId, kind, title.slice(0, 160), body.slice(0, 1200), path, at),
     db.prepare("INSERT INTO messages (id, channel, recipient_kind, recipient_id, sender_scope, kind, body, status, status_detail, created_at) VALUES (?, 'whatsapp', 'candidate', ?, ?, ?, ?, ?, ?, ?)")
       .bind(newId(), candidateId, sender?.scope ?? "", kind, whatsappText.slice(0, 1200), agreed && sender ? "queued" : "skipped", !agreed ? "no WhatsApp consent from the candidate" : sender ? "waiting for a WhatsApp provider" : "no WhatsApp number configured", at),
+    // The same update by email (sent by deliverEmails in lib/portal/outbox.ts; the address is read at send time).
+    db.prepare("INSERT INTO messages (id, recipient_kind, recipient_id, channel, kind, title, body, link, status, created_at) VALUES (?, 'candidate', ?, 'email', ?, ?, ?, ?, 'queued', ?)").bind(newId(), candidateId, kind, title.slice(0, 160), body.slice(0, 1200), path, at),
   ]);
 }
 
@@ -79,7 +81,11 @@ export async function notifyStaff(db: Db, companyId: string, kind: string, title
 }
 
 export async function notifyCompany(db: Db, companyId: string, kind: string, title: string, body: string) {
-  await db.prepare("INSERT INTO messages (id, recipient_kind, recipient_id, channel, kind, title, body, created_at) VALUES (?, 'company', ?, 'inbox', ?, ?, ?, ?)").bind(newId(), companyId, kind, title.slice(0, 160), body.slice(0, 1200), nowIso()).run();
+  const at = nowIso();
+  await db.batch([
+    db.prepare("INSERT INTO messages (id, recipient_kind, recipient_id, channel, kind, title, body, created_at) VALUES (?, 'company', ?, 'inbox', ?, ?, ?, ?)").bind(newId(), companyId, kind, title.slice(0, 160), body.slice(0, 1200), at),
+    db.prepare("INSERT INTO messages (id, recipient_kind, recipient_id, channel, kind, title, body, status, created_at) VALUES (?, 'company', ?, 'email', ?, ?, ?, 'queued', ?)").bind(newId(), companyId, kind, title.slice(0, 160), body.slice(0, 1200), at),
+  ]);
 }
 
 const STAGE_TEXT: Record<string, (job: string) => [string, string]> = {

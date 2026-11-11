@@ -16,7 +16,7 @@ export default function CandidateFields({ jobId }: { jobId?: string }) {
       <label>Full name<input name="fullName" required maxLength={120} autoComplete="name" /></label>
       <label>Email<input name="email" type="email" required maxLength={254} autoComplete="email" /></label>
       <label>Mobile number <span className="label-note">with country code if you want WhatsApp updates</span><input name="phone" type="tel" required maxLength={30} autoComplete="tel" placeholder="+91" /></label>
-      <label>Where you would like to work <span className="label-note">optional</span><input name="location" maxLength={100} placeholder="e.g. Kolkata" /></label>
+      <label>Where you would like to work <span className="label-note">optional</span><input name="location" maxLength={100} placeholder="e.g. Bengaluru" /></label>
       <label className="full-field">Your CV <span className="label-note">PDF or DOCX with selectable text, up to 5 MB. We read your experience, skills and education from it.</span><input name="resume" type="file" required accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /></label>
       <label className="consent full-field"><input name="declaration" type="checkbox" value="yes" required /> <span>I am 18 or older and I accept the <a href="/terms/job-seekers" target="_blank" rel="noopener noreferrer">terms for job seekers</a>.</span></label>
       <label className="consent full-field"><input name="consent" type="checkbox" value="yes" required /> <span>{general ? WEBSITE_FORM.dataGeneral : WEBSITE_FORM.dataJob} <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy notice</a>.</span></label>
