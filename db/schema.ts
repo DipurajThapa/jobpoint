@@ -234,3 +234,41 @@ export const blogAssets = sqliteTable("blog_assets", {
   createdAt: text("created_at").notNull(),
   createdBy: text("created_by").notNull(),
 });
+
+// Editorial intelligence is human-reviewed; no status in these tables authorises publication.
+export const intelligenceSources = sqliteTable("intelligence_sources", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  url: text("url").notNull().unique(),
+  category: text("category").notNull(),
+  coverage: text("coverage").notNull().default("India"),
+  feedUrl: text("feed_url"),
+  reliability: text("reliability").notNull().default("unreviewed"),
+  reviewNotes: text("review_notes").notNull().default(""),
+  lastCheckedAt: text("last_checked_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+export const intelligenceOpportunities = sqliteTable("intelligence_opportunities", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  summary: text("summary").notNull().default(""),
+  audience: text("audience").notNull().default("Both"),
+  category: text("category").notNull().default("Employment news"),
+  priority: text("priority").notNull().default("medium"),
+  status: text("status").notNull().default("idea"),
+  primaryUrl: text("primary_url").notNull().default(""),
+  corroborationUrl: text("corroboration_url").notNull().default(""),
+  evidenceNotes: text("evidence_notes").notNull().default(""),
+  sourceId: text("source_id").references(() => intelligenceSources.id, { onDelete: "set null" }),
+  blogSlug: text("blog_slug"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  reviewedBy: text("reviewed_by"),
+});
+export const blogEngagementDaily = sqliteTable("blog_engagement_daily", {
+  day: text("day").notNull(),
+  slug: text("slug").notNull(),
+  event: text("event").notNull(),
+  count: integer("count").notNull().default(0),
+}, (table) => [primaryKey({ columns: [table.day, table.slug, table.event] })]);
