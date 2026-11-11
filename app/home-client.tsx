@@ -1,7 +1,7 @@
 "use client";
 
 import { DEMO_MODE } from "@/lib/demo";
-import PublicEnquiryDialog from "@/components/public-enquiry-dialog";
+import { useRegistration } from "@/components/registration-provider";
 import { faqs } from "@/lib/faqs";
 import { CONTACT, RECRUITMENT } from "@/lib/site";
 import Image from "next/image";
@@ -9,12 +9,12 @@ import Link from "@/components/app-link";
 import Icon from "@/components/icon";
 import PublicHeader from "@/components/public-header";
 import PublicFooter from "@/components/public-footer";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
-type Modal = "candidate" | "employer" | null;
+
 
 export default function HomeClient() {
-  const [modal, setModal] = useState<Modal>(null);
+  const setModal = useRegistration();
   useEffect(() => { const els = document.querySelectorAll(".reveal"); const observer = new IntersectionObserver(items => items.forEach(item => { if (item.isIntersecting) { item.target.classList.add("is-visible"); observer.unobserve(item.target); } }), { threshold: .12 }); els.forEach(el => observer.observe(el)); return () => observer.disconnect(); }, []);
 
   return <>
@@ -32,6 +32,6 @@ export default function HomeClient() {
       <section className="contact-band" id="contact"><div className="container contact-content reveal"><span className="eyebrow">CONTACT JOBBOARD300</span><h2>Looking for a job, or hiring for one?</h2><p>Job seekers: upload your CV, free. Employers: send your hiring requirements for review.</p><div><button className="button" onClick={() => setModal("candidate")}>I’m looking for work <Icon name="north_east" /></button><button className="button button-quiet" onClick={() => setModal("employer")}>I’m hiring <Icon name="north_east" /></button></div><p className="contact-direct">Or reach us directly: <a href={CONTACT.phoneHref}>{CONTACT.phone}</a> · <a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a></p></div></section>
     </main>
     <PublicFooter onCandidate={() => { setModal("candidate"); }} onEmployer={() => { setModal("employer"); }} />
-    {modal && <PublicEnquiryDialog type={modal} onClose={() => setModal(null)} />}
+
   </>;
 }

@@ -3,12 +3,12 @@
 // home page so the design, theme and voice stay consistent.
 import Image from "next/image";
 import Link from "@/components/app-link";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { DEMO_MODE } from "@/lib/demo";
 import Icon from "./icon";
 import PublicHeader from "./public-header";
 import PublicFooter from "./public-footer";
-import PublicEnquiryDialog from "./public-enquiry-dialog";
+import { useRegistration } from "./registration-provider";
 
 export type Landing = {
   audience: "candidate" | "employer";
@@ -22,10 +22,10 @@ export type Landing = {
 };
 
 export default function LandingPage({ page }: { page: Landing }) {
-  const [open, setOpen] = useState(false);
+  const register = useRegistration();
   useEffect(() => { const els = document.querySelectorAll(".reveal"); const observer = new IntersectionObserver(items => items.forEach(item => { if (item.isIntersecting) { item.target.classList.add("is-visible"); observer.unobserve(item.target); } }), { threshold: .12 }); els.forEach(el => observer.observe(el)); return () => observer.disconnect(); }, []);
   const employer = page.audience === "employer", cta = DEMO_MODE ? "Preview the form" : page.cta;
-  const openEnquiry = () => { if (employer) document.getElementById("hiring-enquiry")?.scrollIntoView({ behavior: "smooth" }); else setOpen(true); };
+  const openEnquiry = () => register(page.audience);
   return <div className={`theme-wrap ${employer ? "theme-company" : "theme-candidate"}`}>
     <PublicHeader audience={employer ? "employer" : "candidate"} />
     <main id="page-top">
@@ -36,11 +36,11 @@ export default function LandingPage({ page }: { page: Landing }) {
         <div className="faq-list reveal">{page.terms.rows.map(([name, text]) => <details key={name} open><summary>{name}<Icon name="add" /></summary><p>{text}</p></details>)}</div>
         <p className="privacy-note"><Link className="text-link" href={page.terms.link.href}>{page.terms.link.label} <Icon name="north_east" /></Link></p></div></section>
       <section className="section services-section" id="page-more"><div className="container"><div className="section-heading reveal"><div><span className="eyebrow">{page.extra.eyebrow}</span><h2>{page.extra.title[0]}<br />{page.extra.title[1]}</h2></div><p>{page.extra.intro}</p></div><div className={`steps-grid ${employer ? "" : "role-cards-grid"}`}>{page.extra.cards.map((c, i) => <article className="step reveal" key={c.title}><span>0{i + 1}</span><h3>{c.title}</h3><p>{c.text}</p></article>)}</div></div></section>
-      {employer && <section className="section employer-enquiry-section" id="hiring-enquiry"><div className="container employer-enquiry-grid"><div className="employer-enquiry-intro"><span className="eyebrow">HIRING ENQUIRY</span><h2>Tell us about the role you need to fill.</h2><p>Share your IT or non-IT hiring requirements. No account or full job description is needed to send an enquiry.</p><p>Already working with us? <Link className="text-link" href="/portal/sign-in?kind=company">Employer sign in <Icon name="arrow_forward" /></Link></p></div><PublicEnquiryDialog type="employer" inline onClose={() => {}} /></div></section>}
+      {employer && <section className="section employer-enquiry-section" id="hiring-enquiry"><div className="container employer-enquiry-grid"><div className="employer-enquiry-intro"><span className="eyebrow">HIRING ENQUIRY</span><h2>Tell us about the role you need to fill.</h2><p>Share your IT or non-IT hiring requirements. Create your business account and send an enquiry in one form. You can also request a meeting.</p><p>Already working with us? <Link className="text-link" href="/portal/sign-in?kind=company">Employer sign in <Icon name="arrow_forward" /></Link></p></div><div className="enquiry-panel"><h3>Start your hiring enquiry</h3><p>Share your contact details, hiring needs and preferred meeting time.</p><button className="button" onClick={openEnquiry}>Create business account <Icon name="north_east" /></button></div></div></section>}
       <section className="section faq-section" id="page-faq"><div className="container faq-grid"><div className="faq-title reveal"><span className="eyebrow">FREQUENTLY ASKED QUESTIONS</span><h2>{employer ? "Questions employers" : "Questions job seekers"}<br />ask us.</h2><p>{employer ? "Not covered here? Include your question in the hiring enquiry." : "Not covered here? The terms for job seekers and the privacy notice have the detail."}</p></div><div className="faq-list reveal">{page.faqs.map(({ question, answer }) => <details key={question}><summary>{question}<Icon name="add" /></summary><p>{answer}</p></details>)}</div></div></section>
       <section className="contact-band" id="page-contact"><div className="container contact-content reveal"><span className="eyebrow">{employer ? "FOR EMPLOYERS" : "FOR JOB SEEKERS"}</span><h2>{page.closing.title}</h2><p>{page.closing.text}</p><div><button className="button" onClick={openEnquiry}>{cta} <Icon name="north_east" /></button><Link className="button button-quiet" href={employer ? "/job-seekers" : "/employers"}>{employer ? "I’m looking for work" : "I’m hiring"} <Icon name="north_east" /></Link></div></div></section>
     </main>
-    <PublicFooter onCandidate={employer ? undefined : () => setOpen(true)} onEmployer={employer ? openEnquiry : undefined} />
-    {open && !employer && <PublicEnquiryDialog type={page.audience} onClose={() => setOpen(false)} />}
+    <PublicFooter />
+
   </div>;
 }

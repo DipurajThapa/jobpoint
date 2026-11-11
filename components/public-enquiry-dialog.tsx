@@ -53,11 +53,9 @@ export default function PublicEnquiryDialog({ type, onClose, inline = false }: P
     const form = event.currentTarget;
     try {
       const candidate = type === "candidate";
-      const response = await fetch(candidate ? "/api/applications" : "/api/employer-enquiries", {
-        method: "POST",
-        body: candidate ? withArrival(new FormData(form)) : JSON.stringify({ ...attributionFields(), ...Object.fromEntries(new FormData(form).entries()) }),
-        headers: candidate ? undefined : { "content-type": "application/json" },
-      });
+      const payload = withArrival(new FormData(form));
+      payload.set("kind", candidate ? "candidate" : "company");
+      const response = await fetch("/api/portal/registration", { method: "POST", body: payload });
       const data = await response.json().catch(() => ({})) as { error?: string; title?: string; message?: string };
       if (!response.ok) {
         // A call time taken while the form was open: fetch the times again.
@@ -80,11 +78,11 @@ export default function PublicEnquiryDialog({ type, onClose, inline = false }: P
     <section ref={dialog} className={inline ? "enquiry-panel" : "modal"} role={inline ? "region" : "dialog"} aria-modal={inline ? undefined : true} aria-labelledby={titleId} aria-describedby={introId}>
       {!inline && <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>}
       <span className="eyebrow">{candidate ? "FOR JOB SEEKERS" : "FOR EMPLOYERS"}</span>
-      <h2 id={titleId}>{candidate ? "Register your CV for relevant roles" : "Tell us about your hiring need"}</h2>
-      {done ? <><p id={introId} className="visually-hidden">{done.title}</p><FormConfirmation title={done.title} message={done.message} onClose={inline ? undefined : onClose} /></> : <>
-      <p id={introId}>{DEMO_MODE ? "Preview the information we would request when recruitment intake opens." : candidate ? "Register your CV free. Send your CV and how to reach you; we read your skills and experience from the CV. A recruiter reviews applications for the roles we are recruiting for and may contact you about a relevant opening. Registering does not guarantee contact, an interview or a job." : "A few lines are enough; you do not need a job description. Choose a time for a call if you like. A consultant will go through the role with you, and nothing is charged until a person you choose joins."}</p>
+      <h2 id={titleId}>{candidate ? "Create your candidate account" : "Create your business account"}</h2>
+      {done ? <><p id={introId} className="visually-hidden">{done.title}</p><FormConfirmation title={done.title} message={done.message} onClose={inline ? undefined : onClose} /><p><a className="text-link" href={`/portal/sign-in?kind=${candidate ? "candidate" : "company"}`}>Go to sign in or resend verification email</a></p></> : <>
+      <p id={introId}>{DEMO_MODE ? "Preview the information we would request when recruitment intake opens." : candidate ? "Create your free login, upload your CV and choose your consent preferences in this form. Verify your email to access your candidate dashboard. Registration does not guarantee contact, an interview or a job." : "Create your business login and share your IT or non-IT hiring needs in this form. You can request a meeting too. Verify your email to access your dashboard; hiring access is subject to company review."}</p>
       {/* method="post" so that a press before the script has loaded never puts the details in the address bar. */}
-      <form method="post" action={candidate ? "/api/applications" : "/api/employer-enquiries"} encType={candidate ? "multipart/form-data" : undefined} onSubmit={submit}>
+      <form method="post" action="/api/portal/registration" encType="multipart/form-data" onSubmit={submit}>
         <DemoFormNotice />
         <fieldset className="demo-fields" disabled={DEMO_MODE}>
           {candidate ? <CandidateFields /> : <div className="public-form">
@@ -93,6 +91,7 @@ export default function PublicEnquiryDialog({ type, onClose, inline = false }: P
             <div className="form-grid">
               <label>Your name<input name="contactName" required maxLength={120} autoComplete="name" /></label>
               <label>Company<input name="company" required maxLength={160} autoComplete="organization" /></label>
+              <label className="full-field">Registered legal name<input name="legalName" required maxLength={160} autoComplete="organization" /></label>
               <label>Work email<input name="email" type="email" required maxLength={254} autoComplete="email" /></label>
               <label>Phone<input name="phone" type="tel" required maxLength={30} autoComplete="tel" placeholder="+91" /><span className="label-note">Include a country code for WhatsApp messages</span></label>
             </div>
@@ -112,11 +111,17 @@ export default function PublicEnquiryDialog({ type, onClose, inline = false }: P
               <label className="consent full-field"><input name="whatsappConsent" type="checkbox" value="yes" /> <span>You may also message me on WhatsApp at this number. <span className="label-note">(optional)</span></span></label>
             </div>
           </div>}
-          {!DEMO_MODE && <button className="button" disabled={busy}>{busy ? "Sending…" : candidate ? "Upload my CV" : "Send enquiry"} <Icon name="north_east" /></button>}
+          <div className="public-form">
+            <div className="form-section-heading"><Icon name="lock" /><div><h3>Your login</h3><p>Use this email and password to sign in after verification.</p></div></div>
+            <div className="form-grid"><label className="full-field">Create a password<input name="password" type="password" required minLength={12} maxLength={200} autoComplete="new-password" /><span className="label-note">At least 12 characters. Use a unique password.</span></label></div>
+          </div>
+          <input type="hidden" name="kind" value={candidate ? "candidate" : "company"} />
+          {!DEMO_MODE && <button className="button" disabled={busy}>{busy ? "Sending…" : candidate ? "Create account and upload CV" : "Create account and send enquiry"} <Icon name="north_east" /></button>}
         </fieldset>
         {error && <p className="form-message form-error" role="alert">{error}</p>}
       </form>
-      <p className="privacy-inline">{DEMO_MODE ? "Live intake opens after the company completes its launch checks." : candidate ? <>Registering is free, and payment never affects who is shortlisted. You get a reference number on screen. To correct your details or replace your CV later, use the <a href="/privacy#privacy-request">privacy request form</a>.</> : <>Nothing is charged for an enquiry, a call or a shortlist. You get a reference number on screen. Your enquiry is submitted for review; response times vary.</>}</p>
+      <p className="privacy-inline">Already registered? <a href={`/portal/sign-in?kind=${candidate ? "candidate" : "company"}`}>Sign in</a> or <a href="/portal/forgot">recover account access</a>.</p>
+      <p className="privacy-inline">{DEMO_MODE ? "Live intake opens after the company completes its launch checks." : candidate ? <>Registering is free, and payment never affects who is shortlisted. After email verification, manage your CV and consent in your dashboard.</> : <>Nothing is charged for an enquiry, a call or a shortlist. Your enquiry is linked to your business account for review. Meeting requests need confirmation; response times vary.</>}</p>
       </>}
     </section>
   </div>;

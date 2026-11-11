@@ -15,37 +15,14 @@ const withNodeEnv = async (value, fn) => {
   try { return await fn(); } finally { process.env.NODE_ENV = before; }
 };
 
-test("sign-up answers the same whether or not the email already has an account", async () => {
+test("retired signup endpoint cannot create disconnected accounts or disclose existing emails", async () => {
   const w = await world();
-  globalThis.__TEST_ENV__.PORTAL_OPEN = "true";
-  const body = email => ({ kind: "candidate", email, password: PASSWORD, name: "New Person", phone: "9830099999", city: "Kolkata", adult: true, terms: true });
-  const fresh = await post("register", body("brand.new@person.example"));
-  const taken = await post("register", body(w.asha.email));
-  const takenAgain = await post("register", body("brand.new@person.example"));
-  assert.equal(fresh.status, 201);
-  assert.equal(taken.status, fresh.status);
-  assert.deepEqual(taken.json, fresh.json, "the reply reveals that the address is registered");
-  assert.deepEqual(takenAgain.json, fresh.json);
-  assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM portal_accounts WHERE email = ?").bind(w.asha.email).first()).n, 1);
-  assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM portal_accounts WHERE email = 'brand.new@person.example'").first()).n, 1);
-  // The existing account is untouched: same password still works, nothing was reset.
-  assert.equal((await post("sign-in", { email: w.asha.email, password: PASSWORD })).status, 200);
-  // Company sign-up gives the same neutral reply for a taken address.
-  const co = await post("register", { kind: "company", email: w.A.email, password: PASSWORD, companyName: "X", legalName: "X Pvt Ltd", terms: true });
-  assert.deepEqual(co.json, fresh.json);
-});
-
-test("sign-up stays closed in production until it is opened, and needs the stated agreements", async () => {
-  await world();
-  const body = { kind: "candidate", email: "closed@person.example", password: PASSWORD, name: "x", adult: true, terms: true };
-  assert.equal((await post("register", body)).status, 503);
-  globalThis.__TEST_ENV__.PORTAL_OPEN = "true";
-  assert.equal((await post("register", { ...body, adult: false })).json.code, "AGE");
-  assert.equal((await post("register", { ...body, terms: false })).json.code, "TERMS");
-  assert.equal((await post("register", { ...body, password: "short" })).json.code, "WEAK_PASSWORD");
-  assert.equal((await post("register", { ...body, email: "not-an-email" })).json.code, "INVALID_EMAIL");
-  assert.equal((await post("register", body)).status, 201);
-  assert.equal((await post("sign-in", { email: body.email, password: PASSWORD })).json.code, "UNVERIFIED", "an unverified account must not be able to sign in");
+  for (const email of ["new@person.example", w.asha.email, w.A.email]) {
+    const reply = await post("register", { email, password: PASSWORD, kind: "candidate" });
+    assert.equal(reply.status, 410);
+    assert.equal(reply.json.code, "USE_REGISTRATION_FORM");
+  }
+  assert.equal((await w.db.prepare("SELECT COUNT(*) AS n FROM portal_accounts WHERE email = 'new@person.example'").first()).n, 0);
 });
 
 test("sign-in and password reset do not reveal which emails have accounts", async () => {
