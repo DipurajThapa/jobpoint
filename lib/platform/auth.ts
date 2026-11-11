@@ -1,3 +1,4 @@
+import { readLimitedForm, readLimitedJson } from "../intake-security";
 import { env } from "cloudflare:workers";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -226,10 +227,10 @@ export async function readInput(request: Request): Promise<{ data: Record<string
   const type = request.headers.get("content-type") ?? "";
   try {
     if (type.includes("application/x-www-form-urlencoded") || type.includes("multipart/form-data")) {
-      const fields = await request.formData();
+      const fields = await readLimitedForm(request, 16000);
       return { data: Object.fromEntries([...fields.entries()].filter(([, v]) => typeof v === "string")), form: true };
     }
-    const data = await request.json();
+    const data = await readLimitedJson(request, 16000);
     return data && typeof data === "object" ? { data: data as Record<string, unknown>, form: false } : null;
   } catch { return null; }
 }

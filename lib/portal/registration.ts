@@ -1,3 +1,5 @@
+import { cvReviewReasons } from "../cv-quality";
+import { validateContact, validateHiringNeed } from "../intake-security";
 // Public registration is one transaction: identity, profile, intake and consent
 // either all exist together or none do. Email delivery happens after commit.
 import { hashPassword, passwordProblem } from "../platform/crypto";
@@ -27,6 +29,8 @@ export async function registerPublic(db: Db, bucket: RegistrationBucket | null, 
   const name = get(candidate ? "fullName" : "contactName", 120), password = String(form.get("password") ?? "");
   if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || phone.replace(/\D/g, "").length < 7) throw new PortalError("DETAILS", "Enter your name, email and phone number.");
   if (form.get("consent") !== "yes" || form.get(candidate ? "declaration" : "terms") !== "yes") throw new PortalError("CONSENT", "Tick the two required consent and terms boxes.");
+  validateContact(name, email, phone);
+  if (!candidate) validateHiringNeed(get("company", 160), get("details", 1800));
   const problem = passwordProblem(password, email);
   if (problem) throw new PortalError("PASSWORD", problem);
   const whatsapp = form.get("whatsappConsent") === "yes";
@@ -46,14 +50,22 @@ export async function registerPublic(db: Db, bucket: RegistrationBucket | null, 
     try { analysed = await analyseCvWithText({ bytes, fileName, knownName: name, now: now() }); }
     catch (error) { throw new PortalError("CV", error instanceof CvReadError ? error.message : "The CV could not be read. Upload a valid PDF or DOCX."); }
     const profile = enrichProfile(analysed.profile, analysed.text, now());
-    const parseStatus = analysed.text.replace(/\s/g, "").length >= 200 && profile.parse.confidence >= .5 ? "parsed" : "needs_review";
+    const review = cvReviewReasons(profile, analysed.text, email);
+    const duplicates = (await db.prepare("SELECT DISTINCT c.id FROM cvs v JOIN candidates c ON c.id = v.candidate_id WHERE v.sha256 = ? AND c.status NOT IN ('deleted','merged') LIMIT 10").bind(profile.source.sha256).all<{ id: string }>()).results;
+    if (duplicates.length) review.push("The same CV file appears under another candidate: check ownership before sharing.");
+    profile.parse.warnings.push(...review);
+    const parseStatus = !review.length && profile.parse.confidence >= .5 ? "parsed" : "needs_review";
+    for (const duplicate of duplicates) {
+      const [a, b] = [duplicate.id, entityId].sort();
+      statements.push(insert(db, "duplicate_flags", { id: newId(), kind: "cv", a_id: a, b_id: b, signal: "same_file", status: "open", created_at: at }));
+    }
     const cvId = newId(), key = `portal-cv/${entityId}/${cvId}`, location = get("location", 100);
     const type = analysed.fileType === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     storage = { key, bytes, type };
     const share = form.get("shareConsent") === "yes";
     statements.push(
       insert(db, "candidates", { id: entityId, account_id: accountId, display_name: name, email, phone, preferred_cities: JSON.stringify(location ? [location] : []), dedupe_email_hash: await sha256Hex(normEmail(email)), dedupe_phone_hash: normPhone(phone).length === 10 ? await sha256Hex(normPhone(phone)) : "", status: parseStatus === "parsed" ? "active" : "review", whatsapp_consent_at: whatsapp ? at : null, whatsapp_consent_version: whatsapp ? `${websiteNoticeVersion(WEBSITE_FORM_VERSION)}: ${WEBSITE_FORM.whatsapp}` : "", last_active_at: at, created_at: at }),
-      insert(db, "applications", { id: intakeId, full_name: name, email, phone, location, experience: "", resume_key: key, resume_name: fileName, resume_type: type, resume_size: file.size, consent: 1, share_consent: +share, future_consent: 1, whatsapp_consent: +whatsapp, ...attribution, terms_version: CANDIDATE_TERMS_VERSION, privacy_version: WEBSITE_FORM_VERSION, consent_at: at, updated_at: at }),
+      insert(db, "applications", { id: intakeId, full_name: name, email, phone, location, experience: "", recruiter_notes: review.join("\n"), resume_key: key, resume_name: fileName, resume_type: type, resume_size: file.size, consent: 1, share_consent: +share, future_consent: 1, whatsapp_consent: +whatsapp, ...attribution, terms_version: CANDIDATE_TERMS_VERSION, privacy_version: WEBSITE_FORM_VERSION, consent_at: at, updated_at: at }),
       insert(db, "candidate_sources", { id: newId(), candidate_id: entityId, kind: "website_application", ref_id: intakeId, created_at: at }),
       insert(db, "cvs", { id: cvId, candidate_id: entityId, r2_key: key, file_name: fileName, file_type: analysed.fileType, size: file.size, sha256: profile.source.sha256, text_fingerprint: minhash(analysed.text), parse_status: parseStatus, parse_confidence: profile.parse.confidence, is_primary: 1, created_at: at }),
       insert(db, "cv_profiles", { cv_id: cvId, version: 1, data: JSON.stringify(profile), source: "parser", created_at: at }),

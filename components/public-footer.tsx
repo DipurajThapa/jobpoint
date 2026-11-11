@@ -33,6 +33,7 @@ export default function PublicFooter({ onCandidate, onEmployer }: { onCandidate?
       </div>
       <div><b>Jobboard300</b>
         <Link href="/#about">About us</Link>
+        <Link href="/blog">Blog</Link>
         <Link href="/#services">Recruitment services</Link>
         <Link href="/#faq">FAQs</Link>
         <Link href="/#contact">Contact</Link>

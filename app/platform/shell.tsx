@@ -19,6 +19,7 @@ export default async function Shell({ user, current, children }: Props) {
         {tools.length > 0 && <span className="wp-nav-label">TOOLS</span>}
         {tools.map(t => <a key={t.key} href={t.href}><Icon name={t.icon} />{t.name}</a>)}
         <span className="wp-nav-label">ACCOUNT</span>
+        {user.role === "admin" && link("/admin/blog", "article", "Blog CMS")}
         {user.role === "admin" && link("/platform/admin", "manage_accounts", "Team access")}
         {user.role === "admin" && link("/platform/admin/operations", "settings", "Operations")}
         {link("/platform/account", "person", "My account")}

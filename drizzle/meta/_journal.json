@@ -176,6 +176,13 @@
       "when": 1795230500000,
       "tag": "0024_pilot_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1795230500001,
+      "tag": "0025_blog_cms",
+      "breakpoints": true
     }
   ]
 }

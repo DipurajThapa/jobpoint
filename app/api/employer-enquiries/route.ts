@@ -1,3 +1,5 @@
+import { readLimitedJson, validateContact, validateHiringNeed, limitContact } from "@/lib/intake-security";
+import { PortalError } from "@/lib/portal/db";
 import { EMPLOYER_TERMS_VERSION } from "@/lib/terms";
 import { DEMO_MODE, demoSubmissionResponse } from "@/lib/demo";
 import { env } from "cloudflare:workers";
@@ -28,7 +30,7 @@ export async function POST(request: Request) {
   try {
     if (!sameOrigin(request)) return errorJson("Cross-site submissions are not accepted.", 403);
     if (Number(request.headers.get("content-length") ?? 0) > 24_000) return errorJson("The request is too large.", 413);
-    const body = await request.json() as Record<string, unknown>;
+    const body = await readLimitedJson(request, 24000);
     if (clean(body.website, 200)) return json({ title: "Thank you. Your enquiry is with us.", message: "Thank you. Your hiring enquiry has been received." }, 201);
     if (!await limitSubmission(request, "employer")) return errorJson("Too many requests. Please try again later.", 429);
     const contactName = clean(body.contactName, 120), company = clean(body.company, 160), email = clean(body.email, 254).toLowerCase();
@@ -39,6 +41,9 @@ export async function POST(request: Request) {
     if (!contactName || !company || !validEmail(email) || phone.replace(/\D/g, "").length < 7 || !details) return errorJson("Please give your name, company, work email and phone number, and tell us what you are looking for.");
     if (body.consent !== "yes" || body.terms !== "yes") return errorJson("Please tick the two required boxes: that we may contact you, and that you accept the terms for employers.");
     if (whatsappConsent && phone.replace(/\D/g, "").length < 10) return errorJson("To get WhatsApp messages, enter your full mobile number (10 digits, or with the country code), or untick the WhatsApp box.");
+    validateContact(contactName, email, phone);
+    validateHiringNeed(company, details);
+    await limitContact(env.DB!, email, phone);
     const meetingAt = clean(body.meetingAt, 40) || null;
     if (meetingAt && !(await freeSlots().catch(() => callSlots())).includes(meetingAt)) return errorJson("That time is no longer free. Please choose another time for the call.", 409);
     const id = crypto.randomUUID(), at = new Date().toISOString();
@@ -59,5 +64,5 @@ export async function POST(request: Request) {
     try { await getDb().update(employerEnquiries).set({ ackEmail: emailed, ackWhatsapp: !whatsappConsent ? "no_consent" : sender ? "queued" : "not_configured" }).where(eq(employerEnquiries.id, id)); }
     catch (error) { console.error("enquiry acknowledgement record failed", id, error instanceof Error ? error.message : error); }
     return json({ reference, emailed: emailed === "sent", meetingAt, ...confirmation("enquiry", { email, reference, emailed, meetingAt }) }, 201);
-  } catch { return errorJson("We couldn't submit your enquiry. Please try again in a moment.", 503); }
+  } catch (error) { if (error instanceof PortalError) return errorJson(error.message, error.status); return errorJson("We couldn't submit your enquiry. Please try again in a moment.", 503); }
 }

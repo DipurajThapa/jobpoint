@@ -1,3 +1,5 @@
+import { readLimitedForm, limitContact } from "@/lib/intake-security";
+import { limitSubmission } from "@/lib/http";
 import { env } from "cloudflare:workers";
 import { DEMO_MODE, demoSubmissionResponse } from "@/lib/demo";
 import { registerPublic } from "@/lib/portal/registration";
@@ -15,9 +17,10 @@ export async function POST(request: Request) {
   try {
     const db = portalDb(), ip = await ipHash(request);
     if (!(await withinLimits(db, ip, "register")).ok) return fail("Too many registrations. Please try again later.", 429);
-    let form: FormData;
-    try { form = await request.formData(); } catch { return fail("Submit the registration form with your details and CV or hiring enquiry.", 400); }
+    if (!await limitSubmission(request, "registration")) return fail("Too many submissions. Please try again later.", 429);
+    const form = await readLimitedForm(request, 5 * 1024 * 1024 + 40000);
     if (form.get("website")) return json({ title: "Thank you", message: "Your request has been received." }, 201);
+    await limitContact(db, String(form.get("email") ?? "").slice(0, 254), String(form.get("phone") ?? "").slice(0, 30));
     let result;
     try { result = await registerPublic(db, env.BUCKET ?? null, form, ip); }
     catch (error) {

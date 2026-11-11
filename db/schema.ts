@@ -210,3 +210,27 @@ export const emailKitSnapshots = sqliteTable("email_kit_snapshots", {
   createdAt: text("created_at").notNull(),
   createdBy: text("created_by").notNull(),
 });
+
+// The draft and live snapshots are separate so editing never changes a published article.
+export const blogPosts = sqliteTable("blog_posts", {
+  id: text("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  draftJson: text("draft_json").notNull(),
+  publishedJson: text("published_json"),
+  revision: integer("revision").notNull().default(1),
+  publishedAt: text("published_at"),
+  updatedAt: text("updated_at").notNull(),
+  publishedUpdatedAt: text("published_updated_at"),
+  updatedBy: text("updated_by").notNull(),
+});
+export const blogAssets = sqliteTable("blog_assets", {
+  id: text("id").primaryKey(),
+  r2Key: text("r2_key").notNull(),
+  mime: text("mime").notNull(),
+  size: integer("size").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  description: text("description").notNull(),
+  createdAt: text("created_at").notNull(),
+  createdBy: text("created_by").notNull(),
+});

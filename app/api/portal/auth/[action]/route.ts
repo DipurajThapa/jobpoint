@@ -1,3 +1,5 @@
+import { readLimitedJson } from "@/lib/intake-security";
+import { sha256Hex } from "@/lib/portal/db";
 import { portalDb, json, fail, failFrom, sameOrigin, ipHash, sessionCookie, clearCookie, tokenFrom, NO_STORE } from "@/lib/portal/session";
 import { endPortalSession, issuePortalToken, redeemToken, signIn } from "@/lib/portal/accounts";
 import { mergeVerifiedDuplicates } from "@/lib/portal/website";
@@ -13,7 +15,10 @@ export async function POST(request: Request, context: { params: Promise<{ action
   const { action } = await context.params;
   const db = portalDb(), ip = await ipHash(request);
   try {
-    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const body = action === "sign-out" && !request.body ? {} : await readLimitedJson(request, 16000);
+    const emailHash = await sha256Hex(str(body.email, 254).toLowerCase());
+    if (["resend-verification", "reset-request"].includes(action) && !(await withinLimits(db, emailHash, "email_link")).ok) return fail("Too many email requests. Please try again later.", 429, "RATE_LIMIT");
+    if (action === "sign-in" && !(await withinLimits(db, emailHash, "auth_email")).ok) return fail("Too many sign-in attempts. Please try again later.", 429, "RATE_LIMIT");
     const origin = new URL(request.url).origin;
     if (action === "register") return fail("Use the registration pop-up to create your account with your CV or hiring enquiry.", 410, "USE_REGISTRATION_FORM");
     if (action === "resend-verification") {

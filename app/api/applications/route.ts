@@ -1,3 +1,6 @@
+import { analyseCvWithText, CvReadError } from "@/lib/ats/pipeline";
+import { readLimitedForm, validateContact, limitContact } from "@/lib/intake-security";
+import { PortalError } from "@/lib/portal/db";
 import { CANDIDATE_TERMS_VERSION } from "@/lib/terms";
 import { DEMO_MODE, demoSubmissionResponse } from "@/lib/demo";
 import { env } from "cloudflare:workers";
@@ -27,7 +30,7 @@ export async function POST(request: Request) {
     const length = Number(request.headers.get("content-length") ?? 0);
     if (length > maxResumeBytes + 40_000) return errorJson("The upload exceeds the 5 MB limit.", 413);
     if (!await limitSubmission(request, "application")) return errorJson("Too many requests. Please try again later.", 429);
-    const form = await request.formData();
+    const form = await readLimitedForm(request, 5 * 1024 * 1024 + 40000);
     if (clean(form.get("website"), 200)) return json({ message: "Thank you. Your details have been received." }, 201);
     const fullName = clean(form.get("fullName"), 120), email = clean(form.get("email"), 254).toLowerCase();
     const phone = clean(form.get("phone"), 30), location = clean(form.get("location"), 100);
@@ -43,6 +46,8 @@ export async function POST(request: Request) {
     const agreed = form.get("consent") === "yes" && (form.get("declaration") === "yes" || (form.get("adult") === "yes" && form.get("terms") === "yes"));
     // The CV carries the experience, skills and education; the form asks only for who the person is and how to reach them.
     if (!fullName || !validEmail(email) || phone.replace(/\D/g, "").length < 7 || !agreed) return errorJson("Please give your name, email and phone number, and tick the two required boxes.");
+    validateContact(fullName, email, phone);
+    await limitContact(portalDb(), email, phone);
     // WhatsApp needs a number it can reach: ten digits, or a number with its country code.
     if (whatsappConsent && phone.replace(/\D/g, "").length < 10) return errorJson("To get WhatsApp updates, enter your full mobile number (10 digits, or with the country code), or untick the WhatsApp box.");
     if (jobId && !await isJobOpen(jobId)) return errorJson("This role is no longer accepting applications.", 410);
@@ -62,6 +67,7 @@ export async function POST(request: Request) {
       const pdf = type === "application/pdf" && file.name.toLowerCase().endsWith(".pdf") && new TextDecoder().decode(bytes.slice(0, 5)) === "%PDF-" && new TextDecoder().decode(bytes.slice(-2048)).includes("%%EOF");
       const docx = type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" && file.name.toLowerCase().endsWith(".docx") && bytes[0] === 0x50 && bytes[1] === 0x4b && new TextDecoder().decode(bytes).includes("[Content_Types].xml");
       if (!pdf && !docx) return errorJson("Upload a valid PDF or DOCX file.");
+      try { await analyseCvWithText({ bytes, fileName: file.name }); } catch (error) { return errorJson(error instanceof CvReadError ? error.message : "Upload a readable PDF or DOCX CV.", 422); }
       if (!env.BUCKET) return errorJson("CV storage is not ready. Please try again later.", 503);
       resumeKey = `resumes/${crypto.randomUUID()}`; resumeName = file.name.replace(/[\\/\r\n\0]/g, "_").slice(0, 140); resumeType = type; resumeSize = file.size;
       await env.BUCKET.put(resumeKey, bytes, { httpMetadata: { contentType: type, cacheControl: "private, no-store" } });
@@ -105,5 +111,5 @@ export async function POST(request: Request) {
       }
     } catch (error) { console.error("application acknowledgement record failed", id, error instanceof Error ? error.message : error); }
     return json({ reference, emailed: emailed === "sent", ...confirmation("application", { email, reference, emailed }) }, 201);
-  } catch { return errorJson("We couldn't submit your details. Please try again in a moment.", 503); }
+  } catch (error) { if (error instanceof PortalError) return errorJson(error.message, error.status); return errorJson("We couldn't submit your details. Please try again in a moment.", 503); }
 }
