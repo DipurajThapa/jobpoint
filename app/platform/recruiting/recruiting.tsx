@@ -67,7 +67,7 @@ export default function Recruiting() {
         <div className="pj-list">{work.changes.items.map(c => <article className="pj-note" key={c.id} style={c.isNew ? { borderLeftColor: "#14603e" } : undefined}>
           <b>{c.title}</b>{c.isNew && <span className="pj-pill strong">New</span>} <span className="pj-muted">· {c.company}{c.name ? ` · ${c.name}` : ""} · {when(c.created_at)}</span>
           {c.body && <p className="pj-muted">{c.body}</p>}
-          {c.jd_id && work.jobs.some(j => j.id === c.jd_id) && <button className="pj-link" onClick={() => { setShowClosed(true); setOpen(c.jd_id); document.getElementById("jobs")?.scrollIntoView({ behavior: "smooth" }); }}>Open the job</button>}
+          {c.jd_id && work.jobs.some(j => j.id === c.jd_id) && <button className="pj-link" onClick={() => { setShowClosed(true); setOpen(c.jd_id); document.getElementById("recruiting-jobs")?.scrollIntoView({ behavior: "smooth" }); }}>Open the job</button>}
         </article>)}</div>}
     </section>
 
@@ -77,7 +77,7 @@ export default function Recruiting() {
         <td>{j.name}</td><td>{j.jd_title} · {j.company}</td><td>{day(j.joining_date)}</td><td>{day(j.last_working_day) || "—"}</td><td>{j.competing_offers || "—"}</td><td>{j.checkpoint?.label ?? "—"}</td></tr>)}</tbody></table>
     </section>}
 
-    <section className="pj-card" id="jobs"><div className="pj-row" style={{ justifyContent: "space-between" }}><h2>Jobs</h2>
+    <section className="pj-card" id="recruiting-jobs"><div className="pj-row" style={{ justifyContent: "space-between" }}><h2>Jobs</h2>
       {work.jobs.some(j => j.status === "closed") && <label className="pj-muted"><input type="checkbox" checked={showClosed} onChange={e => setShowClosed(e.target.checked)} /> Show closed and filled jobs</label>}</div>
       {jobs.length === 0 ? <p className="pj-muted">No jobs are assigned to you or your team yet.</p> : <div className="pj-list">{jobs.map(j => <article className="pj-item" key={String(j.id)}>
         <div><b>{j.title}</b> <span className="pj-pill">{j.status === "closed" ? "closed" : j.status}</span>

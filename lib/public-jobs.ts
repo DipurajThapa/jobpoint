@@ -1,12 +1,10 @@
 import { and, desc, eq, like, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import { jobs } from "@/db/schema";
-import { localDummyListings } from "@/lib/local-dummy-jobs";
 
 /** Shared query contract for first-page vacancies and public search. */
 export async function listPublicJobs(q = "", location = "") {
-  try {
-    const db = getDb();
+  const db = getDb();
     const filters = [eq(jobs.status, "published")];
     if (location) filters.push(eq(jobs.location, location));
     if (q) {
@@ -18,13 +16,6 @@ export async function listPublicJobs(q = "", location = "") {
         .from(jobs).where(and(...filters)).orderBy(desc(jobs.featured), desc(jobs.createdAt)).limit(60),
       db.selectDistinct({ location: jobs.location }).from(jobs).where(eq(jobs.status, "published")).orderBy(jobs.location),
     ]);
-    const samples = localDummyListings(q, location);
-    const availableLocations = process.env.NODE_ENV === "development"
-      ? [...new Set([...locations.map(item => item.location), ...samples.locations])].sort()
-      : locations.map(item => item.location);
-    return { jobs: [...rows, ...samples.jobs], locations: availableLocations };
-  } catch (error) {
-    if (process.env.NODE_ENV === "development") return localDummyListings(q, location);
-    throw error;
-  }
+    // Only vacancies the owner has published. No sample or placeholder roles are ever shown.
+    return { jobs: rows, locations: locations.map(item => item.location) };
 }

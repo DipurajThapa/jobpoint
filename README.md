@@ -7,7 +7,7 @@ Brand tokens: primary `#1D4ED8`, secondary `#0A1F5C`, light accent `#93C5FD`; Go
 ## Product features
 
 - Responsive employer and candidate journeys, animated with reduced-motion support.
-- Live role search backed by D1. Only published D1 roles appear in production. Four clearly marked Dummy references appear only in local development; none are seeded into D1 or accepts applications.
+- Live role search backed by D1. Only roles the owner has published appear, in every environment. There are no sample or placeholder vacancies.
 - Public candidate application and employer enquiry forms with validation, explicit consent, honeypot and IP-hash rate limits.
 - Structured candidate fields, recruiter search, possible-duplicate flags and human-controlled application stages.
 - Mandatory PDF/DOCX CV upload (5 MB maximum), stored in private R2 and delivered only through an owner-protected admin endpoint.
@@ -137,7 +137,7 @@ Apply new files in `drizzle/` before the new code serves traffic. If the order i
 
 Working Platform: with `npm run dev` running, `npm run db:local` applies the migrations to the local D1 (`-- --reset` starts empty). Then run `USHA_STANDALONE=/path/to/Usha-3.0.html npm run check:platform`. It is a browser and API test of the whole journey with fictional data, and blocks every external request.
 
-Run `node --experimental-vm-modules scripts/check-demo.mjs` for the intake boundary (read-only in demo mode; cross-site submissions refused when live) and anonymous admin checks. Run `node --experimental-vm-modules scripts/check-local-dummy-jobs.mjs` for local-only sample vacancy behavior. Native Sites remote build validates the complete TSX bundle. Public URL access must be confirmed using Sites access settings; local tests do not prove the platform authentication boundary.
+Run `node --experimental-vm-modules scripts/check-demo.mjs` for the intake boundary (read-only in demo mode; cross-site submissions refused when live) and anonymous admin checks. Native Sites remote build validates the complete TSX bundle. Public URL access must be confirmed using Sites access settings; local tests do not prove the platform authentication boundary.
 
 ## Website audit
 
