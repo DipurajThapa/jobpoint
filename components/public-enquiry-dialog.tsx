@@ -95,7 +95,7 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
               <label>Phone<input name="phone" type="tel" required maxLength={30} autoComplete="tel" placeholder="+91" /><span className="label-note">Include a country code for WhatsApp messages</span></label>
             </div>
             <div className="form-section-heading"><Icon name="work_outline" /><div><h3>The role</h3><p>A few lines are enough to get started</p></div></div>
-            <div className="form-grid"><label className="full-field">What are you looking for?<textarea name="details" required maxLength={1800} rows={4} placeholder="For example: two accounts executives, starting next month." /></label></div>
+            <div className="form-grid"><label className="full-field">What are you looking for?<textarea name="details" required maxLength={1800} rows={4} placeholder="For example: a software developer or an accounts executive, starting next month." /></label></div>
             <div className="form-section-heading"><Icon name="event" /><div><h3>Arrange a call</h3><p>Optional, 30 minutes in India time</p></div></div>
               <fieldset className="call-picker"><legend>Choose a time <span className="label-note">A consultant confirms it or offers another</span></legend>
                 {days.length === 0 ? <p className="label-note">No times are showing right now. Send the enquiry and a consultant will contact you within two working days.</p> : <div className="form-grid">

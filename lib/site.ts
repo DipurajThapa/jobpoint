@@ -20,8 +20,8 @@ function configuredSiteUrl(): string {
  */
 export const CONTACT = { phone: "+91 96119 87667", phoneHref: "tel:+919611987667", email: "dipuraj.thapa@gmail.com" } as const;
 
-/** The initial three role families; other roles are not covered yet. */
-export const PILOT = { roles: ["Accounts and finance", "Sales and business development", "Customer support and operations"] } as const;
+/** Equal coverage for IT and non-IT recruitment. */
+export const RECRUITMENT = { roles: ["IT: Software development and testing", "IT: Data and analytics", "IT: Support and infrastructure", "Non-IT: Accounts and finance", "Non-IT: Sales and business development", "Non-IT: Customer support and operations"] } as const;
 
 /** The public address of the site, used in links sent to candidates and in search metadata. No trailing slash. */
 export const SITE_URL = configuredSiteUrl();

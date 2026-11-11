@@ -3,8 +3,8 @@ import LandingPage from "@/components/landing-page";
 import { CANDIDATE_PAGE } from "@/lib/landing";
 import { SITE_URL } from "@/lib/site";
 
-const title = "Accounts, Sales & Support Jobs: Free CV Registration";
-const description = "Register your CV free for accounts, sales and customer support jobs. Your CV goes to an employer only with your consent.";
+const title = "IT & Non-IT Jobs: Free CV Registration";
+const description = "Register your CV free for IT and non-IT jobs, including software, data, accounts, sales and operations. Your CV goes to an employer only with your consent.";
 const shareTitle = `${title} | Jobboard300`;
 const shareImage = "/images/candidate-meeting.webp";
 
