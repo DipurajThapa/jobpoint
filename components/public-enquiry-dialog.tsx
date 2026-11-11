@@ -78,32 +78,38 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
     <section ref={dialog} className="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-intro">
       <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
       <span className="eyebrow">{candidate ? "FOR JOB SEEKERS" : "FOR EMPLOYERS"}</span>
-      <h2 id="dialog-title">{candidate ? "Upload your CV." : "Tell us what you are looking for."}</h2>
+      <h2 id="dialog-title">{candidate ? "Register your CV for relevant roles" : "Tell us about your hiring need"}</h2>
       {done ? <><p id="dialog-intro" className="visually-hidden">{done.title}</p><FormConfirmation title={done.title} message={done.message} onClose={onClose} /></> : <>
       <p id="dialog-intro">{DEMO_MODE ? "Preview the information we would request when recruitment intake opens." : candidate ? "Free, and about a minute. Send your CV and how to reach you; we read your skills and experience from the CV. A recruiter reviews applications for the roles we are recruiting for and contacts you only if there is a fit." : "A few lines are enough; you do not need a job description. Choose a time for a call if you like. A consultant will go through the role with you, and nothing is charged until a person you choose joins."}</p>
       {/* method="post" so that a press before the script has loaded never puts the details in the address bar. */}
       <form method="post" action={candidate ? "/api/applications" : "/api/employer-enquiries"} encType={candidate ? "multipart/form-data" : undefined} onSubmit={submit}>
         <DemoFormNotice />
         <fieldset className="demo-fields" disabled={DEMO_MODE}>
-          {candidate ? <CandidateFields /> : <>
+          {candidate ? <CandidateFields /> : <div className="public-form">
             <input name="website" className="honeypot" tabIndex={-1} autoComplete="off" aria-hidden="true" />
+            <div className="form-section-heading"><Icon name="business" /><div><h3>Company and contact</h3><p>Who should we speak to about this role?</p></div></div>
             <div className="form-grid">
               <label>Your name<input name="contactName" required maxLength={120} autoComplete="name" /></label>
               <label>Company<input name="company" required maxLength={160} autoComplete="organization" /></label>
               <label>Work email<input name="email" type="email" required maxLength={254} autoComplete="email" /></label>
-              <label>Phone <span className="label-note">with country code if you want WhatsApp messages</span><input name="phone" type="tel" required maxLength={30} autoComplete="tel" placeholder="+91" /></label>
-              <label className="full-field">What are you looking for?<textarea name="details" required maxLength={1800} rows={4} placeholder="For example: two accounts executives for our Bengaluru office, to start next month." /></label>
-              <fieldset className="call-picker full-field"><legend>Choose a time for a call with a consultant <span className="label-note">optional · 30 minutes · India time · a consultant confirms the time or offers another</span></legend>
+              <label>Phone<input name="phone" type="tel" required maxLength={30} autoComplete="tel" placeholder="+91" /><span className="label-note">Include a country code for WhatsApp messages</span></label>
+            </div>
+            <div className="form-section-heading"><Icon name="work_outline" /><div><h3>The role</h3><p>A few lines are enough to get started</p></div></div>
+            <div className="form-grid"><label className="full-field">What are you looking for?<textarea name="details" required maxLength={1800} rows={4} placeholder="For example: two accounts executives, starting next month." /></label></div>
+            <div className="form-section-heading"><Icon name="event" /><div><h3>Arrange a call</h3><p>Optional, 30 minutes in India time</p></div></div>
+              <fieldset className="call-picker"><legend>Choose a time <span className="label-note">A consultant confirms it or offers another</span></legend>
                 {days.length === 0 ? <p className="label-note">No times are showing right now. Send the enquiry and a consultant will contact you within two working days.</p> : <div className="form-grid">
                   <label>Day<select value={day} onChange={e => setDay(e.target.value)} aria-label="Day for the call"><option value="">No call for now: contact me instead</option>{days.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                   <label>Time<select name="meetingAt" key={day} defaultValue="" disabled={!day} required={!!day} aria-label="Time for the call"><option value="" disabled>{day ? "Choose a time" : "Choose a day first"}</option>{slots.filter(s => dayOf(s) === day).map(s => <option key={s} value={s}>{timeLabel(s)}</option>)}</select></label>
                 </div>}
               </fieldset>
+            <div className="form-section-heading"><Icon name="verified_user" /><div><h3>Consent</h3><p>Confirm how we may contact you</p></div></div>
+            <div className="form-consents">
               <label className="consent full-field"><input name="consent" type="checkbox" value="yes" required /> <span>Jobboard300 may contact me about this enquiry. <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy notice</a>.</span></label>
               <label className="consent full-field"><input name="terms" type="checkbox" value="yes" required /> <span>I am authorised to act for this company, and I have read and agree to the <a href="/terms/employers" target="_blank" rel="noopener noreferrer">terms for employers</a>.</span></label>
               <label className="consent full-field"><input name="whatsappConsent" type="checkbox" value="yes" /> <span>You may also message me on WhatsApp at this number. <span className="label-note">(optional)</span></span></label>
             </div>
-          </>}
+          </div>}
           {!DEMO_MODE && <button className="button" disabled={busy}>{busy ? "Sending…" : candidate ? "Upload my CV" : "Send enquiry"} <Icon name="north_east" /></button>}
         </fieldset>
         {error && <p className="form-message form-error" role="alert">{error}</p>}

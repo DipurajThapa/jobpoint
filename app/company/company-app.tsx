@@ -283,7 +283,7 @@ function NewJd({ created, say }: { created: (id: string) => void; say: (t: strin
   return <section className="pj-card"><h2>Post a job</h2>
     <form className="pj-form" onSubmit={submit}>
       <label>Job title<input name="title" required maxLength={160} /></label>
-      <label>Location<input name="location" required placeholder="e.g. Bengaluru" /></label>
+      <label>Location<input name="location" required placeholder="City or remote" /></label>
       <label>Work mode<select name="workMode"><option>On-site</option><option>Hybrid</option><option>Remote</option></select></label>
       <label>Openings<input name="openings" type="number" min={1} max={500} defaultValue={1} /></label>
       <p className="full pj-muted">A Jobboard300 recruiter finds, screens and submits candidates for this job. You pay only when someone joins.</p>

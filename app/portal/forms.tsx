@@ -46,7 +46,7 @@ export function Register({ kind }: { kind: "candidate" | "company" }) {
     {f.error && <p className="pj-notice bad" role="alert">{f.error}</p>}
     {kind === "candidate" ? <>
       <label>Full name<input name="name" required maxLength={120} autoComplete="name" /></label>
-      <label>Current city<input name="city" required maxLength={80} placeholder="e.g. Bengaluru" /></label>
+      <label>Current city<input name="city" required maxLength={80} placeholder="Your current city" /></label>
     </> : <>
       <label>Company name (shown to candidates)<input name="companyName" required maxLength={120} /></label>
       <label>Registered legal name<input name="legalName" required maxLength={160} placeholder="e.g. Example Steel Works Private Limited" /></label>

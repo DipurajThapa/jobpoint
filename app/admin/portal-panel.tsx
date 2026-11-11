@@ -33,7 +33,7 @@ const storedParams = (value: unknown): StoredParams | null => { try { return typ
 function ParamsFields({ defaults }: { defaults?: StoredParams | null }) {
   const d = defaults, band = d?.ctcBands?.[0];
   return <div className="form-grid">
-    <label>Cities (comma-separated, empty = any)<input name="cities" placeholder="Bengaluru" defaultValue={(d?.cities ?? []).join(", ")} /></label>
+    <label>Cities (comma-separated, empty = any)<input name="cities" placeholder="Add cities if relevant" defaultValue={(d?.cities ?? []).join(", ")} /></label>
     <fieldset className="full-field"><legend>Permitted role families</legend>{ROLE_FAMILIES.map(r => <label key={r} className="consent"><input type="checkbox" name="roleFamilies" value={r} defaultChecked={d ? (d.roleFamilies ?? []).includes(r) : false} /> {r}</label>)}</fieldset>
     <fieldset className="full-field"><legend>Permitted seniority</legend>{SENIORITY.map(s => <label key={s} className="consent"><input type="checkbox" name="seniority" value={s} defaultChecked={d ? (d.seniority ?? []).includes(s) : s === "junior" || s === "mid"} /> {s}</label>)}</fieldset>
     <label>CTC band from (LPA)<input name="ctcMin" type="number" step={0.5} min={0} defaultValue={band ? band.minInr / 100_000 : ""} /></label>
