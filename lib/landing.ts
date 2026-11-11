@@ -46,7 +46,7 @@ export const CANDIDATE_PAGE: Landing = {
   title: ["Find IT and non-IT jobs.", `Register your CV for free.`],
   intro: `Jobboard300 is a job board and job consultancy with recruiters behind it. We recruit for both IT and non-IT roles, from software, data and IT support to accounts, sales and business operations at small and growing businesses. Registering your CV is free. A recruiter may contact you about a relevant opening. Registration does not guarantee contact, an interview or a job.`,
   cta: "Upload your CV",
-  secondary: { label: "Browse current jobs", href: "/#jobs" },
+  secondary: { label: "Browse current jobs", href: "/jobs" },
   image: { src: "/images/candidate-meeting.webp", alt: "A candidate talking through their experience with a Jobboard300 recruiter" },
   proof: ["IT AND NON-IT JOBS", "Free to register and apply", "Your CV is shared only with your consent", "Recruiter-reviewed matches"],
   steps: { eyebrow: "HOW IT WORKS", title: ["How to register your CV", "and apply for jobs."], intro: "You should know what happens to your CV at every step.", items: [

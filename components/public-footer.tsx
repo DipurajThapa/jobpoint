@@ -16,7 +16,7 @@ export default function PublicFooter({ onCandidate, onEmployer }: { onCandidate?
     <div><Image src="/images/jobboard300-logo-on-dark.png" alt="Jobboard300" width={499} height={81} /><p>Jobboard300 is a job board and recruitment consultancy for IT and non-IT roles, including software, data, IT support, accounts, sales and operations.</p></div>
     <div className="footer-links">
       <div><b>Job seekers</b>
-        <Link href="/#jobs">Find jobs</Link>
+        <Link href="/jobs">Find jobs</Link>
         {onCandidate ? <button onClick={onCandidate}>{cv}</button> : <Link href="/job-seekers">{cv}</Link>}
         <Link href="/job-seekers">How it works for job seekers</Link>
         <Link href="/terms/job-seekers">Terms for job seekers</Link>

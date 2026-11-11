@@ -62,7 +62,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   const breadcrumbs = DEMO_MODE ? null : {
     "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [
       { "@type": "ListItem", position: 1, name: "Jobboard300", item: `${SITE_URL}/` },
-      { "@type": "ListItem", position: 2, name: "Current jobs", item: `${SITE_URL}/#jobs` },
+      { "@type": "ListItem", position: 2, name: "Current jobs", item: `${SITE_URL}/jobs` },
       { "@type": "ListItem", position: 3, name: job.title, item: url },
     ],
   };
@@ -70,7 +70,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
     <PublicHeader />
     <main className="job-detail-page"><div className="container detail-layout">
       <article className="job-detail">
-        <Link className="back-link" href="/#jobs"><Icon name="arrow_back" /> All current jobs</Link>
+        <Link className="back-link" href="/jobs"><Icon name="arrow_back" /> All current jobs</Link>
         <span className="eyebrow">CURRENT OPPORTUNITY</span>
         <h1>{job.title}</h1>
         <p className="detail-company">{job.company} · {job.sector}</p>

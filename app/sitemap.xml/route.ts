@@ -12,7 +12,7 @@ export async function GET() {
   // Same address as the canonical links, whichever host the request arrived on.
   const origin = SITE_URL;
   // Policy drafts stay out of the sitemap until the company finalises them.
-  const urls = ["/", "/job-seekers", "/employers", "/terms/job-seekers", "/terms/employers"].map(path => `<url><loc>${escapeXml(origin + path)}</loc></url>`);
+  const urls = ["/", "/jobs", "/job-seekers", "/employers", "/terms/job-seekers", "/terms/employers"].map(path => `<url><loc>${escapeXml(origin + path)}</loc></url>`);
   try {
     const result = await env.DB!.prepare("SELECT id, updated_at FROM jobs WHERE status = 'published' ORDER BY updated_at DESC LIMIT 500").all<{id: string; updated_at: string}>();
     for (const job of result.results) urls.push(`<url><loc>${escapeXml(origin + "/jobs/" + encodeURIComponent(job.id))}</loc><lastmod>${escapeXml(new Date(job.updated_at.replace(" ", "T") + (job.updated_at.includes("Z") ? "" : "Z")).toISOString())}</lastmod></url>`);

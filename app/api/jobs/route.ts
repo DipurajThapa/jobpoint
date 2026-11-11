@@ -8,6 +8,6 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const q = (url.searchParams.get("q") ?? "").trim().slice(0, 100);
     const location = (url.searchParams.get("location") ?? "").trim().slice(0, 100);
-    return json(await listPublicJobs(q, location));
+    return json(await listPublicJobs(q, location, Number(url.searchParams.get("page") ?? 1)));
   } catch { return json({ error: "Job listings are temporarily unavailable." }, 503); }
 }

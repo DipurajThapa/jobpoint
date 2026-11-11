@@ -15,7 +15,7 @@ export default function AccessFrame({ kind, mode, children }: { kind: "candidate
           <h1 id="access-heading">{company ? "Your hiring, in one place." : "Your next step starts here."}</h1>
           <p>{company ? "Access your company's roles, submitted candidate profiles and interview updates." : "Access your profile, CV and application updates for IT and non-IT roles."}</p>
           <ul><li>{company ? "Review candidates shared by your recruiter" : "Keep your CV and profile details up to date"}</li><li>{company ? "Manage interviews and hiring progress" : "Follow your applications and messages"}</li></ul>
-          <Link className="text-link" href={company ? "/employers#hiring-enquiry" : "/#jobs"}>{company ? "Send a hiring enquiry" : "Browse current jobs"}<Icon name="north_east" /></Link>
+          <Link className="text-link" href={company ? "/employers#hiring-enquiry" : "/jobs"}>{company ? "Send a hiring enquiry" : "Browse current jobs"}<Icon name="north_east" /></Link>
         </section>
         <section className="account-access-card" aria-labelledby="access-form-title">
           <span className="eyebrow">{company ? "FOR EMPLOYERS" : "FOR CANDIDATES"}</span>
