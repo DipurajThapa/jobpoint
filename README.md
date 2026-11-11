@@ -113,6 +113,10 @@ Migration `drizzle/0023_open_audit_items.sql` (11 Nov 2026) closes the open audi
 - **Recruiting tool.** What changed, joining soon (with last working day and other offers), profile and reading copy of the CV, phone and email on every row, the client's feedback, interview link and interviewer, technical test results, undo a pass, one-time links in a box with Copy.
 - **CV screening** (engine `portal-match-2026.11.2`; see [the review](docs/reviews/ATS_MATCHING_REVIEW_2026-11-11.md)). Not found in a CV is a question for the recruiter, not a filter, unless the client is set to strict; the two level checks only advise; a career break costs little.
 
+## Pilot and investor pack (Bengaluru)
+
+Start with [docs/pilot/INVESTOR_READINESS.md](docs/pilot/INVESTOR_READINESS.md). It lists what the product now does for each of the investor's conditions, what only the founder can do, and the free tools for each. Also in the pack: the [prospect list](docs/pilot/PROSPECTS_BENGALURU_2026-11.md), [outreach](docs/pilot/OUTREACH.md), the [mandate template](docs/pilot/MANDATE_TEMPLATE.md), [free email set-up](docs/pilot/EMAIL_SETUP.md), and the [deployed test runbook](docs/pilot/DEPLOYED_TEST_RUNBOOK.md) (`node scripts/live-check.mjs https://<live site>`). The numbers live in the owner console under **Pilot and investor** (migration `0024`).
+
 ## Audit: quality, functional and UAT
 
 Three auditors test the whole product against the local dev server and its local database. They never run against a hosted site.

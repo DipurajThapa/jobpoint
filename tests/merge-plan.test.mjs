@@ -382,6 +382,7 @@ test("merge 2: a role posted in the owner console is one vacancy, under the hous
   assert.equal(house.status, 201, house.text);
   // A role for no client is not an employer's authorised vacancy: it is kept as a draft, with the reason.
   assert.match(house.json.message, /not published/i);
+  assert.equal(w.db.raw.prepare("SELECT status FROM jobs WHERE id = ?").get(house.json.id).status, "draft", "the website listing must stay a draft too");
   const jd = w.db.raw.prepare("SELECT company_id, status, service, title FROM jds WHERE id = ?").get(house.json.id);
   assert.deepEqual({ ...jd }, { company_id: vacancy.HOUSE_CLIENT_ID, status: "draft", service: "managed", title: ROLE.title });
   // A client without a signed mandate cannot have a role published either; with one, it can.

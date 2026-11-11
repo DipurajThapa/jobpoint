@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     const description = clean(body.description, 4000), requirements = clean(body.requirements, 2400);
     if (!title || !location || !employmentType || !description) return errorJson("Title, location, employment type and description are required.");
     const id = crypto.randomUUID();
-    await getDb().insert(jobs).values({ id, title, company: clean(body.company, 160) || "Confidential client", location, employmentType, workMode: clean(body.workMode, 40) || "On-site", sector: clean(body.sector, 100) || "Other", salaryRange: clean(body.salaryRange, 100) || null, description, requirements, status: body.status === "published" ? "published" : "draft", featured: body.featured === true });
+    await getDb().insert(jobs).values({ id, title, company: clean(body.company, 160) || "Confidential client", location, employmentType, workMode: clean(body.workMode, 40) || "On-site", sector: clean(body.sector, 100) || "Other", salaryRange: clean(body.salaryRange, 100) || null, description, requirements, status: "draft", featured: body.featured === true });
     // One vacancy record: the role is a client job with the same id, under the chosen client or the house client.
     // Only a vacancy the employer has authorised, under a client with a signed mandate, goes on the website.
     // Otherwise the role is saved as a draft and the owner is told what is missing.
