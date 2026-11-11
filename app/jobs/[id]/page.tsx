@@ -80,7 +80,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         {job.requirements && <><h2>Requirements</h2><p className="requirements-text">{job.requirements}</p></>}
         <div className="job-note"><b>About Jobboard300</b><p>{DEMO_MODE ? "This is a preview of a job listing. Applications will open after the company completes its launch checks." : "Jobboard300 is a recruitment consultancy. A recruiter reviews applications for this role and contacts you only if your experience fits. Your CV goes to the employer only with your consent. Applying is free."}</p></div>
       </article>
-      <aside className="apply-card"><h2>Apply for this role</h2><p>{DEMO_MODE ? "Review the application fields in this demo. No details can be sent." : "Send your name, contact details and CV. It is free and takes about a minute."}</p><ApplicationForm jobId={job.id} /></aside>
+      <aside className="apply-card"><h2>Apply for this role</h2><p>{DEMO_MODE ? "Review the application fields in this demo. No details can be sent." : "Send your name, contact details and CV. Applying is free. Submitting a CV does not guarantee contact, an interview or a job."}</p><ApplicationForm jobId={job.id} /></aside>
     </div>{posting && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(posting) }} />}{breadcrumbs && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbs) }} />}</main>
     <PublicFooter />
   </>;

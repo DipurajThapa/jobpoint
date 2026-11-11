@@ -4,7 +4,7 @@ import { EMPLOYER_PAGE } from "@/lib/landing";
 import { SITE_URL } from "@/lib/site";
 
 const title = "IT & Non-IT Recruitment for Employers";
-const description = "Hire for IT and non-IT roles. Recruiter-screened shortlist, 7.5% to 8.33% fee only when your hire joins, 60-day replacement.";
+const description = "Hire for IT and non-IT roles. Recruiter-screened shortlist, 7.5% to 8.33% fee only when your hire joins, replacement subject to agreed terms.";
 const shareTitle = `${title} | Jobboard300`;
 const shareImage = "/images/candidate-meeting.webp";
 
