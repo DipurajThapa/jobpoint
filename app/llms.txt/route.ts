@@ -25,7 +25,7 @@ export async function GET() {
 
 ## For job seekers
 - Page for job seekers: ${origin}/job-seekers
-- Search current jobs: ${origin}/#jobs
+- Search current jobs: ${origin}/jobs
 - To register: name, email, mobile number and a CV (PDF or DOCX, up to 5 MB), and two required ticks: acceptance of the terms for job seekers, and consent to store and use the CV. Skills and experience are read from the CV.
 - After registering: the page shows a reference number. A recruiter reviews applications for the roles currently being recruited for and contacts the person only if there is a fit.
 - A CV is shared with an employer only with the candidate's consent

@@ -1,15 +1,10 @@
 import HomeClient from "./home-client";
-import { listPublicJobs } from "@/lib/public-jobs";
 import { faqs } from "@/lib/faqs";
 import { SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  let listings: Awaited<ReturnType<typeof listPublicJobs>>;
-  let initialLoaded = true;
-  try { listings = await listPublicJobs(); }
-  catch { listings = { jobs: [], locations: [] }; initialLoaded = false; }
   const url = SITE_URL;
   const company = {
     "@context": "https://schema.org", "@type": "EmploymentAgency", "@id": `${url}/#agency`, name: "Jobboard300", alternateName: ["Job Board 300", "Jobboard300 job board"], url, logo: `${url}/images/jobboard300-logo.png`, image: `${url}/images/candidate-meeting.webp`,
@@ -22,5 +17,5 @@ export default async function Home() {
   };
   const website = { "@context": "https://schema.org", "@type": "WebSite", "@id": `${url}/#website`, name: "Jobboard300", alternateName: "Job Board 300", url, publisher: { "@id": `${url}/#agency` }, inLanguage: "en-IN" };
   const faq = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: faqs.map(({ question, answer }) => ({ "@type": "Question", name: question, acceptedAnswer: { "@type": "Answer", text: answer } })) };
-  return <><HomeClient initialJobs={listings.jobs} initialLocations={listings.locations} initialLoaded={initialLoaded} /><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(company).replace(/</g, "\\u003c") }} /><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(website).replace(/</g, "\\u003c") }} /><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faq).replace(/</g, "\\u003c") }} /></>;
+  return <><HomeClient /><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(company).replace(/</g, "\\u003c") }} /><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(website).replace(/</g, "\\u003c") }} /><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faq).replace(/</g, "\\u003c") }} /></>;
 }

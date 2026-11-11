@@ -6,7 +6,7 @@ import { useState } from "react";
 import Icon from "./icon";
 
 /** The same header on every public page. Section links point at the home page's sections. */
-const navigation = [["/#jobs", "Find jobs"], ["/job-seekers", "Job seekers"], ["/employers", "Employers"], ["/#about", "About"], ["/#faq", "FAQs"]];
+const navigation = [["/jobs", "Find jobs"], ["/job-seekers", "Job seekers"], ["/employers", "Employers"], ["/#about", "About"], ["/#faq", "FAQs"]];
 
 export default function PublicHeader({ audience = "candidate" }: { audience?: "candidate" | "employer" }) {
   const [open, setOpen] = useState(false);
