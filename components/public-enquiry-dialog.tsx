@@ -80,7 +80,7 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
       <span className="eyebrow">{candidate ? "FOR JOB SEEKERS" : "FOR EMPLOYERS"}</span>
       <h2 id="dialog-title">{candidate ? "Register your CV for relevant roles" : "Tell us about your hiring need"}</h2>
       {done ? <><p id="dialog-intro" className="visually-hidden">{done.title}</p><FormConfirmation title={done.title} message={done.message} onClose={onClose} /></> : <>
-      <p id="dialog-intro">{DEMO_MODE ? "Preview the information we would request when recruitment intake opens." : candidate ? "Free, and about a minute. Send your CV and how to reach you; we read your skills and experience from the CV. A recruiter reviews applications for the roles we are recruiting for and contacts you only if there is a fit." : "A few lines are enough; you do not need a job description. Choose a time for a call if you like. A consultant will go through the role with you, and nothing is charged until a person you choose joins."}</p>
+      <p id="dialog-intro">{DEMO_MODE ? "Preview the information we would request when recruitment intake opens." : candidate ? "Register your CV free. Send your CV and how to reach you; we read your skills and experience from the CV. A recruiter reviews applications for the roles we are recruiting for and may contact you about a relevant opening. Registering does not guarantee contact, an interview or a job." : "A few lines are enough; you do not need a job description. Choose a time for a call if you like. A consultant will go through the role with you, and nothing is charged until a person you choose joins."}</p>
       {/* method="post" so that a press before the script has loaded never puts the details in the address bar. */}
       <form method="post" action={candidate ? "/api/applications" : "/api/employer-enquiries"} encType={candidate ? "multipart/form-data" : undefined} onSubmit={submit}>
         <DemoFormNotice />
@@ -96,9 +96,9 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
             </div>
             <div className="form-section-heading"><Icon name="work_outline" /><div><h3>The role</h3><p>A few lines are enough to get started</p></div></div>
             <div className="form-grid"><label className="full-field">What are you looking for?<textarea name="details" required maxLength={1800} rows={4} placeholder="For example: a software developer or an accounts executive, starting next month." /></label></div>
-            <div className="form-section-heading"><Icon name="event" /><div><h3>Arrange a call</h3><p>Optional, 30 minutes in India time</p></div></div>
-              <fieldset className="call-picker"><legend>Choose a time <span className="label-note">A consultant confirms it or offers another</span></legend>
-                {days.length === 0 ? <p className="label-note">No times are showing right now. Send the enquiry and a consultant will contact you within two working days.</p> : <div className="form-grid">
+            <div className="form-section-heading"><Icon name="event" /><div><h3>Request a call</h3><p>Optional request; times shown in India time</p></div></div>
+              <fieldset className="call-picker"><legend>Choose a time <span className="label-note">Subject to availability and confirmation</span></legend>
+                {days.length === 0 ? <p className="label-note">No call times are showing right now. You can still send your enquiry for review. Response times vary.</p> : <div className="form-grid">
                   <label>Day<select value={day} onChange={e => setDay(e.target.value)} aria-label="Day for the call"><option value="">No call for now: contact me instead</option>{days.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                   <label>Time<select name="meetingAt" key={day} defaultValue="" disabled={!day} required={!!day} aria-label="Time for the call"><option value="" disabled>{day ? "Choose a time" : "Choose a day first"}</option>{slots.filter(s => dayOf(s) === day).map(s => <option key={s} value={s}>{timeLabel(s)}</option>)}</select></label>
                 </div>}
@@ -114,7 +114,7 @@ export default function PublicEnquiryDialog({ type, onClose }: Props) {
         </fieldset>
         {error && <p className="form-message form-error" role="alert">{error}</p>}
       </form>
-      <p className="privacy-inline">{DEMO_MODE ? "Live intake opens after the company completes its launch checks." : candidate ? <>Registering is free, and payment never affects who is shortlisted. You get a reference number on screen. To correct your details or replace your CV later, use the <a href="/privacy#privacy-request">privacy request form</a>.</> : <>Nothing is charged for an enquiry, a call or a shortlist. You get a reference number on screen, and a consultant contacts you within two working days if you do not choose a call time.</>}</p>
+      <p className="privacy-inline">{DEMO_MODE ? "Live intake opens after the company completes its launch checks." : candidate ? <>Registering is free, and payment never affects who is shortlisted. You get a reference number on screen. To correct your details or replace your CV later, use the <a href="/privacy#privacy-request">privacy request form</a>.</> : <>Nothing is charged for an enquiry, a call or a shortlist. You get a reference number on screen. Your enquiry is submitted for review; response times vary.</>}</p>
       </>}
     </section>
   </div>;

@@ -52,12 +52,13 @@ export function applicationAckText(input: { name: string; reference: string; rol
     `Dear ${input.name},`,
     input.roleTitle ? `Thank you for applying for ${input.roleTitle}. Your CV is with Jobboard300.` : "Thank you for registering your CV with Jobboard300.",
     `Your reference is ${input.reference}. Please quote it if you write to us.`,
-    `What happens next:\n- A recruiter reviews applications for the roles we are currently recruiting for.\n- We contact you only if there is a fit.${input.share ? "" : " We will ask you before your CV goes to an employer."}`,
+    `What happens next:\n- A recruiter reviews applications for the roles we are currently recruiting for.\n- We may contact you if your experience appears relevant to an available role.${input.share ? "" : " We will ask you before your CV goes to an employer."}`,
+    `Submitting a CV does not guarantee contact, an interview or a job.`,
     `Your choices on the form:\n- Share my CV with ${input.roleTitle ? "the employer for this role" : "an employer for a role that suits me"}: ${input.share ? "yes" : "no"}\n- Keep my CV and contact me about other roles: ${input.future ? "yes" : "no"}\n- WhatsApp updates: ${input.whatsapp ? "yes" : "no"}`,
     `Registering and applying are free, and payment never affects who is shortlisted. To correct your details, replace your CV, or withdraw your consent, use the request form at ${SITE_URL}/privacy#privacy-request.`,
     SIGN_OFF,
   ].join("\n\n");
-  const whatsapp = `Jobboard300: we have your ${input.roleTitle ? `application for ${input.roleTitle}` : "CV"}. Reference ${input.reference}. A recruiter will contact you only if there is a fit with a role we are recruiting for. To stop WhatsApp updates, use the request form at ${SITE_URL}/privacy#privacy-request`;
+  const whatsapp = `Jobboard300: we have your ${input.roleTitle ? `application for ${input.roleTitle}` : "CV"}. Reference ${input.reference}. A recruiter may contact you about a relevant role. Registration does not guarantee contact, an interview or a job. To stop WhatsApp updates, use the request form at ${SITE_URL}/privacy#privacy-request`;
   return { subject, text, whatsapp };
 }
 
@@ -67,20 +68,20 @@ export function enquiryAckText(input: { name: string; company: string; reference
     `Dear ${input.name},`,
     `Thank you for your enquiry on behalf of ${input.company}. Your reference is ${input.reference}.`,
     input.meetingAt
-      ? `You asked for a call on ${callTimeText(input.meetingAt)}. A Jobboard300 consultant will confirm this time, or offer another, by email.`
-      : `A Jobboard300 consultant will contact you within two working days to arrange a call.`,
+      ? `You asked for a call on ${callTimeText(input.meetingAt)}. This is a request, not a confirmed appointment. Please wait for confirmation before making arrangements.`
+      : `Your enquiry has been submitted for review. A consultant may contact you to discuss it. Response times vary.`,
     "On the call we go through the role, the salary range, the location and your timeline. If we are a fit, we then agree the terms in a recruitment services agreement before we start. Nothing is charged for the enquiry, the call or a shortlist: the fee applies only when a person you choose joins.",
     `Our terms for employers: ${SITE_URL}/terms/employers`,
     SIGN_OFF,
   ].join("\n\n");
-  const whatsapp = `Jobboard300: we have your hiring enquiry for ${input.company}. Reference ${input.reference}. ${input.meetingAt ? `Call requested for ${callTimeText(input.meetingAt)}; a consultant will confirm.` : "A consultant will contact you within two working days."} To stop WhatsApp messages, reply to our email.`;
+  const whatsapp = `Jobboard300: we have your hiring enquiry for ${input.company}. Reference ${input.reference}. ${input.meetingAt ? `Call requested for ${callTimeText(input.meetingAt)}; awaiting confirmation.` : "Your enquiry is awaiting review. Response times vary."} To stop WhatsApp messages, reply to our email.`;
   return { subject, text, whatsapp };
 }
 
 /** What the employer is told when the owner confirms or cancels the call they asked for. */
 export function callUpdateText(input: { name: string; meetingAt: string; status: "confirmed" | "cancelled" }) {
   return input.status === "confirmed"
-    ? { subject: "Your call with Jobboard300 is confirmed", text: [`Dear ${input.name},`, `Your call with a Jobboard300 consultant is confirmed for ${callTimeText(input.meetingAt)}. It takes about 30 minutes. We will call the phone number you gave us.`, "If the time no longer suits you, reply to this email and we will arrange another.", SIGN_OFF].join("\n\n") }
+    ? { subject: "Your call with Jobboard300 is confirmed", text: [`Dear ${input.name},`, `Your call with a Jobboard300 consultant is confirmed for ${callTimeText(input.meetingAt)}. We will call the phone number you gave us.`, "If the time no longer suits you, reply to this email and we will arrange another.", SIGN_OFF].join("\n\n") }
     : { subject: "Your call with Jobboard300 needs a new time", text: [`Dear ${input.name},`, `We are sorry: we cannot hold the call you asked for on ${callTimeText(input.meetingAt)}. A consultant will contact you to agree another time, or you can reply to this email with times that suit you.`, SIGN_OFF].join("\n\n") };
 }
 export const sendCallUpdate = (to: string, input: Parameters<typeof callUpdateText>[0]) => { const m = callUpdateText(input); return email(to, m.subject, m.text); };
@@ -96,8 +97,8 @@ export function confirmation(kind: "application" | "enquiry", input: { email: st
   const lines = [
     `Your reference is ${input.reference}.`,
     ...(sent ? [`We have sent the details to ${input.email}. Check your spam folder if you do not see it.`] : []),
-    kind === "application" ? "A recruiter reviews applications for the roles we are recruiting for and will contact you only if there is a fit."
-      : input.meetingAt ? `You asked for a call on ${callTimeText(input.meetingAt)}. A consultant will confirm the time.` : "A consultant will contact you within two working days to arrange a call.",
+    kind === "application" ? "Your CV has been submitted for review against available roles. Registration does not guarantee contact, an interview or a job."
+      : input.meetingAt ? `You asked for a call on ${callTimeText(input.meetingAt)}. This is a request, subject to availability and confirmation.` : "Your enquiry has been submitted for review. Response times vary.",
   ];
   return { title, message: lines.join(" ") };
 }
