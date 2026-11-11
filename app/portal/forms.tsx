@@ -20,7 +20,7 @@ export function SignIn({ next, kind = "candidate" }: { next: string; kind?: "can
   const f = useForm();
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const d = new FormData(e.currentTarget); f.setBusy(true); f.setError("");
-    try { const r = await post<{ next: string }>("/api/portal/auth/sign-in", { email: d.get("email"), password: d.get("password") }); window.location.assign(next.startsWith("/candidate") || next.startsWith("/company") ? next : r.next); }
+    try { const r = await post<{ next: string }>("/api/portal/auth/sign-in", { email: d.get("email"), password: d.get("password") }); window.location.assign((next === r.next || next.startsWith(`${r.next}/`) || next.startsWith(`${r.next}?`)) ? next : r.next); }
     catch (err) { f.setError((err as Error).message); f.setBusy(false); }
   }
   return <form onSubmit={submit} method="post" className="pj-list">
@@ -28,49 +28,25 @@ export function SignIn({ next, kind = "candidate" }: { next: string; kind?: "can
     <label>{kind === "company" ? "Work email" : "Email"}<input name="email" type="email" required autoComplete="username" /></label>
     <label>Password<input name="password" type="password" required autoComplete="current-password" /></label>
     <button className="wp-btn" disabled={f.busy}>{f.busy ? "Signing in…" : kind === "company" ? "Sign in to your hiring account" : "Sign in to your candidate account"}</button>
+    <button type="button" className="text-link" disabled={f.busy} onClick={async e => {
+      const form = e.currentTarget.form;
+      const email = form?.querySelector<HTMLInputElement>('input[name="email"]');
+      if (!email?.reportValidity()) return;
+      f.setBusy(true); f.setError(""); f.setNotice("");
+      try { f.setNotice((await post<{ message: string }>("/api/portal/auth/resend-verification", { email: email.value })).message); }
+      catch (error) { f.setError((error as Error).message); } finally { f.setBusy(false); }
+    }}>Resend verification email</button>
+    {f.notice && <p className="pj-notice" role="status">{f.notice}</p>}
     <p className="pj-muted"><a href={`/portal/register?kind=${kind}`}>Sign up</a> · <a href="/portal/forgot">Forgot password?</a></p>
-  </form>;
-}
-
-export function Register({ kind }: { kind: "candidate" | "company" }) {
-  const f = useForm();
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault(); const d = Object.fromEntries(new FormData(e.currentTarget).entries());
-    f.setBusy(true); f.setError("");
-    try { const r = await post<{ message: string; devLink?: string }>("/api/portal/auth/register", { ...d, kind, adult: d.adult === "yes", terms: d.terms === "yes" }); f.setNotice(r.message); f.setLink(r.devLink ?? ""); }
-    catch (err) { f.setError((err as Error).message); }
-    finally { f.setBusy(false); }
-  }
-  if (f.notice) return <div className="pj-list"><p className="pj-notice good" role="status">{f.notice}</p>{f.link && <p className="pj-muted">Local development: <a href={f.link}>open the verification link</a>.</p>}</div>;
-  return <form onSubmit={submit} method="post" className="pj-list">
-    {f.error && <p className="pj-notice bad" role="alert">{f.error}</p>}
-    {kind === "candidate" ? <>
-      <label>Full name<input name="name" required maxLength={120} autoComplete="name" /></label>
-      <label>Current city<input name="city" required maxLength={80} placeholder="Your current city" /></label>
-    </> : <>
-      <label>Company name (shown to candidates)<input name="companyName" required maxLength={120} /></label>
-      <label>Registered legal name<input name="legalName" required maxLength={160} placeholder="e.g. Example Steel Works Private Limited" /></label>
-      <label>GSTIN <span className="pj-muted">optional, speeds up approval</span><input name="gstin" maxLength={15} /></label>
-      <label>City<input name="city" required maxLength={80} /></label>
-      <label>Website<input name="website" maxLength={200} /></label>
-    </>}
-    <label>{kind === "company" ? "Work email" : "Email"}<input name="email" type="email" required autoComplete="email" /></label>
-    <label>Mobile number<input name="phone" type="tel" required maxLength={16} autoComplete="tel" /></label>
-    <label>Password <span className="pj-muted">at least 12 characters</span><input name="password" type="password" required minLength={12} autoComplete="new-password" /></label>
-    {kind === "candidate" && <label className="pj-row"><input type="checkbox" name="adult" value="yes" required /> I am 18 or older.</label>}
-    <label className="pj-row"><input type="checkbox" name="terms" value="yes" required /> I accept the <a href="/terms" target="_blank">terms</a>{kind === "company" ? ", including using candidate data only for hiring, never contacting candidates outside Jobboard300, and deleting CVs on request." : " and have read the "}{kind === "candidate" && <a href="/privacy" target="_blank">privacy notice</a>}.</label>
-    <button className="wp-btn" disabled={f.busy}>{f.busy ? "Creating…" : "Create account"}</button>
-    {kind === "company" && <p className="pj-muted">Jobboard300 reviews every company before any candidate is put in front of it.</p>}
-    <p className="pj-muted">Already have an account? <a href={`/portal/sign-in?kind=${kind}`}>Sign in</a></p>
   </form>;
 }
 
 export function Verify({ token }: { token: string }) {
   const f = useForm();
-  async function go() { f.setBusy(true); try { f.setNotice((await post<{ message: string }>("/api/portal/auth/verify", { token })).message); } catch (err) { f.setError((err as Error).message); } finally { f.setBusy(false); } }
+  async function go() { f.setBusy(true); try { const result = await post<{ message: string; next: string }>("/api/portal/auth/verify", { token }); f.setNotice(result.message); f.setLink(result.next); } catch (err) { f.setError((err as Error).message); } finally { f.setBusy(false); } }
   return <div className="pj-list">
     {f.error && <p className="pj-notice bad">{f.error}</p>}
-    {f.notice ? <><p className="pj-notice good">{f.notice}</p><a className="wp-btn" href="/portal/sign-in">Sign in</a></> : <button className="wp-btn" onClick={go} disabled={f.busy}>Verify my email</button>}
+    {f.notice ? <><p className="pj-notice good">{f.notice}</p><a className="wp-btn" href={f.link || "/portal/sign-in"}>Sign in</a></> : <button className="wp-btn" onClick={go} disabled={f.busy}>Verify my email</button>}
   </div>;
 }
 
@@ -95,7 +71,7 @@ export function Reset({ token }: { token: string }) {
     if (d.get("password") !== d.get("confirm")) { f.setError("The two passwords do not match."); return; }
     f.setBusy(true); try { f.setNotice((await post<{ message: string }>("/api/portal/auth/reset", { token, password: d.get("password") })).message); } catch (err) { f.setError((err as Error).message); } finally { f.setBusy(false); }
   }
-  if (f.notice) return <div className="pj-list"><p className="pj-notice good">{f.notice}</p><a className="wp-btn" href="/portal/sign-in">Sign in</a></div>;
+  if (f.notice) return <div className="pj-list"><p className="pj-notice good">{f.notice}</p><a className="wp-btn" href={f.link || "/portal/sign-in"}>Sign in</a></div>;
   return <form onSubmit={submit} method="post" className="pj-list">
     {f.error && <p className="pj-notice bad">{f.error}</p>}
     <label>New password<input name="password" type="password" minLength={12} required autoComplete="new-password" /></label>
@@ -114,7 +90,7 @@ export function Accept({ token }: { token: string }) {
     if (d.get("password") !== d.get("confirm")) { f.setError("The two passwords do not match."); return; }
     f.setBusy(true); try { f.setNotice((await post<{ message: string }>("/api/portal/auth/accept", { token, password: d.get("password") })).message); } catch (err) { f.setError((err as Error).message); } finally { f.setBusy(false); }
   }
-  if (f.notice) return <div className="pj-list"><p className="pj-notice good">{f.notice}</p><a className="wp-btn" href="/portal/sign-in">Sign in</a></div>;
+  if (f.notice) return <div className="pj-list"><p className="pj-notice good">{f.notice}</p><a className="wp-btn" href={f.link || "/portal/sign-in"}>Sign in</a></div>;
   return <form onSubmit={submit} method="post" className="pj-list">
     <p className="pj-muted">Choose a password of at least 12 characters. You will use it with your email address to sign in.</p>
     {f.error && <p className="pj-notice bad">{f.error}</p>}

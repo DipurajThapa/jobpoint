@@ -32,7 +32,7 @@ export default function CandidateFields({ jobId }: { jobId?: string }) {
         <label className="consent"><input name="shareConsent" type="checkbox" value="yes" /> <span>{general ? WEBSITE_FORM.shareGeneral : WEBSITE_FORM.shareJob}</span></label>
         {!general && <label className="consent"><input name="futureConsent" type="checkbox" value="yes" /> <span>{WEBSITE_FORM.future}</span></label>}
         <label className="consent"><input name="whatsappConsent" type="checkbox" value="yes" /> <span>{WEBSITE_FORM.whatsapp}</span></label>
-        <p className="label-note">To change these later, use the <a href="/privacy#privacy-request">privacy request form</a>.</p>
+        <p className="label-note">{general ? <>After verifying your email, manage these preferences in your candidate dashboard.</> : <>To change these later, use the <a href="/privacy#privacy-request">privacy request form</a>.</>}</p>
       </fieldset>
       </div>
     </div>

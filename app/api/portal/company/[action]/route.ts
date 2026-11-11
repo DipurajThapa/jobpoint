@@ -31,7 +31,8 @@ export async function GET(request: Request, context: Ctx) {
       dash.jds = dash.jds.map(j => ({ ...j, released: 0, unlocked: 0 })); overview.jobs = overview.jobs.map(j => ({ ...j, released: 0 }));
       // The matching rules (minimum score, filters, release caps) are internal in the placement-fee model.
       const params = !dash.params ? dash.params : { version: 0, params: { maxLiveJds: dash.params.params.maxLiveJds } };
-      return json({ ...dash, params, overview, role: account.companyRole, notices: await companyNotices(db, companyId), terms: { feePercent: terms?.fee_percent, guaranteeDays: terms?.guarantee_days } });
+      const enquiries = (await db.prepare("SELECT id, details, status, meeting_at, meeting_status, created_at FROM employer_enquiries WHERE company_id = ? ORDER BY created_at DESC LIMIT 20").bind(companyId).all()).results;
+      return json({ ...dash, params, overview, enquiries, role: account.companyRole, notices: await companyNotices(db, companyId), terms: { feePercent: terms?.fee_percent, guaranteeDays: terms?.guarantee_days } });
     }
     if (action === "pipeline") return json({ pipeline: await pipelineView(db, companyId, url.searchParams.get("jd") || undefined, true), reasons: REASONS, labels: STAGE_LABEL });
     if (action === "team") return json({ team: await teamList(db, companyId), you: account.id, owner: account.companyRole === "owner" });
