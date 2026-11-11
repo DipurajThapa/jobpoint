@@ -237,7 +237,12 @@ await step("F5.1", `${Math.min(6, seedCvs.length)} candidates register on the po
 // The website form: a role-specific application and a general registration.
 let roleId, webApp, webGeneral;
 await step("F5.9", "the owner posts and publishes a public role for the same client", async () => {
-  const r = await owner.post("/api/admin/jobs", { title: "Junior Accountant", company: "Confidential client", companyId, location: "Durgapur", employmentType: "Full-time", workMode: "On-site", sector: "Accounts", description: "Junior Accountant for a Durgapur manufacturing client. Day-to-day accounting in Tally Prime, GST returns, TDS and bank reconciliation.", requirements: "B.Com graduate with 1-4 years of experience. Must have Tally and GST. Good knowledge of MS Excel.", status: "published" });
+  // Only an authorised vacancy of a client with a signed mandate is published (pilot rule).
+  const unmandated = await owner.post("/api/admin/jobs", { title: "Unauthorised role", company: "Confidential client", companyId, location: "Durgapur", employmentType: "Full-time", workMode: "On-site", sector: "Accounts", description: "A role nobody at the employer has authorised yet; it must not be published on the website.", status: "published" });
+  check("F5.9a", "a role for a client without a signed mandate is saved as a draft, not published", unmandated.status === 201 && /not published/i.test(unmandated.body?.message ?? "") && !(await anon.get("/api/jobs")).body?.jobs?.some(j => j.id === unmandated.body?.id), { severity: "high", detail: unmandated.body?.message ?? unmandated.text.slice(0, 120) });
+  const mandate = await owner.post("/api/admin/portal/mandate", { companyId, signedOn: new Date().toISOString().slice(0, 10), reference: "mandate-audit.pdf" });
+  check("F5.9b", "the owner records the client's signed mandate", mandate.ok && !!row("SELECT mandate_signed_on FROM companies WHERE id = ?", companyId)?.mandate_signed_on, { severity: "high", detail: `${mandate.status}` });
+  const r = await owner.post("/api/admin/jobs", { authorisedBy: "Ritu Sen, HR manager (audit)", authorisedOn: new Date().toISOString().slice(0, 10), title: "Junior Accountant", company: "Confidential client", companyId, location: "Durgapur", employmentType: "Full-time", workMode: "On-site", sector: "Accounts", description: "Junior Accountant for a Durgapur manufacturing client. Day-to-day accounting in Tally Prime, GST returns, TDS and bank reconciliation.", requirements: "B.Com graduate with 1-4 years of experience. Must have Tally and GST. Good knowledge of MS Excel.", status: "published" });
   roleId = r.body?.id; if (!roleId) throw new Error(`${r.status} ${r.text.slice(0, 300)}`);
 }, { severity: "blocker" });
 {
@@ -666,34 +671,12 @@ let invitedEntry;
   check("F11.3", "the administrator sets the Fast Track price and payment instructions", set.ok && row("SELECT value FROM portal_settings WHERE key = 'fast_track_price_inr'")?.value === "499", { severity: "medium", detail: `status ${set.status}` });
   const person = candidates.find(c => c.id !== A?.candidate_id) ?? candidates[0];
   if (person) {
+    // Pilot rule (11 Nov 2026): Fast Track is not offered, and a paid test never changes selection.
     const reqFt = await person.session.post("/api/portal/candidate/fasttrack-request", {});
-    const order = row("SELECT * FROM orders WHERE candidate_id = ? AND kind = 'fast_track'", person.id);
-    check("F11.4", "a candidate asks to join Fast Track: an order with a reference and the amount is stored", [200, 201].includes(reqFt.status) && order?.status === "awaiting_payment" && Number(order.amount_inr) === 499 && !!order.reference, { severity: "high", detail: `${reqFt.status} ${JSON.stringify(order ?? null).slice(0, 200)}` });
-    const seen = (await admin.get("/api/platform/assessments/banks")).body?.fastTrack?.orders?.find(o => o.id === order?.id);
-    check("F11.5", "the administrator sees the order waiting for payment", !!seen, { severity: "high" });
-    const before = (await person.session.get("/api/portal/candidate/tests")).body;
+    check("F11.4", "Fast Track is not offered during the pilot: the request is refused and no order is stored", reqFt.status === 409 && reqFt.body?.code === "NOT_OFFERED" && !row("SELECT id FROM orders WHERE candidate_id = ? AND kind = 'fast_track'", person.id), { severity: "high", detail: `${reqFt.status} ${reqFt.text.slice(0, 120)}` });
+    const tests = (await person.session.get("/api/portal/candidate/tests")).body;
     const early = await person.session.post("/api/portal/candidate/test-start", { bankId: banks.find(b => b.kind === "technical")?.id });
-    check("F11.6", "before payment is confirmed the candidate is not on Fast Track and cannot start a technical test", before?.fastTrack === false && !early.ok, { severity: "high", detail: `fastTrack ${before?.fastTrack}, start -> ${early.status}` });
-    const paid = await admin.post("/api/platform/assessments/order-decide", { orderId: order?.id, paid: true, note: "UPI ref 123" });
-    const after = (await person.session.get("/api/portal/candidate/tests")).body;
-    check("F11.7", "the administrator confirms the payment and the candidate is on Fast Track at once", paid.ok && after?.fastTrack === true && !!row("SELECT fast_track_at FROM candidates WHERE id = ?", person.id)?.fast_track_at, { severity: "high", detail: `${paid.status} fastTrack ${after?.fastTrack}` });
-    const tech = after?.technical?.[0];
-    if (tech) {
-      const start = await person.session.post("/api/portal/candidate/test-start", { bankId: tech.id });
-      const testId = start.body?.id;
-      const run = await answerAll(async () => (await person.session.post("/api/portal/candidate/test-answer", { testId, choice: 0 })).body, start.body);
-      const t = row("SELECT status, asked, final_level, band FROM adaptive_tests WHERE id = ?", testId ?? "");
-      check("F11.8", "the candidate sits a technical test to the end; the result (level and band) is stored", start.ok && run.last?.state === "done" && t?.status === "completed" && Number(t.asked) === 20 && !!t.band && count("adaptive_answers", "test_id = ?", testId) === 20, { severity: "high", detail: `${start.status} ${JSON.stringify(t ?? null)} after ${run.n} answers` });
-      const mine = (await person.session.get("/api/portal/candidate/tests")).body?.tests?.find(x => x.id === testId);
-      check("F11.9", "the candidate sees their own level", mine?.status === "completed" && mine.final_level === t?.final_level, { severity: "medium" });
-      const again = await person.session.post("/api/portal/candidate/test-start", { bankId: tech.id });
-      check("F11.10", "the same test cannot be retaken straight away (cool-down)", !again.ok, { severity: "medium", detail: `status ${again.status} ${again.text.slice(0, 100)}` });
-      const leak = JSON.stringify(start.body ?? {}) + JSON.stringify(run.last ?? {});
-      check("F11.11", "the correct answer never leaves the server", !/answer_index|answerIndex|"correct"/.test(leak), { severity: "blocker", title: "A test response contains the correct answer" });
-      // Does the recruiter see the verified level?
-      const lists = [(await admin.get(`/api/platform/recruiting/candidates?jd=${jdId}`)).text, (await admin.get(`/api/platform/recruiting/pipeline?jd=${jdId}`)).text, (await admin.get(`/api/platform/recruiting/pipeline?jd=${roleId}`)).text].join("");
-      if (!lists.includes(tech.title)) finding("F11.12", { severity: "medium", kind: "gap", title: "A Fast Track candidate's technical test result is never shown to recruiters", actual: `The candidate paid, sat "${tech.title}" and got level ${t?.final_level} (${t?.band}). In the Recruiting tool the candidate card shows only a "Fast Track" pill; neither the shortlist nor the pipeline shows the test or the level. (Tests a recruiter sends for a job are shown; a candidate's own technical tests are not, because they are not tied to a job.) The product page says a strong result "is verified on your profile and counts when recruiters shortlist".`, expected: "Each candidate card and pipeline row lists the person's valid technical results (test, band, date).", fix: "In testsForPipeline()/staffCandidates() also select completed technical adaptive_tests for the candidate (jd_id IS NULL) and render them in recruiting.tsx.", where: "lib/portal/adaptive.ts testsForPipeline; lib/portal/staff.ts; app/platform/recruiting/recruiting.tsx" });
-    }
+    check("F11.6", "the candidate's test page does not offer Fast Track, and a technical test cannot be started", tests?.fastTrackOffered === false && tests?.fastTrack === false && !early.ok, { severity: "high", detail: `offered ${tests?.fastTrackOffered}, start -> ${early.status}` });
   }
   // A test sent by a recruiter for a job, taken through a one-time link with no account.
   const spare = ((await admin.get(`/api/platform/recruiting/candidates?jd=${jdId}`)).body?.candidates ?? []).find(c => Number(c.can_share) && !Number(c.in_pipeline) && Number(c.hard_pass));
