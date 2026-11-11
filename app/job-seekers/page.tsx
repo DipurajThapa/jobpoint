@@ -3,8 +3,8 @@ import LandingPage from "@/components/landing-page";
 import { CANDIDATE_PAGE } from "@/lib/landing";
 import { SITE_URL } from "@/lib/site";
 
-const title = "Job consultancy in Kolkata: free CV upload";
-const description = "Register your CV free with Jobboard300, Kolkata. A recruiter reviews it for IT, accounts, sales and office jobs and shares it only with your consent.";
+const title = "Job consultancy in Bengaluru: free CV upload";
+const description = "Register your CV free for accounts, sales and customer support jobs in Bengaluru. Your CV goes to an employer only with your consent.";
 const shareTitle = `${title} | Jobboard300`;
 const shareImage = "/images/career-conversation.webp";
 

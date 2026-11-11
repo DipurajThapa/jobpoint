@@ -169,7 +169,9 @@ test("merge 7: each side reads only its own inbox from the shared table", async 
   assert.ok((await notify.companyNotices(w.db, w.A.id)).some(n => n.title === "For Alpha only"));
   const bravoNotices = await notify.companyNotices(w.db, w.B.id);
   assert.ok(bravoNotices.length && bravoNotices.every(n => n.title !== "For Alpha only"), "Bravo read Alpha's notice");
-  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM messages WHERE recipient_kind = 'company' AND recipient_id = ?").get(w.B.id).n, bravoNotices.length);
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM messages WHERE recipient_kind = 'company' AND recipient_id = ? AND channel = 'inbox'").get(w.B.id).n, bravoNotices.length);
+  // Each notice also has its email copy, which is not shown as a second notice.
+  assert.equal(w.db.raw.prepare("SELECT COUNT(*) AS n FROM messages WHERE recipient_kind = 'company' AND recipient_id = ? AND channel = 'email'").get(w.B.id).n, bravoNotices.length);
   // A candidate id is never read as a company id, or the other way round.
   assert.deepEqual(await notify.companyNotices(w.db, w.asha.id), []);
   assert.deepEqual(await notify.candidateInbox(w.db, w.A.id), []);
@@ -226,7 +228,7 @@ test("merges 4 and 5: the old test and services tables are gone, and Fast Track 
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM orders").get().n, 0);
 });
 
-test("merge 4: the old test routes are gone and matching reads adaptive results", async () => {
+test("merge 4: the old test routes are gone and matching reads adaptive results", async (t) => {
   const w = await world();
   const candidate = await route("portal/candidate/[action]"), company = await route("portal/company/[action]"), owner = await route("admin/portal/[action]");
   const { portalCookie } = await import("./helpers/world.mjs");
@@ -241,6 +243,11 @@ test("merge 4: the old test routes are gone and matching reads adaptive results"
   await w.db.prepare("INSERT INTO question_banks (id, kind, title, skill_id, status, created_by, created_at, updated_at) VALUES ('bank-tally', 'technical', 'Tally', 'tally', 'active', 'admin', ?, ?)").bind(at, at).run();
   await w.db.prepare("INSERT INTO adaptive_tests (id, bank_id, candidate_id, status, final_level, created_at, completed_at) VALUES ('t-1', 'bank-tally', ?, 'completed', 8, ?, ?)").bind(w.asha.id, at, at).run();
   const adaptive = await import(resolve(root, "lib/portal/adaptive.ts")), queue = await import(resolve(root, "lib/portal/queue.ts"));
+  // During the pilot a test only paying candidates can take never reaches the ranking.
+  const { PILOT_RULES } = await import(resolve(root, "lib/portal/policy.ts"));
+  assert.deepEqual(await adaptive.adaptiveEvidence(w.db, w.asha.id), {});
+  PILOT_RULES.paidResultsAffectSelection = true;
+  t.after(() => { PILOT_RULES.paidResultsAffectSelection = false; });
   assert.deepEqual(Object.keys(await adaptive.adaptiveEvidence(w.db, w.asha.id)), ["tally"]);
   await mods.company.enqueue(w.db, "candidate", w.asha.id, "test").run();
   await queue.drainQueue(w.db, "test-secret-test-secret-test-secret-123", 400);
@@ -248,10 +255,15 @@ test("merge 4: the old test routes are gone and matching reads adaptive results"
   assert.match(match.explanation, /verified/, "the adaptive result did not reach the match explanation");
 });
 
-test("merge 5: a Fast Track request is written to the one orders table", async () => {
+test("merge 5: a Fast Track request is written to the one orders table", async (t) => {
   const w = await world();
   const adaptive = await import(resolve(root, "lib/portal/adaptive.ts"));
   await adaptive.saveFastTrackSettings(w.db, 1499, "Pay by UPI", "admin");
+  // Fast Track is not offered during the pilot.
+  const { PILOT_RULES } = await import(resolve(root, "lib/portal/policy.ts"));
+  await assert.rejects(adaptive.requestFastTrack(w.db, w.asha.id), e => e.code === "NOT_OFFERED");
+  PILOT_RULES.fastTrack = true;
+  t.after(() => { PILOT_RULES.fastTrack = false; });
   const order = await adaptive.requestFastTrack(w.db, w.asha.id);
   const row = w.db.raw.prepare("SELECT kind, status, amount_inr, candidate_id FROM orders WHERE reference = ?").get(order.reference);
   assert.deepEqual({ ...row }, { kind: "fast_track", status: "awaiting_payment", amount_inr: 1499, candidate_id: w.asha.id });
@@ -347,7 +359,10 @@ const queueLib = await import(resolve(root, "lib/portal/queue.ts"));
 const { SECRET, profile: cvProfile } = await import("./helpers/world.mjs");
 const ROLE = { title: "Accounts Executive", location: "Durgapur", employmentType: "Full-time", workMode: "On-site", sector: "Accounts", description: "We are hiring an Accounts Executive in Durgapur for a manufacturing client. B.Com with 2-5 years of experience.", requirements: "Must have Tally, GST returns and bank reconciliation. Salary 3 to 4.5 LPA." };
 const jobsRoute = () => route("admin/jobs"), jobRoute = () => route("admin/jobs/[id]");
-const postRole = async (body) => call(await jobsRoute(), "POST", "/api/admin/jobs", { headers: OWNER, body: { ...ROLE, ...body } });
+// Only an authorised vacancy of a client with a signed mandate is published: these tests post roles for Alpha, which has one.
+const AUTHORISED = { authorisedBy: "Priya Sharma, HR manager", authorisedOn: "2026-11-01" };
+const mandate = (w) => w.db.prepare("UPDATE companies SET mandate_signed_on = '2026-10-30', mandate_reference = 'signed-mandate.pdf' WHERE id = ?").bind(w.A.id).run();
+const postRole = async (body) => call(await jobsRoute(), "POST", "/api/admin/jobs", { headers: OWNER, body: { ...ROLE, ...AUTHORISED, ...body } });
 
 /** A website applicant with a parsed CV: name, whether they ticked the two optional boxes, and the role applied to. */
 async function websiteApplicant(w, id, name, email, { jobId = null, share = false, future = false } = {}) {
@@ -365,8 +380,17 @@ test("merge 2: a role posted in the owner console is one vacancy, under the hous
   const w = await world();
   const house = await postRole({ status: "published" });
   assert.equal(house.status, 201, house.text);
+  // A role for no client is not an employer's authorised vacancy: it is kept as a draft, with the reason.
+  assert.match(house.json.message, /not published/i);
   const jd = w.db.raw.prepare("SELECT company_id, status, service, title FROM jds WHERE id = ?").get(house.json.id);
-  assert.deepEqual({ ...jd }, { company_id: vacancy.HOUSE_CLIENT_ID, status: "live", service: "managed", title: ROLE.title });
+  assert.deepEqual({ ...jd }, { company_id: vacancy.HOUSE_CLIENT_ID, status: "draft", service: "managed", title: ROLE.title });
+  // A client without a signed mandate cannot have a role published either; with one, it can.
+  const noMandate = await postRole({ status: "published", companyId: w.A.id });
+  assert.match(noMandate.json.message, /mandate/i);
+  await mandate(w);
+  const ok = await postRole({ status: "published", companyId: w.A.id });
+  assert.equal(w.db.raw.prepare("SELECT status FROM jds WHERE id = ?").get(ok.json.id).status, "live");
+  assert.equal(w.db.raw.prepare("SELECT status FROM jobs WHERE id = ?").get(ok.json.id).status, "published");
   assert.equal(w.db.raw.prepare("SELECT status FROM companies WHERE id = ?").get(vacancy.HOUSE_CLIENT_ID).status, "active");
   assert.ok(JSON.parse(w.db.raw.prepare("SELECT requirements FROM jds WHERE id = ?").get(house.json.id).requirements).roleFamily, "the role's requirements were not parsed");
   const forClient = await postRole({ status: "draft", companyId: w.A.id });
@@ -389,7 +413,8 @@ test("merge 2: a role posted in the owner console is one vacancy, under the hous
 
 test("merge 2: publishing, unpublishing and closing a role moves the same vacancy", async () => {
   const w = await world();
-  const role = (await postRole({ status: "draft" })).json.id;
+  await mandate(w);
+  const role = (await postRole({ status: "draft", companyId: w.A.id })).json.id;
   const set = async (status) => call(await jobRoute(), "PATCH", `/api/admin/jobs/${role}`, { headers: OWNER, body: { status }, params: { id: role } });
   const jd = () => w.db.raw.prepare("SELECT status FROM jds WHERE id = ?").get(role).status;
   assert.equal(jd(), "draft");
@@ -411,6 +436,7 @@ test("merge 2: roles posted before this get their vacancy record when the owner 
 
 test("merge 2: a website application to a role enters that vacancy's shortlist, and nothing else", async () => {
   const w = await world();
+  await mandate(w);
   const role = (await postRole({ status: "published", companyId: w.A.id })).json.id;
   // Ticked "share my CV with the employer for this role" only: not the general matching box.
   const farah = await websiteApplicant(w, "app-f1", "Farah Khan", "farah.khan@person.example", { jobId: role, share: true });
@@ -436,11 +462,12 @@ test("merge 2: a website application to a role enters that vacancy's shortlist, 
 
 test("merge 2: an applicant who did not tick the sharing box is shortlisted but cannot be submitted", async () => {
   const w = await world();
-  const role = (await postRole({ status: "published" })).json.id;
+  await mandate(w);
+  const role = (await postRole({ status: "published", companyId: w.A.id })).json.id;
   const gita = await websiteApplicant(w, "app-g1", "Gita Paul", "gita.paul@person.example", { jobId: role });
   const row = (await mods.client.submissionCandidates(w.db, role)).find(c => c.candidate_id === gita);
   assert.ok(row); assert.equal(row.applied, 1); assert.ok(!row.can_share);
-  await assert.rejects(mods.client.submitByRecruiter(w.db, SECRET, { companyId: vacancy.HOUSE_CLIENT_ID, jdId: role, candidateId: gita, note: "x" }, "admin-1"), /not consented/);
+  await assert.rejects(mods.client.submitByRecruiter(w.db, SECRET, { companyId: w.A.id, jdId: role, candidateId: gita, note: "x" }, "admin-1"), /not consented/);
 });
 
 test("merge 2: the old stage list is read-only and CV screening is gone", async () => {
@@ -473,6 +500,7 @@ test("a candidate record carries the person's email and phone, from the portal a
 
 test("staff get the record's contact details, even when the person has no readable CV", async () => {
   const w = await world();
+  await mandate(w);
   const role = (await postRole({ status: "published", companyId: w.A.id })).json.id;
   const lata = await websiteApplicant(w, "app-l1", "Lata Roy", "lata.roy@person.example", { jobId: role, share: true });
   await w.db.prepare("UPDATE candidates SET phone = '9830011223' WHERE id = ?").bind(lata).run();

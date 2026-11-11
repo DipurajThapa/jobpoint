@@ -170,6 +170,14 @@ function JobWork({ jd, canEdit, canManage, say, showLink, reload }: { jd: Row; c
     ? <p className="pj-muted">Phone: <b>{contacts[candidateId].phone || "not given"}</b> · Email: <b>{contacts[candidateId].email || "not given"}</b></p>
     : <button type="button" className="pj-link" onClick={() => showContact(candidateId)}>Show phone and email</button>;
   return <div className="pj-list" style={{ marginTop: 12 }}>
+    {canEdit && <form className="pj-row" onSubmit={(ev: FormEvent<HTMLFormElement>) => { ev.preventDefault(); const form = ev.currentTarget, f = Object.fromEntries(new FormData(form).entries()) as Record<string, string>; post("work-log", { jdId: jd.id, minutes: Math.round(Number(f.hours) * 60), activity: f.activity, note: f.note }).then(() => form.reset()); }} aria-label="Log time on this job">
+      <b>Log time</b>
+      <input name="hours" type="number" step={0.25} min={0.25} max={16} required placeholder="Hours" aria-label="Hours" style={{ width: 90 }} />
+      <select name="activity" required defaultValue="" aria-label="Spent on"><option value="" disabled>Spent on…</option>{[["sourcing", "Sourcing"], ["screening", "Screening CVs"], ["calls", "Calls with candidates"], ["interview_coordination", "Interview coordination"], ["offer_and_joining", "Offer and joining follow-up"], ["client_meeting", "Client meeting"], ["admin", "Admin"]].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
+      <input name="note" maxLength={300} placeholder="Note (optional)" aria-label="Note" />
+      <button className="pj-btn quiet">Save time</button>
+      <span className="pj-muted">Time per job is how cost per hire is worked out.</span>
+    </form>}
     <h3>Pipeline</h3>
     {pipe?.tests && canEdit && !closed && <label className="pj-row pj-muted"><input type="checkbox" checked={pipe.tests.aptitudeOpted} onChange={ev => post("job-aptitude", { jdId: jd.id, on: ev.target.checked })} /> The client has opted for the aptitude and soft-skills test on this job (team manager or admin)</label>}
     {!pipe ? <p className="pj-muted">Loading…</p> : pipe.pipeline.length === 0 ? <p className="pj-muted">Nobody in the client&apos;s pipeline yet.</p> : pipe.pipeline.map(e => <div className="pj-note" key={e.id}>
@@ -233,7 +241,6 @@ function JobWork({ jd, canEdit, canManage, say, showLink, reload }: { jd: Row; c
         <b>{c.display_name || "Candidate"}</b> <span className="pj-pill">{c.source === "website" ? "Website applicant" : "Portal"}</span> <span className="pj-muted">· {c.current_city || "city not stated"}{c.score == null ? (c.band ? ` · ${c.band}` : "") : ` · score ${Math.round(Number(c.score))}`} · {Number(c.hard_pass) ? "meets the hard filters" : "misses a hard filter"}{Number(c.in_pipeline) ? " · already submitted" : ""}</span>
         <p className="pj-muted">{c.explanation}</p>
         {Array.isArray(c.questions) && (c.questions as unknown as string[]).length > 0 && <div className="pj-notice"><b>Ask the candidate</b><ul>{(c.questions as unknown as string[]).map(q => <li key={q}>{q}</li>)}</ul><span className="pj-muted">Not found in the CV is not the same as no. Nobody is filtered out for it.</span></div>}
-        {Number(c.fast_track) > 0 && <span className="pj-pill">Fast Track</span>}
         <Tech results={c.technical as unknown as Technical[]} />
         {Number(c.early_exits) > 0 && <p className="pj-notice bad">Left a previous placement within the 60-day guarantee ({String(c.early_exits)} time{Number(c.early_exits) > 1 ? "s" : ""}). Ask why before submitting.</p>}
         {c.passed ? <p className="pj-muted">Passed: {String(c.passed).replace(/_/g, " ")}</p> : null}

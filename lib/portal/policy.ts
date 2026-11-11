@@ -7,6 +7,16 @@
 // hiring process for them is open. How candidates are selected stays internal:
 // clients never see scores, rankings, match counts or the reasons behind them.
 
+/**
+ * Pilot rules (11 Nov 2026), after investor review:
+ * - fastTrack: the paid candidate package is not offered. Recruitment must work for everyone, free, first.
+ * - paidResultsAffectSelection: a test that only paying candidates can take must never change who is ranked or
+ *   shortlisted. Kept false while technical tests are part of a paid package.
+ * - earlyLeaverLowerPriority: someone who left a placement early is not pushed down the ranking automatically
+ *   (the recruiter still sees it and asks why). The rule is being reviewed with candidates first.
+ */
+export const PILOT_RULES = { fastTrack: false, paidResultsAffectSelection: false, earlyLeaverLowerPriority: false } as const;
+
 export const FEE = { minPct: 7.5, maxPct: 8.33, defaultPct: 8.33, guaranteeDays: 60 } as const;
 
 /** A live job's requirements can be changed this many times in the window; more needs a recruiter. Stops requirement changes being used to probe the matching. */

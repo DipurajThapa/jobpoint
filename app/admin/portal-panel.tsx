@@ -33,7 +33,7 @@ const storedParams = (value: unknown): StoredParams | null => { try { return typ
 function ParamsFields({ defaults }: { defaults?: StoredParams | null }) {
   const d = defaults, band = d?.ctcBands?.[0];
   return <div className="form-grid">
-    <label>Cities (comma-separated, empty = any)<input name="cities" placeholder="Kolkata, Howrah" defaultValue={(d?.cities ?? []).join(", ")} /></label>
+    <label>Cities (comma-separated, empty = any)<input name="cities" placeholder="Bengaluru" defaultValue={(d?.cities ?? []).join(", ")} /></label>
     <fieldset className="full-field"><legend>Permitted role families</legend>{ROLE_FAMILIES.map(r => <label key={r} className="consent"><input type="checkbox" name="roleFamilies" value={r} defaultChecked={d ? (d.roleFamilies ?? []).includes(r) : false} /> {r}</label>)}</fieldset>
     <fieldset className="full-field"><legend>Permitted seniority</legend>{SENIORITY.map(s => <label key={s} className="consent"><input type="checkbox" name="seniority" value={s} defaultChecked={d ? (d.seniority ?? []).includes(s) : s === "junior" || s === "mid"} /> {s}</label>)}</fieldset>
     <label>CTC band from (LPA)<input name="ctcMin" type="number" step={0.5} min={0} defaultValue={band ? band.minInr / 100_000 : ""} /></label>
@@ -143,6 +143,7 @@ export default function PortalPanel({ prefill, onChanged }: { prefill?: InvitePr
         {c.status === "active" && <div className="admin-record-actions">
           
           
+          <button className="text-link" onClick={() => { const on = window.prompt("Date the hiring mandate (fee agreement) was signed, YYYY-MM-DD. Leave empty to clear:", String(c.mandate_signed_on ?? "")); if (on === null) return; const ref = on ? window.prompt("Where is the signed copy kept? (file name, e-sign reference or email subject)", String(c.mandate_reference ?? "")) : ""; if (on && !ref) return; act("mandate", { companyId: c.id, signedOn: on, reference: ref }); }}>{c.mandate_signed_on ? `Mandate signed ${c.mandate_signed_on}` : "Record signed mandate"}</button>
           <button className="text-link" onClick={() => setOpen(open === `p${c.id}` ? null : `p${c.id}`)}>Change parameters</button>
           <button className="text-link" onClick={() => { const fp = window.prompt("Placement fee, % of annual salary (7.5 to 8.33):", String(c.fee_percent ?? 8.33)); if (fp === null) return; const g = window.prompt("Replacement guarantee (days):", String(c.guarantee_days ?? 60)); if (g === null) return; const n = window.prompt("Months Jobboard300 will not approach people placed here about other jobs:", String(c.non_solicit_months ?? 12)); if (n === null) return; const t = window.prompt("Other fee terms:", String(c.fee_terms ?? "")); if (t !== null) act("client-terms", { companyId: c.id, feePercent: Number(fp), guaranteeDays: Number(g), nonSolicitMonths: Number(n), feeTerms: t }); }}>Client terms</button>
           <button className="delete-link" onClick={() => act("company-status", { companyId: c.id, status: "suspended" }, "Suspend this company? Its users lose access to the portal.")}>Suspend</button>

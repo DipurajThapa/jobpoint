@@ -35,6 +35,6 @@ export default function ApplicationForm({ jobId }: { jobId: string }) {
       {!DEMO_MODE && <button className="button" disabled={busy}>{busy ? "Sending…" : "Apply for this role"}</button>}
     </fieldset>
     {error && <p className="form-message form-error" role="alert">{error}</p>}
-    <p className="privacy-inline">{DEMO_MODE ? "This is a preview. Applications are currently disabled." : <>Applying is free. We confirm by email. To correct your details or replace your CV later, use the <a href="/privacy#privacy-request">privacy request form</a>.</>}</p>
+    <p className="privacy-inline">{DEMO_MODE ? "This is a preview. Applications are currently disabled." : <>Applying is free. You get a reference number on screen. To correct your details or replace your CV later, use the <a href="/privacy#privacy-request">privacy request form</a>.</>}</p>
   </form>;
 }

@@ -14,6 +14,7 @@ import { inviteToTest, testsForPipeline } from "./adaptive";
 import { reissueCommitmentLink } from "./commitment";
 import { closeJob, closeOpenCandidates, moveStage, nextCheckpoint, pipelineView, recordInterview, rescheduleInterview, scheduleInterview, submissionCandidates, submitByRecruiter, type InterviewInput, type StageInput } from "./client";
 import { primaryProfile } from "./candidate";
+import { PILOT_RULES } from "./policy";
 import type { PortalProfile } from "./profile";
 
 export type Staff = { id: string; admin: boolean };
@@ -119,7 +120,8 @@ export async function staffCandidates(db: Db, staff: Staff, jdId: string) {
 /** A candidate's own completed technical tests (Fast Track). They are not tied to a job, so they are looked up by person. Staff only. */
 async function technicalResults(db: Db, candidateIds: string[]) {
   const out = new Map<string, { title: string; level: number | null; band: string | null; date: string }[]>();
-  if (!candidateIds.length) return out;
+  // Technical tests are part of the paid package: while that is so, recruiters choosing whom to submit do not see them.
+  if (!candidateIds.length || !PILOT_RULES.paidResultsAffectSelection) return out;
   const ids = [...new Set(candidateIds)];
   const { results } = await db.prepare(`SELECT t.candidate_id, b.title, t.final_level, t.band, t.completed_at FROM adaptive_tests t JOIN question_banks b ON b.id = t.bank_id
     WHERE t.jd_id IS NULL AND t.status = 'completed' AND b.kind = 'technical' AND t.candidate_id IN (${marks(ids)}) ORDER BY t.completed_at DESC`).bind(...ids).all<{ candidate_id: string; title: string; final_level: number | null; band: string | null; completed_at: string }>();

@@ -34,6 +34,7 @@ const views = await mod("views.ts");
 const policy = await mod("policy.ts");
 const adaptive = await mod("adaptive.ts");
 const commitment = await mod("commitment.ts");
+const pilot = await mod("pilot.ts");
 
 const SECRET = "test-secret-test-secret-test-secret-123";
 let clock = new Date("2026-11-09T06:00:00Z");
@@ -545,7 +546,7 @@ await check("CV intake and applications message the candidate, naming what is mi
 await check("WhatsApp sender: the client's team number first, admin as fallback, admin override wins; nothing is queued without the candidate's consent or sent without a provider", async () => {
   const t = await staffSetup();
   const cand = await makeCandidate(t.db, "Queue Candidate");
-  const last = async () => t.db.prepare("SELECT sender_scope, status, status_detail FROM messages WHERE channel != 'inbox' ORDER BY rowid DESC LIMIT 1").first();
+  const last = async () => t.db.prepare("SELECT sender_scope, status, status_detail FROM messages WHERE channel = 'whatsapp' ORDER BY rowid DESC LIMIT 1").first();
   await notify.notifyCandidate(t.db, cand, "test", "T", "B", t.compK.id);
   assert.deepEqual([(await last()).status, (await last()).sender_scope], ["skipped", ""], "no number configured: recorded, not sent");
   await rejects(staffMod.setStaffMessaging(t.db, t.mgrK, "admin", { number: "+919830012345", enabled: true }), "ADMIN_ONLY");
@@ -720,6 +721,9 @@ await check("Fast Track: payment confirmation marks the candidate; technical tes
   const [tech] = await adaptive.loadSampleBanks(db, "admin");
   const cand = await makeCandidate(db, "Test Taker");
   await rejects(adaptive.startTechnicalTest(db, cand, tech), "FAST_TRACK");
+  // Not offered during the pilot; the machinery below is kept working for when it is.
+  await rejects(adaptive.requestFastTrack(db, cand), "NOT_OFFERED");
+  policy.PILOT_RULES.fastTrack = true; policy.PILOT_RULES.paidResultsAffectSelection = true;
   await rejects(adaptive.requestFastTrack(db, cand), "NOT_OPEN");
   await rejects(adaptive.saveFastTrackSettings(db, 0, "Pay by UPI to jobboard300@upi", "admin"), "PRICE");
   await adaptive.saveFastTrackSettings(db, 1499, "Pay by UPI to jobboard300@upi and quote your reference.", "admin");
@@ -748,6 +752,7 @@ await check("Fast Track: payment confirmation marks the candidate; technical tes
     await rejects(adaptive.testStep(db, t.id, cand), "NOT_FOUND");
   }
   assert.deepEqual(await adaptive.adaptiveEvidence(db, cand), {}, "sample banks never count towards ranking");
+  policy.PILOT_RULES.fastTrack = false; policy.PILOT_RULES.paidResultsAffectSelection = false;
 });
 
 await check("Aptitude and client tests go only to invited candidates; the offer commitment and early-leaver priority work", async () => {
@@ -795,9 +800,14 @@ await check("Aptitude and client tests go only to invited candidates; the offer 
   clock = new Date("2026-12-21T06:00:00Z");
   await client.reportPlacementExit(t.db, t.compK.id, t.compK.userId, pl.id, "2026-12-20", "Left");
   await rank(t.db, t.jdF, cand, 95); await rank(t.db, t.jdF, other, 60);
-  assert.deepEqual((await client.submissionCandidates(t.db, t.jdF)).map(c => c.candidate_id), [other, cand], "a recent early leaver ranks after everyone else");
+  // During the pilot an early leaver is not pushed down automatically; the recruiter sees the exit and asks.
+  assert.deepEqual((await client.submissionCandidates(t.db, t.jdF)).map(c => c.candidate_id), [cand, other], "the rule is off during the pilot");
+  assert.equal((await client.submissionCandidates(t.db, t.jdF)).find(c => c.candidate_id === cand).early_exits, 1, "the recruiter still sees the early exit");
+  policy.PILOT_RULES.earlyLeaverLowerPriority = true;
+  assert.deepEqual((await client.submissionCandidates(t.db, t.jdF)).map(c => c.candidate_id), [other, cand], "with the rule on, a recent early leaver ranks after everyone else");
   clock = new Date("2028-01-05T06:00:00Z");
   assert.deepEqual((await client.submissionCandidates(t.db, t.jdF)).map(c => c.candidate_id), [cand, other], "after 12 months the ranking is by fit again");
+  policy.PILOT_RULES.earlyLeaverLowerPriority = false;
   clock = new Date("2026-11-09T06:00:00Z");
 });
 
@@ -995,6 +1005,51 @@ await check("Recruiters: 'What changed', undo a pass, joining list, technical re
   await staffMod.markChangesSeen(t.db, t.recA);
   assert.equal((await staffMod.staffWork(t.db, t.recA)).changes.unread, 0);
   assert.equal((await staffMod.staffWork(t.db, t.recF)).changes.items.length, 0, "another team does not see it");
+});
+
+await check("Pilot evidence: mandates and authorised vacancies gate publishing; invoices, collections, time and costs give cost per hire, contribution and the readiness checklist", async () => {
+  const t = await staffSetup();
+  clock = new Date("2026-11-20T06:00:00Z");
+  assert.match(await pilot.publishProblem(t.db, t.jdK), /mandate/);
+  await rejects(pilot.setMandate(t.db, t.compK.id, "2027-01-01", "x.pdf", "admin"), "DATE");
+  await rejects(pilot.setMandate(t.db, t.compK.id, "2026-11-10", "", "admin"), "REFERENCE");
+  await pilot.setMandate(t.db, t.compK.id, "2026-11-10", "mandate-kolkata-client.pdf", "admin");
+  assert.match(await pilot.publishProblem(t.db, t.jdK), /authorised/);
+  await rejects(pilot.authoriseVacancy(t.db, t.jdK, "x", "2026-11-12", "admin"), "AUTHORISED_BY");
+  await pilot.authoriseVacancy(t.db, t.jdK, "Priya Sharma, HR manager", "2026-11-12", "admin");
+  assert.equal(await pilot.publishProblem(t.db, t.jdK), null);
+  // A hire, its invoice and the money.
+  await client.setJdOpenings(t.db, t.compK.id, t.jdK, 2, t.compK.userId);
+  const cand = await makeCandidate(t.db, "Pilot Hire");
+  const sub = await rankedSubmit(t, t.recA, { jdId: t.jdK, candidateId: cand, note: "x" });
+  await toStage(t, sub.id, ["shortlisted", "interview", "offered", "offer_accepted"], { offered: { offerCtcInr: 480_000 }, offer_accepted: { joiningDate: "2026-11-18" } });
+  await client.moveStage(t.db, t.compK.id, t.compK.userId, sub.id, { stage: "joined", joiningDate: "2026-11-18" });
+  const pl = await t.db.prepare("SELECT id, fee_inr FROM placements WHERE pipeline_id = ?").bind(sub.id).first();
+  await rejects(pilot.recordCollection(t.db, pl.id, { collectedOn: "2026-11-19", amountInr: 39_984 }, "admin"), "NOT_INVOICED");
+  await pilot.recordInvoice(t.db, pl.id, { invoiceNumber: "JB300-001", invoicedOn: "2026-11-18" }, "admin");
+  await pilot.recordCollection(t.db, pl.id, { collectedOn: "2026-11-19", amountInr: pl.fee_inr }, "admin");
+  // Recruiter time and a direct cost on the job.
+  await rejects(pilot.logWork(t.db, t.recA.id, { jdId: t.jdK, minutes: 2, activity: "screening" }), "MINUTES");
+  await rejects(pilot.logWork(t.db, t.recA.id, { jdId: t.jdK, minutes: 60, activity: "golf" }), "ACTIVITY");
+  await pilot.logWork(t.db, t.recA.id, { jdId: t.jdK, minutes: 600, activity: "screening", workedOn: "2026-11-15" });
+  await pilot.logCost(t.db, { jdId: t.jdK, kind: "job_ads", amountInr: 2_000, spentOn: "2026-11-14" }, "admin");
+  await pilot.setHourlyCost(t.db, 500, "admin");
+  const eco = await pilot.unitEconomics(t.db);
+  const row = eco.placements.find(p => p.id === pl.id);
+  assert.deepEqual([row.hours, row.timeCostInr, row.directCostInr, row.contributionInr], [10, 5_000, 2_000, pl.fee_inr - 7_000]);
+  assert.equal(eco.totals.costPerHireInr, 7_000);
+  // The weekly funnel puts each event in its week (Monday, India time).
+  assert.equal(pilot.weekOf("2026-11-18"), "2026-11-16");
+  assert.equal(pilot.weekOf("2026-11-15T20:00:00.000Z"), "2026-11-16", "Sunday 20:00 UTC is Monday in India");
+  const week = (await pilot.weeklyFunnel(t.db, 4)).find(w => w.week === "2026-11-16");
+  assert.ok(week.joins >= 1 && week.invoicedInr === pl.fee_inr && week.collectedInr === pl.fee_inr, JSON.stringify(week));
+  assert.ok((await pilot.funnelCsv(t.db)).startsWith("week_starting,prospects,mandates"));
+  // The readiness checklist counts only what the records show.
+  const r = Object.fromEntries((await pilot.readiness(t.db)).map(x => [x.key, x.met]));
+  assert.deepEqual([r.mandates, r.paid, r.time, r.contribution], [false, false, true, true], JSON.stringify(r));
+  // Every update to a candidate or client is queued as email too (the address is read when it is sent).
+  assert.ok((await t.db.prepare("SELECT COUNT(*) AS n FROM messages WHERE channel = 'email' AND status = 'queued' AND recipient_id = ?").bind(cand).first()).n > 0);
+  clock = new Date("2026-11-09T06:00:00Z");
 });
 
 console.log(`\n${passed} portal checks passed.`);

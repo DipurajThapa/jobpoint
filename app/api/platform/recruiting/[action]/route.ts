@@ -8,9 +8,11 @@ import { portalDb, portalSecret, json, fail, failFrom, siteLink } from "@/lib/po
 import { extractText } from "@/lib/ats/extract";
 import { renderCvPdf } from "@/lib/portal/watermark";
 import { drainQueue } from "@/lib/portal/queue";
+import { ACTIVITIES, logWork } from "@/lib/portal/pilot";
 import { redactContacts } from "@/lib/portal/policy";
 import { assignClientTeam, assignJobRecruiter, canManageTeam, markChangesSeen, removeTeamMember, setStaffMessaging, setTeamManager, staffCandidates, staffCloseJob, staffCloseRemaining, staffContact, staffCvSource, staffMessaging, staffMoveStage, staffPass, staffPassedCandidates, staffProfile, staffRecordInterview, staffRescheduleInterview, staffUnpass, PASS_REASONS, staffPipeline, staffJobTests, setJobAptitude, staffInviteToTest, staffCommitmentLink, staffScheduleInterview, staffSubmit, staffWork, type Staff } from "@/lib/portal/staff";
 import { REASONS, STAGE_LABEL } from "@/lib/portal/client";
+import { deliverEmails } from "@/lib/portal/outbox";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ action: string }> };
@@ -22,7 +24,7 @@ export async function GET(request: Request, context: Ctx) {
   const { action } = await context.params;
   const db = portalDb(), staff: Staff = { id: user.id, admin: user.role === "admin" }, url = new URL(request.url);
   try {
-    if (action === "work") return json({ ...await staffWork(db, staff), canEdit: user.access.recruiting !== "view", me: user.id, messaging: await staffMessaging(db, staff) });
+    if (action === "work") return json({ ...await staffWork(db, staff), activities: ACTIVITIES, canEdit: user.access.recruiting !== "view", me: user.id, messaging: await staffMessaging(db, staff) });
     if (action === "candidates") {
       const jd = url.searchParams.get("jd") ?? "";
       await staffCandidates(db, staff, jd); // 404 for a job this person cannot see, before any work is done
@@ -49,7 +51,14 @@ export async function GET(request: Request, context: Ctx) {
   } catch (error) { return failFrom(error); }
 }
 
+/** After every change, send a few of the queued update emails (there is no scheduler on this hosting). */
 export async function POST(request: Request, context: Ctx) {
+  const response = await handlePost(request, context);
+  try { await deliverEmails(portalDb(), 10); } catch (error) { console.error("email delivery failed", error instanceof Error ? error.message : error); }
+  return response;
+}
+
+async function handlePost(request: Request, context: Ctx) {
   const user = await authorizeApi(request, { tool: "recruiting", min: "edit", mutate: true });
   if (user instanceof Response) return user;
   const { action } = await context.params;
@@ -62,6 +71,13 @@ export async function POST(request: Request, context: Ctx) {
     if (action === "contact") return json(await staffContact(db, staff, { jdId: s(b.jdId, 60), candidateId: s(b.candidateId, 60) }));
     if (action === "pass") { await staffPass(db, staff, { jdId: s(b.jdId, 60), candidateId: s(b.candidateId, 60), reason: s(b.reason, 40), note: s(b.note, 500) }); return json({ message: "Noted. The next best candidate is shown." }); }
     if (action === "submit") { const out = await staffSubmit(db, portalSecret(), staff, { jdId: s(b.jdId, 60), candidateId: s(b.candidateId, 60), note: s(b.note, 2000) }); return json({ ...out, message: "Submitted to the client." }, 201); }
+    if (action === "work-log") {
+      // Recruiter time per job: what cost per hire and contribution per placement are worked out from.
+      const jdId = s(b.jdId, 60);
+      if (jdId) await staffCandidates(db, staff, jdId); // only a job this person can see
+      await logWork(db, staff.id, { jdId: jdId || undefined, minutes: Number(b.minutes), activity: s(b.activity, 40), note: s(b.note, 300), workedOn: s(b.workedOn, 10) });
+      return json({ message: "Time recorded." });
+    }
     if (action === "unpass") { await staffUnpass(db, staff, { jdId: s(b.jdId, 60), candidateId: s(b.candidateId, 60) }); return json({ message: "Back on the shortlist." }); }
     if (action === "changes-seen") { await markChangesSeen(db, staff); return json({ message: "ok" }); }
     if (action === "interview-record") {
