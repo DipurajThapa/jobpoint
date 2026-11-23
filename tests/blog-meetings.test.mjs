@@ -33,6 +33,25 @@ test('draft, publish, draft revision isolation, stale save, stable URL and unpub
   assert.equal(await publishedPost(p.slug),null); assert.equal((await call(media,'GET',`/api/blog/media/${bannerId}`,{params:{id:bannerId}})).status,404);
   assert.equal((await w.db.prepare('SELECT count(*) n FROM blog_posts').first()).n,1);
 });
+test('replacing a blog banner keeps the live image until republish, then updates cards and media access',async()=>{
+  const w=await setup(), p=article(), replacementId='22222222-2222-4222-8222-222222222222';
+  await w.db.prepare('INSERT INTO blog_assets (id,r2_key,mime,size,width,height,description,created_at,created_by) VALUES (?,?,?,?,?,?,?,?,?)')
+    .bind(replacementId,'blog-media/replacement','image/png',3,1920,1080,'New banner',new Date().toISOString(),'admin').run();
+  await w.BUCKET.put('blog-media/replacement',new Uint8Array([4,5,6]));
+  const initial=await post(w.cookie,{action:'publish',post:p});
+  assert.equal(initial.status,200,initial.text);
+  const next={...p,banner:{...p.banner,src:`/api/blog/media/${replacementId}`,description:'An updated article-specific image'}};
+  const draft=await post(w.cookie,{id:initial.json.id,revision:1,action:'save',post:next});
+  assert.equal(draft.status,200,draft.text);
+  assert.equal(JSON.parse((await publishedPost(p.slug)).published_json).banner.src,p.banner.src);
+  assert.equal(JSON.parse((await publishedPosts())[0].published_json).banner.src,p.banner.src);
+  const published=await post(w.cookie,{id:initial.json.id,revision:2,action:'publish',post:next});
+  assert.equal(published.status,200,published.text);
+  assert.equal(JSON.parse((await publishedPost(p.slug)).published_json).banner.src,next.banner.src);
+  assert.equal(JSON.parse((await publishedPosts())[0].published_json).banner.src,next.banner.src);
+  assert.equal((await call(media,'GET',next.banner.src,{params:{id:replacementId}})).status,200);
+  assert.equal((await call(media,'GET',p.banner.src,{params:{id:bannerId}})).status,404);
+});
 test('published banner dimensions, duplicate slug and invalid content are rejected',async()=>{
   const w=await setup(); await w.db.prepare('UPDATE blog_assets SET width=100 WHERE id=?').bind(bannerId).run();
   assert.equal((await post(w.cookie,{action:'publish',post:article()})).status,400);
